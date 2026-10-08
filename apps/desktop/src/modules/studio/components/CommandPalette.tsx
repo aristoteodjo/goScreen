@@ -9,6 +9,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { registry } from "@/lib/registry";
+import { canvasCommands } from "@/modules/canvas/commands";
 import type { CaptureControls } from "@/modules/recording/useCapture";
 import { ASPECTS, type AspectId } from "../store/aspect";
 import { useEditor } from "../store/editor";
@@ -47,6 +48,15 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
       <CommandInput placeholder="Type a command" />
       <CommandList>
         <CommandEmpty>No command found.</CommandEmpty>
+        <CommandGroup heading="View">
+          <CommandItem onSelect={run(() => useEditor.getState().setView("canvas"))}>Show canvas</CommandItem>
+          <CommandItem onSelect={run(() => useEditor.getState().setView("scene"))}>Show scene</CommandItem>
+          <CommandItem onSelect={run(canvasCommands.fit)}>
+            Fit all devices
+            <CommandShortcut>Shift 1</CommandShortcut>
+          </CommandItem>
+          <CommandItem onSelect={run(project.arrangeCanvas)}>Arrange devices in a row</CommandItem>
+        </CommandGroup>
         <CommandGroup heading="Capture">
           <CommandItem onSelect={run(capture.toggleRecording)}>
             {capture.recording ? "Stop recording" : "Start recording"}
@@ -65,6 +75,14 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
             >
               Rotate device
             </CommandItem>
+            <CommandItem onSelect={run(() => project.setSynced(selected.id, !selected.synced))}>
+              {selected.synced ? "Unsync" : "Sync"} this device
+            </CommandItem>
+            {selected.viewport ? (
+              <CommandItem onSelect={run(() => project.updateDevice(selected.id, { viewport: null }))}>
+                Reset to native size
+              </CommandItem>
+            ) : null}
             <CommandItem onSelect={run(() => project.removeDevice(selected.id))}>Remove device</CommandItem>
           </CommandGroup>
         ) : null}
@@ -84,9 +102,8 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
         </CommandGroup>
         <CommandGroup heading="Scene">
           <CommandItem onSelect={run(project.autoLayout)}>Auto layout devices</CommandItem>
-          <CommandItem onSelect={run(() => project.setSyncInteractions(!project.syncInteractions))}>
-            {project.syncInteractions ? "Disable" : "Enable"} interaction sync
-          </CommandItem>
+          <CommandItem onSelect={run(() => project.setAllSynced(true))}>Sync all devices</CommandItem>
+          <CommandItem onSelect={run(() => project.setAllSynced(false))}>Unsync all devices</CommandItem>
           {(Object.keys(ASPECTS) as AspectId[]).map((id) => (
             <CommandItem key={id} value={`aspect ratio ${id}`} onSelect={run(() => project.setAspect(id))}>
               Aspect ratio {id}

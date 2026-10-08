@@ -1,0 +1,48 @@
+{
+  "id": "ipad-air-13",
+  "brand": "Apple",
+  "name": "iPad Air 13\"",
+  "category": "tablet",
+  "platform": "ios",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 1024,
+    "height": 1366,
+    "dpr": 2
+  },
+  "frame": {
+    "bezel": 28,
+    "radius": 46,
+    "screenRadius": 20,
+    "colors": [
+      {
+        "id": "space-gray",
+        "name": "Space Gray",
+        "body": "#2c2c2e",
+        "edge": "#4a4a4e"
+      },
+      {
+        "id": "blue",
+        "name": "Blue",
+        "body": "#a9bcd0",
+        "edge": "#cad7e4"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 24,
+    "bottom": 20,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "none"
+  },
+  "statusBar": {
+    "style": "ios",
+    "height": 24
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (iPad; CPU OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+}

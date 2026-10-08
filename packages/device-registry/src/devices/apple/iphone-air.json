@@ -1,0 +1,57 @@
+{
+  "id": "iphone-air",
+  "brand": "Apple",
+  "name": "iPhone Air",
+  "category": "phone",
+  "platform": "ios",
+  "tier": "standard",
+  "verified": false,
+  "viewport": {
+    "width": 420,
+    "height": 912,
+    "dpr": 3
+  },
+  "frame": {
+    "bezel": 12,
+    "radius": 64,
+    "screenRadius": 54,
+    "colors": [
+      {
+        "id": "space-black",
+        "name": "Space Black",
+        "body": "#1c1c1e",
+        "edge": "#3a3a3c"
+      },
+      {
+        "id": "sky-blue",
+        "name": "Sky Blue",
+        "body": "#cfdeeb",
+        "edge": "#e8f0f7"
+      },
+      {
+        "id": "light-gold",
+        "name": "Light Gold",
+        "body": "#e6d8bd",
+        "edge": "#f3ead8"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 62,
+    "bottom": 34,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "dynamic-island",
+    "width": 124,
+    "height": 36,
+    "offsetTop": 11
+  },
+  "statusBar": {
+    "style": "ios",
+    "height": 54
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+}

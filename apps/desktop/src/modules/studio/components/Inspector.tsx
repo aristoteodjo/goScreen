@@ -7,6 +7,8 @@ import {
 import type { DeviceDefinition } from "@goscreen/device-registry";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Combobox,
   ComboboxContent,
@@ -23,7 +25,7 @@ import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 import { BACKGROUND_PRESETS, backgroundToCss } from "../store/backgrounds";
 import { useEditor } from "../store/editor";
-import { useProject } from "../store/project";
+import { type ProjectDevice, useProject } from "../store/project";
 
 export function Inspector() {
   const selectedId = useEditor((s) => s.selectedId);
@@ -65,12 +67,18 @@ function shadowPresetOf(instance: DeviceInstance): ShadowPresetId | "custom" {
   return match ?? "custom";
 }
 
-function DeviceSection({ instance }: { instance: DeviceInstance }) {
+function DeviceSection({ instance }: { instance: ProjectDevice }) {
   const update = useProject((s) => s.updateDevice);
+  const setSynced = useProject((s) => s.setSynced);
   const remove = useProject((s) => s.removeDevice);
   const device = registry.get(instance.deviceId);
   if (!device) return null;
-  const set = (patch: Partial<DeviceInstance>) => update(instance.id, patch);
+  const set = (patch: Partial<ProjectDevice>) => update(instance.id, patch);
+  const size = instance.viewport ?? { width: device.viewport.width, height: device.viewport.height };
+  const setSize = (axis: "width" | "height", raw: string) => {
+    const value = Number.parseInt(raw, 10);
+    if (Number.isFinite(value) && value >= 240 && value <= 3840) set({ viewport: { ...size, [axis]: value } });
+  };
 
   return (
     <div className="flex flex-col gap-5 p-4">
@@ -126,6 +134,46 @@ function DeviceSection({ instance }: { instance: DeviceInstance }) {
           <ToggleGroupItem value="landscape" className="flex-1">Landscape</ToggleGroupItem>
         </ToggleGroup>
       </Row>
+
+      <Row label="Viewport" value={instance.viewport ? "custom" : `@${device.viewport.dpr}x`}>
+        <div className="flex items-center gap-2">
+          <Input
+            key={`w${size.width}`}
+            defaultValue={size.width}
+            onBlur={(e) => setSize("width", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            className="h-8 font-mono text-xs"
+            aria-label="Viewport width"
+          />
+          <span className="text-xs text-muted-foreground">×</span>
+          <Input
+            key={`h${size.height}`}
+            defaultValue={size.height}
+            onBlur={(e) => setSize("height", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            className="h-8 font-mono text-xs"
+            aria-label="Viewport height"
+          />
+        </div>
+        {instance.viewport ? (
+          <Button variant="ghost" size="sm" className="self-start px-0 text-xs" onClick={() => set({ viewport: null })}>
+            Reset to {device.viewport.width} × {device.viewport.height}
+          </Button>
+        ) : null}
+      </Row>
+
+      <div className="flex items-start gap-2.5 text-xs">
+        <Checkbox
+          id="inspector-sync"
+          checked={instance.synced}
+          onCheckedChange={(v) => setSynced(instance.id, v === true)}
+          className="mt-0.5"
+        />
+        <label htmlFor="inspector-sync" className="cursor-pointer space-y-0.5">
+          <span className="block text-foreground">Sync with other devices</span>
+          <span className="block text-muted-foreground">Follows the shared URL, navigation and scroll.</span>
+        </label>
+      </div>
 
       <Separator />
 

@@ -1,0 +1,48 @@
+{
+  "id": "monitor-1080p",
+  "brand": "Generic",
+  "name": "Monitor 1080p",
+  "category": "desktop",
+  "platform": "generic",
+  "tier": "standard",
+  "verified": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080,
+    "dpr": 1
+  },
+  "frame": {
+    "bezel": 14,
+    "radius": 10,
+    "screenRadius": 2,
+    "colors": [
+      {
+        "id": "black",
+        "name": "Black",
+        "body": "#18181a",
+        "edge": "#333336"
+      },
+      {
+        "id": "white",
+        "name": "White",
+        "body": "#e9e9eb",
+        "edge": "#f7f7f8"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 0,
+    "bottom": 0,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "none"
+  },
+  "statusBar": {
+    "style": "none",
+    "height": 0
+  },
+  "homeIndicator": false,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+}

@@ -1,0 +1,57 @@
+{
+  "id": "iphone-17-pro-max",
+  "brand": "Apple",
+  "name": "iPhone 17 Pro Max",
+  "category": "phone",
+  "platform": "ios",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 440,
+    "height": 956,
+    "dpr": 3
+  },
+  "frame": {
+    "bezel": 14,
+    "radius": 66,
+    "screenRadius": 54,
+    "colors": [
+      {
+        "id": "cosmic-orange",
+        "name": "Cosmic Orange",
+        "body": "#c8642c",
+        "edge": "#e08a52"
+      },
+      {
+        "id": "deep-blue",
+        "name": "Deep Blue",
+        "body": "#2b3647",
+        "edge": "#56647a"
+      },
+      {
+        "id": "silver",
+        "name": "Silver",
+        "body": "#d9d9d6",
+        "edge": "#f4f4f2"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 62,
+    "bottom": 34,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "dynamic-island",
+    "width": 124,
+    "height": 36,
+    "offsetTop": 11
+  },
+  "statusBar": {
+    "style": "ios",
+    "height": 54
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+}

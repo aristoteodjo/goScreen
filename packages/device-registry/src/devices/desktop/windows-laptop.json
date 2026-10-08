@@ -1,0 +1,48 @@
+{
+  "id": "windows-laptop",
+  "brand": "Generic",
+  "name": "Windows laptop",
+  "category": "laptop",
+  "platform": "windows",
+  "tier": "standard",
+  "verified": true,
+  "viewport": {
+    "width": 1536,
+    "height": 864,
+    "dpr": 1.25
+  },
+  "frame": {
+    "bezel": 16,
+    "radius": 14,
+    "screenRadius": 4,
+    "colors": [
+      {
+        "id": "graphite",
+        "name": "Graphite",
+        "body": "#2a2b2e",
+        "edge": "#4a4b50"
+      },
+      {
+        "id": "platinum",
+        "name": "Platinum",
+        "body": "#d6d7d9",
+        "edge": "#ececee"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 0,
+    "bottom": 0,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "none"
+  },
+  "statusBar": {
+    "style": "none",
+    "height": 0
+  },
+  "homeIndicator": false,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+}

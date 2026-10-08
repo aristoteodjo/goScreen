@@ -1,0 +1,51 @@
+{
+  "id": "galaxy-s25-ultra",
+  "brand": "Samsung",
+  "name": "Galaxy S25 Ultra",
+  "category": "phone",
+  "platform": "android",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 412,
+    "height": 891,
+    "dpr": 3.5
+  },
+  "frame": {
+    "bezel": 10,
+    "radius": 34,
+    "screenRadius": 26,
+    "colors": [
+      {
+        "id": "titanium-silverblue",
+        "name": "Titanium Silverblue",
+        "body": "#8c9aaa",
+        "edge": "#b7c2ce"
+      },
+      {
+        "id": "titanium-black",
+        "name": "Titanium Black",
+        "body": "#2a2b2d",
+        "edge": "#4b4c50"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 40,
+    "bottom": 20,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "punch-hole",
+    "width": 22,
+    "height": 22,
+    "offsetTop": 12
+  },
+  "statusBar": {
+    "style": "android",
+    "height": 40
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (Linux; Android 16; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36"
+}

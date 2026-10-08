@@ -1,4 +1,4 @@
-import { Delete02Icon, SmartPhone01Icon, Tablet01Icon } from "@hugeicons/core-free-icons";
+import { ComputerIcon, Delete02Icon, LaptopIcon, SmartPhone01Icon, Tablet01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Sidebar,
@@ -14,12 +14,22 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { registry } from "@/lib/registry";
+import { canvasCommands } from "@/modules/canvas/commands";
 import { useEditor } from "../store/editor";
 import { useProject } from "../store/project";
 
-const brands = [...new Set(registry.list().map((d) => d.brand))].map(
-  (brand) => [brand, registry.list().filter((d) => d.brand === brand)] as const,
+const CATEGORIES = [
+  { id: "phone", label: "Phones", icon: SmartPhone01Icon },
+  { id: "tablet", label: "Tablets", icon: Tablet01Icon },
+  { id: "laptop", label: "Laptops", icon: LaptopIcon },
+  { id: "desktop", label: "Desktops", icon: ComputerIcon },
+] as const;
+
+const groups = CATEGORIES.map((c) => ({ ...c, devices: registry.list().filter((d) => d.category === c.id) })).filter(
+  (g) => g.devices.length > 0,
 );
+
+const iconFor = (category: string) => CATEGORIES.find((c) => c.id === category)?.icon ?? SmartPhone01Icon;
 
 export function StudioSidebar() {
   const devices = useProject((s) => s.devices);
@@ -47,8 +57,14 @@ export function StudioSidebar() {
                 const def = registry.get(d.deviceId);
                 return (
                   <SidebarMenuItem key={d.id}>
-                    <SidebarMenuButton isActive={d.id === selectedId} onClick={() => select(d.id)}>
-                      <HugeiconsIcon icon={SmartPhone01Icon} strokeWidth={1.75} />
+                    <SidebarMenuButton
+                      isActive={d.id === selectedId}
+                      onClick={() => {
+                        select(d.id);
+                        if (useEditor.getState().view === "canvas") canvasCommands.focus(d.id);
+                      }}
+                    >
+                      <HugeiconsIcon icon={iconFor(def?.category ?? "phone")} strokeWidth={1.75} />
                       <span>{def?.name ?? d.deviceId}</span>
                     </SidebarMenuButton>
                     <SidebarMenuAction showOnHover onClick={() => removeDevice(d.id)} aria-label="Remove device">
@@ -60,12 +76,12 @@ export function StudioSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {brands.map(([brand, list]) => (
-          <SidebarGroup key={brand}>
-            <SidebarGroupLabel>{brand}</SidebarGroupLabel>
+        {groups.map((group) => (
+          <SidebarGroup key={group.id}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {list.map((device) => (
+                {group.devices.map((device) => (
                   <SidebarMenuItem key={device.id}>
                     <SidebarMenuButton
                       onClick={() => {
@@ -73,10 +89,7 @@ export function StudioSidebar() {
                         if (id) select(id);
                       }}
                     >
-                      <HugeiconsIcon
-                        icon={device.category === "tablet" ? Tablet01Icon : SmartPhone01Icon}
-                        strokeWidth={1.75}
-                      />
+                      <HugeiconsIcon icon={group.icon} strokeWidth={1.75} />
                       <span>{device.name}</span>
                     </SidebarMenuButton>
                     {device.tier === "premium" ? <SidebarMenuBadge>Pro</SidebarMenuBadge> : null}

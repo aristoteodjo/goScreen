@@ -4,7 +4,7 @@ import type { DeviceInstance, Size } from "./types";
 
 export type LayoutItem = Pick<
   DeviceInstance,
-  "id" | "orientation" | "scale"
+  "id" | "orientation" | "scale" | "viewport"
 > & { device: DeviceDefinition };
 
 // Decides where devices land on the stage when the user clicks "Auto layout"
@@ -18,7 +18,8 @@ export function arrangeDevices(
   if (items.length === 0) return positions;
 
   const widths = items.map(
-    (it) => resolveScreenLayout(it.device, it.orientation).frame.width * it.scale,
+    (it) => resolveScreenLayout(it.device, it.orientation, it.viewport).frame.width *
+      it.scale,
   );
   const total = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
   let cursor = (stage.width - total) / 2;

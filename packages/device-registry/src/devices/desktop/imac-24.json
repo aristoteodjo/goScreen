@@ -1,0 +1,54 @@
+{
+  "id": "imac-24",
+  "brand": "Apple",
+  "name": "iMac 24\"",
+  "category": "desktop",
+  "platform": "macos",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 2240,
+    "height": 1260,
+    "dpr": 2
+  },
+  "frame": {
+    "bezel": 34,
+    "radius": 26,
+    "screenRadius": 6,
+    "colors": [
+      {
+        "id": "blue",
+        "name": "Blue",
+        "body": "#3d6fa8",
+        "edge": "#6c95c4"
+      },
+      {
+        "id": "green",
+        "name": "Green",
+        "body": "#4f8f6a",
+        "edge": "#7cb393"
+      },
+      {
+        "id": "silver",
+        "name": "Silver",
+        "body": "#d8d9db",
+        "edge": "#eeeff0"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 0,
+    "bottom": 0,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "none"
+  },
+  "statusBar": {
+    "style": "none",
+    "height": 0
+  },
+  "homeIndicator": false,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+}

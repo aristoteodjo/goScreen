@@ -34,6 +34,8 @@ export type DeviceInstance = {
   shadow: Shadow;
   browserChrome: BrowserChrome;
   statusBar: StatusBarMode;
+  // Custom viewport in portrait terms, set by drag-resizing a frame.
+  viewport: Size | null;
 };
 
 export type ScreenLayout = {

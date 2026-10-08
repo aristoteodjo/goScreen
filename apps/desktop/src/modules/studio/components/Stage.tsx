@@ -1,13 +1,12 @@
-import { fitScale } from "@goscreen/device-engine";
+import { fitScale, instanceTransform, shadowToCss } from "@goscreen/device-engine";
 import { type PointerEvent, useLayoutEffect, useRef, useState } from "react";
-import { DeviceView } from "@/modules/device/DeviceView";
+import { DeviceMockup } from "@/modules/device/DeviceMockup";
 import { useRecording } from "@/modules/recording/store";
 import { setStageElement } from "../stageRef";
 import { ASPECTS } from "../store/aspect";
 import { backgroundToCss } from "../store/backgrounds";
 import { useEditor } from "../store/editor";
-import { useProject } from "../store/project";
-import { useBridgeWiring } from "../useBridgeWiring";
+import { deviceUrl, useProject } from "../store/project";
 
 type Drag = { id: string; startX: number; startY: number; originX: number; originY: number };
 
@@ -24,8 +23,6 @@ export function Stage() {
   const selectedId = useEditor((s) => s.selectedId);
   const select = useEditor((s) => s.select);
   const recording = useRecording((s) => s.active);
-
-  useBridgeWiring();
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -82,14 +79,22 @@ export function Stage() {
             style={{ width: stage.width, height: stage.height, transform: `scale(${zoom})` }}
           >
             {devices.map((d) => (
-              <DeviceView
+              <div
                 key={d.id}
-                instance={d}
-                url={url}
-                selected={!recording && d.id === selectedId}
-                framesInteractive={drag === null}
-                onFramePointerDown={onFramePointerDown(d.id)}
-              />
+                className="absolute top-0 left-0 will-change-transform"
+                style={{
+                  transform: instanceTransform(d),
+                  filter: d.renderMode === "flat" ? undefined : shadowToCss(d.shadow),
+                }}
+              >
+                <DeviceMockup
+                  instance={d}
+                  url={deviceUrl(d, url)}
+                  selected={!recording && d.id === selectedId}
+                  framesInteractive={drag === null}
+                  onFramePointerDown={onFramePointerDown(d.id)}
+                />
+              </div>
             ))}
           </div>
         </div>

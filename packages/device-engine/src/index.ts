@@ -1,5 +1,9 @@
 export {
   fitScale,
+  MAX_VIEWPORT,
+  MIN_VIEWPORT,
+  type ResizeEdge,
+  resizeViewport,
   resolveSafeArea,
   resolveScreenLayout,
   resolveViewport,

@@ -1,0 +1,57 @@
+{
+  "id": "pixel-10-pro-xl",
+  "brand": "Google",
+  "name": "Pixel 10 Pro XL",
+  "category": "phone",
+  "platform": "android",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 448,
+    "height": 998,
+    "dpr": 3
+  },
+  "frame": {
+    "bezel": 13,
+    "radius": 58,
+    "screenRadius": 46,
+    "colors": [
+      {
+        "id": "obsidian",
+        "name": "Obsidian",
+        "body": "#202124",
+        "edge": "#3c3d41"
+      },
+      {
+        "id": "moonstone",
+        "name": "Moonstone",
+        "body": "#8e98a6",
+        "edge": "#b5bdc8"
+      },
+      {
+        "id": "porcelain",
+        "name": "Porcelain",
+        "body": "#ece6dc",
+        "edge": "#f8f4ee"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 52,
+    "bottom": 24,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "punch-hole",
+    "width": 28,
+    "height": 28,
+    "offsetTop": 14
+  },
+  "statusBar": {
+    "style": "android",
+    "height": 52
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (Linux; Android 16; Pixel 10 Pro XL) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36"
+}

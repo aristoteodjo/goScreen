@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ipc } from "@/lib/ipc";
 import { stageRegion } from "@/modules/studio/stageRef";
 import { ASPECTS } from "@/modules/studio/store/aspect";
+import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
 import { interactionLog, useRecording } from "./store";
 
@@ -21,7 +22,10 @@ export function useCapture() {
     mutationFn: async () => {
       // Selection outlines hide once `active` renders, before ffmpeg starts.
       interactionLog.reset();
+      // The recorded region is the scene stage, never the free canvas.
+      useEditor.getState().setView("scene");
       setActive(true);
+      await nextFrame();
       await nextFrame();
       const region = stageRegion();
       if (!region) throw new Error("The stage is not visible.");
@@ -70,10 +74,15 @@ export function useCapture() {
 
   const screenshot = useMutation({
     mutationFn: async () => {
-      const region = stageRegion();
-      if (!region) throw new Error("The stage is not visible.");
+      useEditor.getState().setView("scene");
       setActive(true);
       await nextFrame();
+      await nextFrame();
+      const region = stageRegion();
+      if (!region) {
+        setActive(false);
+        throw new Error("The stage is not visible.");
+      }
       try {
         return await ipc.screenshot(region);
       } finally {

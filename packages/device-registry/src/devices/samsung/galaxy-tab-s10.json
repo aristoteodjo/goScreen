@@ -1,0 +1,48 @@
+{
+  "id": "galaxy-tab-s10",
+  "brand": "Samsung",
+  "name": "Galaxy Tab S10+",
+  "category": "tablet",
+  "platform": "android",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 800,
+    "height": 1280,
+    "dpr": 2
+  },
+  "frame": {
+    "bezel": 24,
+    "radius": 30,
+    "screenRadius": 14,
+    "colors": [
+      {
+        "id": "moonstone-gray",
+        "name": "Moonstone Gray",
+        "body": "#4d5157",
+        "edge": "#6f747b"
+      },
+      {
+        "id": "platinum-silver",
+        "name": "Platinum Silver",
+        "body": "#d5d6d8",
+        "edge": "#ebecee"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 28,
+    "bottom": 20,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "none"
+  },
+  "statusBar": {
+    "style": "android",
+    "height": 28
+  },
+  "homeIndicator": false,
+  "userAgent": "Mozilla/5.0 (Linux; Android 16; SM-X826B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+}

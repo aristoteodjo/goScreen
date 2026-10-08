@@ -8,6 +8,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -17,15 +18,23 @@ import { useReload } from "@/modules/interaction/runtime";
 import type { CaptureControls } from "@/modules/recording/useCapture";
 import { useRecording } from "@/modules/recording/store";
 import { ASPECTS, type AspectId } from "../store/aspect";
+import { type ViewMode, useEditor } from "../store/editor";
 import { useProject } from "../store/project";
 
 export function Toolbar({ capture }: { capture: CaptureControls }) {
-  const url = useProject((s) => s.url);
+  const sharedUrl = useProject((s) => s.url);
   const setUrl = useProject((s) => s.setUrl);
+  const navigateDevice = useProject((s) => s.navigateDevice);
+  const selectedId = useEditor((s) => s.selectedId);
+  const view = useEditor((s) => s.view);
+  const setView = useEditor((s) => s.setView);
+  // An unsynced selected device has its own address; edit that one.
+  const ownDevice = useProject((s) => s.devices.find((d) => d.id === selectedId && !d.synced));
+  const url = ownDevice ? (ownDevice.url ?? sharedUrl) : sharedUrl;
   const aspect = useProject((s) => s.aspect);
   const setAspect = useProject((s) => s.setAspect);
-  const sync = useProject((s) => s.syncInteractions);
-  const setSync = useProject((s) => s.setSyncInteractions);
+  const allSynced = useProject((s) => s.devices.length > 0 && s.devices.every((d) => d.synced));
+  const setAllSynced = useProject((s) => s.setAllSynced);
   const reloadAll = useReload((s) => s.reloadAll);
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(url);
@@ -40,6 +49,7 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
       return;
     }
     if (next === url) reload();
+    else if (ownDevice) navigateDevice(ownDevice.id, next);
     else setUrl(next);
   };
 
@@ -51,6 +61,16 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
   return (
     <header data-tauri-drag-region className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger className="-ml-1" />
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        value={view}
+        onValueChange={(v) => v && setView(v as ViewMode)}
+      >
+        <ToggleGroupItem value="canvas" className="px-3 text-xs">Canvas</ToggleGroupItem>
+        <ToggleGroupItem value="scene" className="px-3 text-xs">Scene</ToggleGroupItem>
+      </ToggleGroup>
       <form onSubmit={submit} className="mx-auto w-full max-w-xl">
         <InputGroup className="h-8">
           <InputGroupAddon>
@@ -59,7 +79,7 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
           <InputGroupInput
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="https://your-site.com or localhost:3000"
+            placeholder={ownDevice ? "Address for this device only" : "https://your-site.com or localhost:3000"}
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -73,10 +93,16 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
         </InputGroup>
       </form>
       <div className="flex items-center gap-2">
-        <Label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Switch size="sm" checked={sync} onCheckedChange={setSync} />
-          Sync
-        </Label>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch size="sm" checked={allSynced} onCheckedChange={setAllSynced} />
+              Sync all
+            </Label>
+          </TooltipTrigger>
+          <TooltipContent>Shared URL and scroll for every device. Fine-tune per device on each frame.</TooltipContent>
+        </Tooltip>
+        {view === "scene" ? (
         <Select value={aspect} onValueChange={(v) => setAspect(v as AspectId)}>
           <SelectTrigger size="sm" className="w-[84px]">
             <SelectValue />
@@ -89,6 +115,7 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
             ))}
           </SelectContent>
         </Select>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

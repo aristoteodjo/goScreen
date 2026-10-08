@@ -1,0 +1,51 @@
+{
+  "id": "iphone-16e",
+  "brand": "Apple",
+  "name": "iPhone 16e",
+  "category": "phone",
+  "platform": "ios",
+  "tier": "standard",
+  "verified": false,
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "dpr": 3
+  },
+  "frame": {
+    "bezel": 16,
+    "radius": 58,
+    "screenRadius": 46,
+    "colors": [
+      {
+        "id": "black",
+        "name": "Black",
+        "body": "#1d1d1f",
+        "edge": "#3a3a3d"
+      },
+      {
+        "id": "white",
+        "name": "White",
+        "body": "#ecebe8",
+        "edge": "#fafaf8"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 47,
+    "bottom": 34,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "notch",
+    "width": 162,
+    "height": 32,
+    "offsetTop": 0
+  },
+  "statusBar": {
+    "style": "ios",
+    "height": 47
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+}

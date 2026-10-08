@@ -1,0 +1,51 @@
+{
+  "id": "macbook-pro-16",
+  "brand": "Apple",
+  "name": "MacBook Pro 16\"",
+  "category": "laptop",
+  "platform": "macos",
+  "tier": "premium",
+  "verified": false,
+  "viewport": {
+    "width": 1728,
+    "height": 1117,
+    "dpr": 2
+  },
+  "frame": {
+    "bezel": 20,
+    "radius": 24,
+    "screenRadius": 12,
+    "colors": [
+      {
+        "id": "space-black",
+        "name": "Space Black",
+        "body": "#1f1f21",
+        "edge": "#3d3d40"
+      },
+      {
+        "id": "silver",
+        "name": "Silver",
+        "body": "#d8d9db",
+        "edge": "#eeeff0"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 0,
+    "bottom": 0,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "notch",
+    "width": 210,
+    "height": 34,
+    "offsetTop": 0
+  },
+  "statusBar": {
+    "style": "none",
+    "height": 0
+  },
+  "homeIndicator": false,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+}

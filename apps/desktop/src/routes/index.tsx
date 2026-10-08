@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { CanvasRoot } from "@/modules/canvas/CanvasRoot";
 import { useCapture } from "@/modules/recording/useCapture";
 import { CommandPalette } from "@/modules/studio/components/CommandPalette";
 import { Inspector } from "@/modules/studio/components/Inspector";
 import { Stage } from "@/modules/studio/components/Stage";
 import { StudioSidebar } from "@/modules/studio/components/StudioSidebar";
 import { Toolbar } from "@/modules/studio/components/Toolbar";
+import { useEditor } from "@/modules/studio/store/editor";
+import { useBridgeWiring } from "@/modules/studio/useBridgeWiring";
 
 export const Route = createFileRoute("/")({
   component: Studio,
@@ -13,13 +16,16 @@ export const Route = createFileRoute("/")({
 
 function Studio() {
   const capture = useCapture();
+  const view = useEditor((s) => s.view);
+  useBridgeWiring();
+
   return (
     <SidebarProvider className="h-full min-h-0">
       <StudioSidebar />
       <SidebarInset className="flex min-h-0 min-w-0 flex-row">
         <div className="flex min-w-0 flex-1 flex-col">
           <Toolbar capture={capture} />
-          <Stage />
+          {view === "canvas" ? <CanvasRoot /> : <Stage />}
         </div>
         <Inspector />
       </SidebarInset>

@@ -17,6 +17,8 @@ export const bridgeEventSchema = z.discriminatedUnion("type", [
     type: z.literal("location"),
     href: z.string(),
     title: z.string(),
+    cause: z.enum(["load", "history"]),
+    user: z.boolean(),
   }),
 ]);
 

@@ -1,0 +1,57 @@
+{
+  "id": "pixel-9a",
+  "brand": "Google",
+  "name": "Pixel 9a",
+  "category": "phone",
+  "platform": "android",
+  "tier": "standard",
+  "verified": false,
+  "viewport": {
+    "width": 412,
+    "height": 915,
+    "dpr": 2.625
+  },
+  "frame": {
+    "bezel": 16,
+    "radius": 52,
+    "screenRadius": 38,
+    "colors": [
+      {
+        "id": "obsidian",
+        "name": "Obsidian",
+        "body": "#202124",
+        "edge": "#3c3d41"
+      },
+      {
+        "id": "iris",
+        "name": "Iris",
+        "body": "#b7b2e0",
+        "edge": "#d6d3f0"
+      },
+      {
+        "id": "peony",
+        "name": "Peony",
+        "body": "#f0bfc8",
+        "edge": "#f8dbe0"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 48,
+    "bottom": 24,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "punch-hole",
+    "width": 26,
+    "height": 26,
+    "offsetTop": 14
+  },
+  "statusBar": {
+    "style": "android",
+    "height": 48
+  },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (Linux; Android 16; Pixel 9a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36"
+}

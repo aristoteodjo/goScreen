@@ -32,18 +32,31 @@
     );
   }
 
-  addEventListener(
-    "click",
-    (e) => {
-      const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
-      if (!a || e.defaultPrevented || (a.target && a.target !== "_self")) return;
-      const url = new URL(a.href, location.href);
-      if (url.origin === location.origin || !/^https?:$/.test(url.protocol)) return;
-      e.preventDefault();
-      post({ type: "navigate", href: url.href });
-    },
-    true,
-  );
+  // Only navigations that follow real input are mirrored to synced devices;
+  // load-time redirects (m.site.com vs www) would otherwise ping-pong.
+  let lastInput = 0;
+  const markInput = () => {
+    lastInput = Date.now();
+  };
+  addEventListener("pointerdown", markInput, true);
+  addEventListener("keydown", markInput, true);
+  const userDriven = () => Date.now() - lastInput < 1500;
+
+  // Bubble phase: SPA routers have already called preventDefault by now, so
+  // only plain document navigations are taken over.
+  addEventListener("click", (e) => {
+    const a = e.target instanceof Element ? e.target.closest("a[href]") : null;
+    if (!a || e.defaultPrevented || e.button !== 0) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (a.target && a.target !== "_self") return;
+    if (a.hasAttribute("download")) return;
+    const url = new URL(a.href, location.href);
+    if (!/^https?:$/.test(url.protocol)) return;
+    if (url.origin === location.origin && url.pathname === location.pathname && url.search === location.search) return;
+    e.preventDefault();
+    const href = url.origin === location.origin ? url.href.replace(CFG.proxyOrigin, CFG.origin) : url.href;
+    post({ type: "navigate", href });
+  });
 
   let syncing = false;
   let scrollQueued = false;
@@ -63,18 +76,19 @@
     { capture: true, passive: true },
   );
 
-  const reportLocation = () => post({ type: "location", href: realHref(), title: document.title });
+  const reportLocation = (cause) =>
+    post({ type: "location", href: realHref(), title: document.title, cause, user: userDriven() });
   for (const fn of ["pushState", "replaceState"]) {
     const original = history[fn];
     history[fn] = function (...args) {
       const r = original.apply(this, args);
-      reportLocation();
+      reportLocation("history");
       return r;
     };
   }
-  addEventListener("popstate", reportLocation);
-  addEventListener("hashchange", reportLocation);
-  addEventListener("DOMContentLoaded", reportLocation);
+  addEventListener("popstate", () => reportLocation("history"));
+  addEventListener("hashchange", () => reportLocation("history"));
+  addEventListener("DOMContentLoaded", () => reportLocation("load"));
 
   addEventListener("message", (e) => {
     if (e.source !== window.parent || !e.data || e.data.__goscreen !== 1) return;

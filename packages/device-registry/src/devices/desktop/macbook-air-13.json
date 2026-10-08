@@ -1,0 +1,57 @@
+{
+  "id": "macbook-air-13",
+  "brand": "Apple",
+  "name": "MacBook Air 13\"",
+  "category": "laptop",
+  "platform": "macos",
+  "tier": "standard",
+  "verified": false,
+  "viewport": {
+    "width": 1470,
+    "height": 956,
+    "dpr": 2
+  },
+  "frame": {
+    "bezel": 18,
+    "radius": 22,
+    "screenRadius": 10,
+    "colors": [
+      {
+        "id": "midnight",
+        "name": "Midnight",
+        "body": "#2b3240",
+        "edge": "#4a5263"
+      },
+      {
+        "id": "starlight",
+        "name": "Starlight",
+        "body": "#e3dccd",
+        "edge": "#f2ede3"
+      },
+      {
+        "id": "sky-blue",
+        "name": "Sky Blue",
+        "body": "#c9d6e2",
+        "edge": "#e3eaf1"
+      }
+    ]
+  },
+  "safeArea": {
+    "top": 0,
+    "bottom": 0,
+    "left": 0,
+    "right": 0
+  },
+  "cutout": {
+    "type": "notch",
+    "width": 200,
+    "height": 32,
+    "offsetTop": 0
+  },
+  "statusBar": {
+    "style": "none",
+    "height": 0
+  },
+  "homeIndicator": false,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+}

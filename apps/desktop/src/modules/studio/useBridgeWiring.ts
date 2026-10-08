@@ -14,25 +14,37 @@ export function useBridgeWiring() {
         if (useRecording.getState().active && event.type !== "location") {
           interactionLog.push({ instanceId, event });
         }
+        const project = useProject.getState();
+        const source = project.devices.find((d) => d.id === instanceId);
+        if (!source) return;
+
         switch (event.type) {
           case "down":
             useEditor.getState().select(instanceId);
             break;
           case "scroll": {
-            const { syncInteractions, devices } = useProject.getState();
-            if (!syncInteractions) break;
+            if (!source.synced) break;
             const command = syncScrollCommand(event);
-            for (const d of devices) if (d.id !== instanceId) sendToFrame(d.id, command);
+            for (const d of project.devices) {
+              if (d.id !== instanceId && d.synced) sendToFrame(d.id, command);
+            }
             break;
           }
           case "navigate": {
             const url = normalizeUrl(event.href);
-            if (url) useProject.getState().setUrl(url);
+            if (url) project.navigateDevice(instanceId, url);
             break;
           }
-          case "location":
+          case "location": {
             useRuntime.getState().setLocation(instanceId, event.href, event.title);
+            // SPA route changes the user caused are mirrored; load-time
+            // redirects are not, or differently redirected devices would loop.
+            if (event.cause === "history" && event.user) {
+              const url = normalizeUrl(event.href);
+              if (url) project.navigateDevice(instanceId, url);
+            }
             break;
+          }
         }
       }),
     [],

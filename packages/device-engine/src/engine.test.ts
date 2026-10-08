@@ -1,6 +1,6 @@
 import { builtinPack } from "@goscreen/device-registry";
 import { describe, expect, it } from "vitest";
-import { fitScale, resolveScreenLayout } from "./geometry";
+import { fitScale, resizeViewport, resolveScreenLayout } from "./geometry";
 import { arrangeDevices } from "./layout";
 import { SHADOW_PRESETS, shadowToCss } from "./style";
 
@@ -35,6 +35,7 @@ describe("layout", () => {
       device: iphone,
       orientation: "portrait" as const,
       scale: 1,
+      viewport: null,
     }));
     const pos = arrangeDevices(items, stage);
     const a = pos.get("a") ?? { x: Number.NaN, y: Number.NaN };
@@ -48,5 +49,29 @@ describe("style", () => {
   it("disables the shadow at zero opacity", () => {
     expect(shadowToCss(SHADOW_PRESETS.none)).toBe("none");
     expect(shadowToCss(SHADOW_PRESETS.soft)).toContain("drop-shadow");
+  });
+});
+
+describe("resize", () => {
+  const start = { width: 400, height: 800 };
+
+  it("grows width only from the right edge", () => {
+    expect(resizeViewport(start, "portrait", "right", 50, 999)).toEqual({ width: 450, height: 800 });
+  });
+
+  it("maps displayed axes back to portrait storage in landscape", () => {
+    // Shown as 800x400; dragging the right edge widens the stored height.
+    expect(resizeViewport(start, "landscape", "right", 100, 0)).toEqual({ width: 400, height: 900 });
+  });
+
+  it("clamps to the minimum viewport", () => {
+    const r = resizeViewport(start, "portrait", "corner", -1000, -1000);
+    expect(r.width).toBe(240);
+    expect(r.height).toBe(320);
+  });
+
+  it("uses the override for the frame", () => {
+    const l = resolveScreenLayout(iphone, "portrait", { width: 500, height: 900 });
+    expect(l.screen).toEqual({ width: 500, height: 900 });
   });
 });
