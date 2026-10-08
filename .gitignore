@@ -1,0 +1,12 @@
+node_modules
+dist
+.output
+.nitro
+.tanstack
+.vinxi
+target
+*.log
+.env
+.env.local
+.DS_Store
+src-tauri/gen

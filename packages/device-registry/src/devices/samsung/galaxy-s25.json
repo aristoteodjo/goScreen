@@ -1,0 +1,24 @@
+{
+  "id": "galaxy-s25",
+  "brand": "Samsung",
+  "name": "Galaxy S25",
+  "category": "phone",
+  "platform": "android",
+  "tier": "standard",
+  "verified": false,
+  "viewport": { "width": 360, "height": 780, "dpr": 3 },
+  "frame": {
+    "bezel": 11,
+    "radius": 48,
+    "screenRadius": 38,
+    "colors": [
+      { "id": "navy", "name": "Navy", "body": "#26304a", "edge": "#4a5576" },
+      { "id": "icyblue", "name": "Icyblue", "body": "#c9dbe8", "edge": "#e4eef5" }
+    ]
+  },
+  "safeArea": { "top": 40, "bottom": 20, "left": 0, "right": 0 },
+  "cutout": { "type": "punch-hole", "width": 22, "height": 22, "offsetTop": 12 },
+  "statusBar": { "style": "android", "height": 40 },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (Linux; Android 16; SM-S931B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36"
+}

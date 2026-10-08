@@ -1,0 +1,25 @@
+{
+  "id": "iphone-17",
+  "brand": "Apple",
+  "name": "iPhone 17",
+  "category": "phone",
+  "platform": "ios",
+  "tier": "standard",
+  "verified": false,
+  "viewport": { "width": 402, "height": 874, "dpr": 3 },
+  "frame": {
+    "bezel": 15,
+    "radius": 62,
+    "screenRadius": 50,
+    "colors": [
+      { "id": "black", "name": "Black", "body": "#1d1d1f", "edge": "#3a3a3d" },
+      { "id": "lavender", "name": "Lavender", "body": "#c9bfdc", "edge": "#e2dbee" },
+      { "id": "sage", "name": "Sage", "body": "#b7c2a8", "edge": "#d6dfcb" }
+    ]
+  },
+  "safeArea": { "top": 62, "bottom": 34, "left": 0, "right": 0 },
+  "cutout": { "type": "dynamic-island", "width": 124, "height": 36, "offsetTop": 11 },
+  "statusBar": { "style": "ios", "height": 54 },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+}

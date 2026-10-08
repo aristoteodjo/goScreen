@@ -1,0 +1,24 @@
+{
+  "id": "generic-android",
+  "brand": "Generic",
+  "name": "Android",
+  "category": "phone",
+  "platform": "android",
+  "tier": "standard",
+  "verified": true,
+  "viewport": { "width": 393, "height": 852, "dpr": 2.75 },
+  "frame": {
+    "bezel": 12,
+    "radius": 46,
+    "screenRadius": 36,
+    "colors": [
+      { "id": "graphite", "name": "Graphite", "body": "#2a2b2e", "edge": "#4a4b50" },
+      { "id": "chalk", "name": "Chalk", "body": "#e8e6e1", "edge": "#f7f6f3" }
+    ]
+  },
+  "safeArea": { "top": 40, "bottom": 20, "left": 0, "right": 0 },
+  "cutout": { "type": "punch-hole", "width": 22, "height": 22, "offsetTop": 12 },
+  "statusBar": { "style": "android", "height": 40 },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36"
+}

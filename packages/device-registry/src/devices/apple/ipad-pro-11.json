@@ -1,0 +1,24 @@
+{
+  "id": "ipad-pro-11",
+  "brand": "Apple",
+  "name": "iPad Pro 11\"",
+  "category": "tablet",
+  "platform": "ios",
+  "tier": "premium",
+  "verified": false,
+  "viewport": { "width": 834, "height": 1210, "dpr": 2 },
+  "frame": {
+    "bezel": 26,
+    "radius": 44,
+    "screenRadius": 20,
+    "colors": [
+      { "id": "space-black", "name": "Space Black", "body": "#232325", "edge": "#45454a" },
+      { "id": "silver", "name": "Silver", "body": "#d9d9d6", "edge": "#f2f2f0" }
+    ]
+  },
+  "safeArea": { "top": 24, "bottom": 20, "left": 0, "right": 0 },
+  "cutout": { "type": "none" },
+  "statusBar": { "style": "ios", "height": 24 },
+  "homeIndicator": true,
+  "userAgent": "Mozilla/5.0 (iPad; CPU OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+}

@@ -1,0 +1,145 @@
+import { Camera01Icon, Globe02Icon, RecordIcon, RefreshIcon, StopIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { type FormEvent, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { normalizeUrl } from "@/lib/url";
+import { cn } from "@/lib/utils";
+import { useReload } from "@/modules/interaction/runtime";
+import type { CaptureControls } from "@/modules/recording/useCapture";
+import { useRecording } from "@/modules/recording/store";
+import { ASPECTS, type AspectId } from "../store/aspect";
+import { useProject } from "../store/project";
+
+export function Toolbar({ capture }: { capture: CaptureControls }) {
+  const url = useProject((s) => s.url);
+  const setUrl = useProject((s) => s.setUrl);
+  const aspect = useProject((s) => s.aspect);
+  const setAspect = useProject((s) => s.setAspect);
+  const sync = useProject((s) => s.syncInteractions);
+  const setSync = useProject((s) => s.setSyncInteractions);
+  const reloadAll = useReload((s) => s.reloadAll);
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState(url);
+
+  useEffect(() => setDraft(url), [url]);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const next = normalizeUrl(draft);
+    if (!next) {
+      toast.error("Enter a valid http or https address.");
+      return;
+    }
+    if (next === url) reload();
+    else setUrl(next);
+  };
+
+  const reload = () => {
+    queryClient.invalidateQueries({ queryKey: ["proxy"] });
+    reloadAll();
+  };
+
+  return (
+    <header data-tauri-drag-region className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+      <SidebarTrigger className="-ml-1" />
+      <form onSubmit={submit} className="mx-auto w-full max-w-xl">
+        <InputGroup className="h-8">
+          <InputGroupAddon>
+            <HugeiconsIcon icon={Globe02Icon} strokeWidth={1.75} />
+          </InputGroupAddon>
+          <InputGroupInput
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="https://your-site.com or localhost:3000"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            className="font-mono text-xs"
+          />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton size="icon-xs" type="button" onClick={reload} aria-label="Reload all devices">
+              <HugeiconsIcon icon={RefreshIcon} strokeWidth={1.75} />
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+      </form>
+      <div className="flex items-center gap-2">
+        <Label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch size="sm" checked={sync} onCheckedChange={setSync} />
+          Sync
+        </Label>
+        <Select value={aspect} onValueChange={(v) => setAspect(v as AspectId)}>
+          <SelectTrigger size="sm" className="w-[84px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(ASPECTS).map((id) => (
+              <SelectItem key={id} value={id}>
+                {id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={capture.screenshot}
+              disabled={capture.isShooting || capture.recording}
+              aria-label="Screenshot"
+            >
+              {capture.isShooting ? <Spinner /> : <HugeiconsIcon icon={Camera01Icon} strokeWidth={1.75} />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Screenshot</TooltipContent>
+        </Tooltip>
+        <RecordButton capture={capture} />
+      </div>
+    </header>
+  );
+}
+
+function RecordButton({ capture }: { capture: CaptureControls }) {
+  const startedAt = useRecording((s) => s.startedAt);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!startedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [startedAt]);
+
+  const busy = capture.isStarting || capture.isStopping;
+  const elapsed = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const label = capture.recording
+    ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
+    : "Record";
+
+  return (
+    <Button
+      size="sm"
+      onClick={capture.toggleRecording}
+      disabled={busy}
+      className={cn(
+        "min-w-[92px] gap-1.5 tabular-nums",
+        capture.recording ? "bg-rec text-white hover:bg-rec/90" : "bg-signal text-signal-foreground hover:bg-signal/90",
+      )}
+    >
+      {busy ? (
+        <Spinner />
+      ) : (
+        <HugeiconsIcon icon={capture.recording ? StopIcon : RecordIcon} strokeWidth={2} />
+      )}
+      {label}
+    </Button>
+  );
+}

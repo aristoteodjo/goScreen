@@ -1,0 +1,30 @@
+[package]
+name = "goscreen"
+version = "0.1.0"
+description = "goScreen - device studio for product videos"
+edition = "2021"
+
+[lib]
+name = "goscreen_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+dirs = "6"
+which = "8"
+url = "2"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "gzip",
+  "brotli",
+  "deflate",
+] }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "sync", "time"] }

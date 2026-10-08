@@ -1,0 +1,21 @@
+{
+  "name": "goscreen",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.16.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:desktop": "pnpm --filter @goscreen/desktop tauri dev",
+    "dev:web": "pnpm --filter @goscreen/web dev",
+    "check-types": "pnpm -r check-types",
+    "test": "pnpm -r test",
+    "lint": "biome lint .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "typescript": "~6.0.3"
+  }
+}
