@@ -89,6 +89,8 @@ export const ipc = {
   openPrivacySettings: async (pane: "screen" | "camera" | "microphone") => {
     await invoke("open_privacy_settings", { pane });
   },
+  sitePages: async (url: string, limit = 30) =>
+    z.array(z.string().url()).parse(await invoke("site_pages", { url, limit })),
   captureDevices: async () => captureDevicesSchema.parse(await invoke("capture_devices")),
   recordingStop: async (interactions: unknown) =>
     recordingResultSchema.parse(

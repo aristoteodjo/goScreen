@@ -18,6 +18,8 @@ import { useReload } from "@/modules/interaction/runtime";
 import type { CaptureControls } from "@/modules/recording/useCapture";
 import { useCaptureSettings } from "@/modules/recording/settings";
 import { useRecording } from "@/modules/recording/store";
+import { pageLabel } from "@/modules/tour/plan";
+import { useTour } from "@/modules/tour/store";
 import { ASPECTS, type AspectId } from "../store/aspect";
 import { type ViewMode, useEditor } from "../store/editor";
 import { useProject } from "../store/project";
@@ -101,7 +103,7 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
       <div className="flex items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Label className="flex items-center gap-2 text-xs text-muted-foreground text-nowrap">
               <Switch size="sm" checked={allSynced} onCheckedChange={setAllSynced} />
               Sync all
             </Label>
@@ -136,9 +138,23 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
           </TooltipTrigger>
           <TooltipContent>Screenshot</TooltipContent>
         </Tooltip>
+        <TourProgress />
         <RecordButton capture={capture} />
       </div>
     </header>
+  );
+}
+
+function TourProgress() {
+  const running = useTour((s) => s.running);
+  const index = useTour((s) => s.index);
+  const total = useTour((s) => s.total);
+  const page = useTour((s) => s.page);
+  if (!running) return null;
+  return (
+    <span className="max-w-[220px] truncate rounded-md bg-white/5 px-2 py-1 font-mono text-[11px] text-muted-foreground">
+      Tour {index + 1}/{total} · {page ? pageLabel(page) : ""}
+    </span>
   );
 }
 

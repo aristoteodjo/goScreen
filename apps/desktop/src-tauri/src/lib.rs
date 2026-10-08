@@ -29,6 +29,7 @@ pub fn run() {
             media::recording_open,
             media::edit_save,
             media::recordings_list,
+            modules::site::site_pages,
             export::export_begin,
             export::export_frame,
             export::export_finish,

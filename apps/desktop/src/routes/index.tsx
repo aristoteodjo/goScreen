@@ -3,6 +3,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useAndroidSync } from "@/modules/android/useAndroid";
 import { CanvasRoot } from "@/modules/canvas/CanvasRoot";
 import { CaptureBar } from "@/modules/recording/CaptureBar";
+import { SiteTourDialog } from "@/modules/tour/SiteTourDialog";
 import { useCapture } from "@/modules/recording/useCapture";
 import { CommandPalette } from "@/modules/studio/components/CommandPalette";
 import { Inspector } from "@/modules/studio/components/Inspector";
@@ -34,6 +35,7 @@ function Studio() {
         <Inspector />
       </SidebarInset>
       <CommandPalette capture={capture} />
+      <SiteTourDialog capture={capture} />
     </SidebarProvider>
   );
 }

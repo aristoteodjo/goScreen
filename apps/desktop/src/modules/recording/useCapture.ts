@@ -171,6 +171,9 @@ export function useCapture() {
       if (active) stop.mutate();
       else start.mutate();
     },
+    /** Resolves once FFmpeg delivers frames; rejects when it cannot start. */
+    startAsync: () => start.mutateAsync(),
+    stopAsync: () => stop.mutateAsync(),
     isStarting: start.isPending,
     isStopping: stop.isPending,
     screenshot: () => screenshot.mutate(),

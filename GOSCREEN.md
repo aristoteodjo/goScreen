@@ -113,6 +113,15 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
   En dev, c'est **Portly.app**. Arrêt : `q`, puis SIGINT, puis kill. Les PID sont notés dans le cache : un FFmpeg orphelin
   (crash, rebuild) est tué au lancement suivant.
 
+### Site tour
+
+- « Site tour » (barre de capture) enregistre un site entier en une prise. Rust (`modules/site/`) trouve les
+  pages : `sitemap.xml`, sinon les liens internes de l'accueil et des pages liées (même origine, sans assets).
+- `tour/runTour.ts` : bascule de vue et chargement de la 1re page **avant** de lancer la caméra, puis pour
+  chaque page : ouverture sur tous les devices web synchronisés (attente des `location` de type `load`),
+  pause, scroll doux de haut en bas (`scrollTo` via le bridge), pause. Stop dans la toolbar arrête le tour.
+  Timings purs et testés dans `tour/plan.ts`.
+
 ### Capture native
 
 Les iframes cross-origin ne se dessinent pas dans un `<canvas>`, donc la capture est native :

@@ -2,6 +2,7 @@ import type { CaptureMode } from "@goscreen/render-engine";
 import {
   ArrowDown01Icon,
   Cancel01Icon,
+  Globe02Icon,
   GridViewIcon,
   Image01Icon,
   Mic01Icon,
@@ -27,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ipc } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useEditor } from "@/modules/studio/store/editor";
+import { useTour } from "@/modules/tour/store";
 import { useProject } from "@/modules/studio/store/project";
 import { useCaptureSettings } from "./settings";
 import { useRecording } from "./store";
@@ -104,6 +106,15 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
           onChange={setMicrophone}
         />
         <Divider />
+        <button
+          type="button"
+          title="Record every page of the site, scrolled top to bottom"
+          onClick={() => useTour.getState().set({ dialogOpen: true })}
+          className="flex h-12 items-center gap-2 rounded-xl px-3 text-[13px] text-white/80 hover:bg-white/5 hover:text-white"
+        >
+          <HugeiconsIcon icon={Globe02Icon} size={18} strokeWidth={1.6} />
+          Site tour
+        </button>
         <Button
           onClick={capture.toggleRecording}
           disabled={blocked || capture.isStarting}
