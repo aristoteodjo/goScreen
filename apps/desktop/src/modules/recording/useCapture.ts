@@ -19,6 +19,17 @@ function errorMessage(e: unknown) {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** A "fix it" button for errors caused by a missing macOS permission. */
+function settingsAction(message: string) {
+  const pane = message.includes("Screen Recording")
+    ? "screen"
+    : message.includes("Camera and Microphone")
+      ? "camera"
+      : null;
+  if (!pane) return undefined;
+  return { label: "Open Settings", onClick: () => void ipc.openPrivacySettings(pane).catch(() => {}) };
+}
+
 function boxOf(el: HTMLElement | null): CaptureRegion | null {
   if (!el) return null;
   const r = el.getBoundingClientRect();
@@ -76,12 +87,22 @@ export function useCapture() {
       useRecording.getState().setClockZero(zero);
       layerLog.start(region, () => (performance.now() - zero) / 1000);
       useCaptureSettings.getState().setBarOpen(false);
-      if (started.companionWarning) toast.warning("Recording the screen only", { description: started.companionWarning });
+      if (started.companionWarning) {
+        toast.warning("Recording the screen only", {
+          description: started.companionWarning,
+          action: settingsAction(started.companionWarning),
+        });
+      }
     },
     onError: (e) => {
       layerLog.stop();
       setActive(false);
-      toast.error("Could not start recording", { description: errorMessage(e) });
+      const message = errorMessage(e);
+      toast.error("Could not start recording", {
+        description: message,
+        action: settingsAction(message),
+        duration: 15_000,
+      });
     },
   });
 

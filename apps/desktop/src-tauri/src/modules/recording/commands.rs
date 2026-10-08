@@ -13,6 +13,7 @@ use tauri::{State, WebviewWindow};
 use super::capture::{encode_args, PixelRect, ScreenCaptureProvider};
 use super::companion::{self, CaptureDevices};
 use super::ffmpeg;
+use super::permissions;
 
 const STDERR_TAIL: usize = 40;
 
@@ -186,9 +187,7 @@ fn start_companion(bin: &Path, video: &Path, camera: Option<u32>, mic: Option<u3
         if exited || spawned.elapsed() > FIRST_FRAME_TIMEOUT {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("The camera or microphone did not start. Allow Camera and Microphone access for goScreen \
-(in development: for the app that launched it) in System Settings > Privacy & Security."
-                .into());
+            return Err(permissions::companion_message());
         }
         std::thread::sleep(Duration::from_millis(15));
     };
@@ -264,7 +263,7 @@ pub fn recording_start(
             let _ = child.wait();
             orphan::forget();
             let _ = std::fs::remove_file(&video);
-            return Err(NO_FRAMES.into());
+            return Err(permissions::no_frames_message());
         }
         std::thread::sleep(Duration::from_millis(15));
     };
@@ -293,8 +292,6 @@ pub fn recording_start(
 
 const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(6);
 
-const NO_FRAMES: &str = "The screen sent no image. Allow screen recording for goScreen in System Settings > \
-Privacy & Security > Screen Recording (in development: for the terminal that runs it), then restart the app.";
 
 /// Asks FFmpeg to finish the file: `q` on stdin, then SIGINT, then kill.
 /// Each step gets a few seconds so the MP4 index (moov) is written.
@@ -474,7 +471,7 @@ pub async fn screenshot_capture(window: WebviewWindow, region: CaptureRegion) ->
         if !wait_for(&mut child, FIRST_FRAME_TIMEOUT) {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(NO_FRAMES.to_string());
+            return Err(permissions::no_frames_message());
         }
         let mut stderr = String::new();
         if let Some(mut pipe) = child.stderr.take() {

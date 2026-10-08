@@ -19,6 +19,7 @@ pub fn run() {
             recording::commands::recording_stop,
             recording::commands::screenshot_capture,
             recording::commands::capture_devices,
+            recording::permissions::open_privacy_settings,
             android::commands::android_status,
             android::commands::android_devices,
             android::commands::android_device_info,

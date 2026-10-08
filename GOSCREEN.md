@@ -108,8 +108,9 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
   jamais l'enregistrement de l'écran (avertissement). Webcam en overlay (coin 3x3, taille, forme, miroir) ou
   en split screen ; le micro est mixé à l'export.
 - Démarrage : FFmpeg ne crée la sortie qu'à la première frame. Sans fichier après 6 s, c'est la permission
-  « Enregistrement de l'écran » qui manque : erreur explicite, process tué. En dev, l'app responsable est
-  **Portly.app**. Arrêt : `q`, puis SIGINT, puis kill. Les PID sont notés dans le cache : un FFmpeg orphelin
+  « Enregistrement de l'écran » qui manque : erreur explicite qui nomme l'app responsable (premier `.app`
+  parmi les ancêtres du process, `recording/permissions.rs`) avec un bouton vers le bon panneau des Réglages.
+  En dev, c'est **Portly.app**. Arrêt : `q`, puis SIGINT, puis kill. Les PID sont notés dans le cache : un FFmpeg orphelin
   (crash, rebuild) est tué au lancement suivant.
 
 ### Capture native

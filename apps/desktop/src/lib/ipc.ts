@@ -86,6 +86,9 @@ export const ipc = {
   ffmpegStatus: async () => ffmpegStatusSchema.parse(await invoke("ffmpeg_status")),
   recordingStart: async (region: CaptureRegion, media: { camera: number | null; microphone: number | null }, fps = 60) =>
     recordingStartedSchema.parse(await invoke("recording_start", { region, fps, ...media })),
+  openPrivacySettings: async (pane: "screen" | "camera" | "microphone") => {
+    await invoke("open_privacy_settings", { pane });
+  },
   captureDevices: async () => captureDevicesSchema.parse(await invoke("capture_devices")),
   recordingStop: async (interactions: unknown) =>
     recordingResultSchema.parse(
