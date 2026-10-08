@@ -11,8 +11,43 @@ const recordingResultSchema = z.object({
   videoPath: z.string().min(1),
   interactionsPath: z.string().min(1),
   durationMs: z.number().nonnegative(),
+  cameraPath: z.string().nullable(),
+  micPath: z.string().nullable(),
 });
+
+const captureDeviceSchema = z.object({ index: z.number().int().nonnegative(), name: z.string() });
+const captureDevicesSchema = z.object({
+  cameras: z.array(captureDeviceSchema),
+  microphones: z.array(captureDeviceSchema),
+});
+export type CaptureDevices = z.infer<typeof captureDevicesSchema>;
 export type RecordingResult = z.infer<typeof recordingResultSchema>;
+
+const recordingStartedSchema = z.object({
+  videoPath: z.string().min(1),
+  companionWarning: z.string().nullable(),
+  spawnOffsetMs: z.number().nonnegative(),
+});
+export type RecordingStarted = z.infer<typeof recordingStartedSchema>;
+
+const openedRecordingSchema = z.object({
+  videoPath: z.string().min(1),
+  videoUrl: z.string().url(),
+  cameraUrl: z.string().url().nullable(),
+  micUrl: z.string().url().nullable(),
+  name: z.string(),
+  interactions: z.unknown().nullable(),
+  edit: z.unknown().nullable(),
+});
+export type OpenedRecording = z.infer<typeof openedRecordingSchema>;
+
+const recordingEntrySchema = z.object({
+  path: z.string().min(1),
+  name: z.string(),
+  modifiedMs: z.number(),
+  hasInteractions: z.boolean(),
+});
+export type RecordingEntry = z.infer<typeof recordingEntrySchema>;
 
 const ffmpegStatusSchema = z.object({
   available: z.boolean(),
@@ -49,12 +84,33 @@ async function proxyOpen(url: string, userAgent: string, touch: boolean): Promis
 export const ipc = {
   proxyOpen,
   ffmpegStatus: async () => ffmpegStatusSchema.parse(await invoke("ffmpeg_status")),
-  recordingStart: async (region: CaptureRegion, fps = 60) =>
-    z.string().parse(await invoke("recording_start", { region, fps })),
+  recordingStart: async (region: CaptureRegion, media: { camera: number | null; microphone: number | null }, fps = 60) =>
+    recordingStartedSchema.parse(await invoke("recording_start", { region, fps, ...media })),
+  captureDevices: async () => captureDevicesSchema.parse(await invoke("capture_devices")),
   recordingStop: async (interactions: unknown) =>
     recordingResultSchema.parse(
       await invoke("recording_stop", { interactions }),
     ),
   screenshot: async (region: CaptureRegion) =>
     z.string().parse(await invoke("screenshot_capture", { region })),
+  recordingOpen: async (videoPath: string) =>
+    openedRecordingSchema.parse(await invoke("recording_open", { videoPath })),
+  recordingsList: async () => z.array(recordingEntrySchema).parse(await invoke("recordings_list")),
+  editSave: async (videoPath: string, edit: unknown) => {
+    await invoke("edit_save", { videoPath, edit });
+  },
+  exportBegin: async (name: string, fps: number) =>
+    z.string().min(1).parse(await invoke("export_begin", { name, fps })),
+  // Raw body: a JPEG goes over IPC as bytes, not as a JSON array.
+  exportFrame: async (jpeg: ArrayBuffer) => {
+    await invoke("export_frame", new Uint8Array(jpeg));
+  },
+  exportFinish: async (
+    clicks: number[],
+    volume: number,
+    mic: { videoPath: string; trimStartMs: number; volume: number } | null,
+  ) => z.string().min(1).parse(await invoke("export_finish", { clicks, volume, mic })),
+  exportCancel: async () => {
+    await invoke("export_cancel");
+  },
 };

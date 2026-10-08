@@ -5,17 +5,28 @@ import {
   SHADOW_PRESETS,
   type Size,
 } from "@goscreen/device-engine";
+import { type ContentSourceRef, WEB_SOURCE } from "@goscreen/content-source";
 import { create } from "zustand";
 import { registry } from "@/lib/registry";
 import { ASPECTS, type AspectId } from "./aspect";
 import { BACKGROUND_PRESETS, type Background } from "./backgrounds";
 
-// A device as the project knows it: engine instance plus how it follows the
-// shared URL. Unsynced devices browse on their own.
+// A device as the project knows it: engine instance, what it displays, and
+// how it follows the shared URL. Unsynced devices browse on their own;
+// Android devices show their own screen and never follow a URL.
 export type ProjectDevice = DeviceInstance & {
   synced: boolean;
   url: string | null;
+  source: ContentSourceRef;
 };
+
+export type NewDevice = {
+  source?: ContentSourceRef;
+  viewport?: Size | null;
+  orientation?: DeviceInstance["orientation"];
+};
+
+const followsUrl = (d: ProjectDevice) => d.source.kind === "web";
 
 export type CanvasPoint = { x: number; y: number };
 
@@ -38,7 +49,7 @@ type ProjectActions = {
   setBackground: (bg: Background) => void;
   setSynced: (id: string, synced: boolean) => void;
   setAllSynced: (synced: boolean) => void;
-  addDevice: (deviceId: string) => string | null;
+  addDevice: (deviceId: string, init?: NewDevice) => string | null;
   removeDevice: (id: string) => void;
   updateDevice: (id: string, patch: Partial<ProjectDevice>) => void;
   moveOnCanvas: (id: string, point: CanvasPoint) => void;
@@ -117,20 +128,23 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
   setSynced: (id, synced) =>
     set((s) => ({
       devices: s.devices.map((d) =>
-        d.id === id ? { ...d, synced, url: synced ? null : (d.url ?? s.url) } : d,
+        d.id === id && followsUrl(d) ? { ...d, synced, url: synced ? null : (d.url ?? s.url) } : d,
       ),
     })),
   setAllSynced: (synced) =>
     set((s) => ({
-      devices: s.devices.map((d) => ({ ...d, synced, url: synced ? null : (d.url ?? s.url) })),
+      devices: s.devices.map((d) =>
+        followsUrl(d) ? { ...d, synced, url: synced ? null : (d.url ?? s.url) } : d,
+      ),
     })),
 
-  addDevice: (deviceId) => {
+  addDevice: (deviceId, init = {}) => {
     const device = registry.get(deviceId);
     if (!device) return null;
     counter += 1;
     const id = `dev-${Date.now().toString(36)}-${counter}`;
-    const base = { deviceId, orientation: "portrait" as const, viewport: null };
+    const source = init.source ?? WEB_SOURCE;
+    const base = { deviceId, orientation: init.orientation ?? ("portrait" as const), viewport: init.viewport ?? null };
     const instance: ProjectDevice = {
       id,
       ...base,
@@ -144,8 +158,9 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
       shadow: SHADOW_PRESETS.floating,
       browserChrome: "none",
       statusBar: "auto",
-      synced: true,
+      synced: source.kind === "web",
       url: null,
+      source,
     };
     set((s) => {
       const devices = [...s.devices, instance];
@@ -189,7 +204,8 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
             next.colorId = device.frame.colors[0].id;
           }
           // Another model has another native size; a custom size would lie.
-          if (patch.viewport === undefined) next.viewport = null;
+          // A live source keeps its real size whatever frame shows it.
+          if (patch.viewport === undefined && followsUrl(next)) next.viewport = null;
         }
         if ((patch.deviceId || patch.orientation) && patch.scale === undefined) {
           next.scale = fitScaleFor(next, s.aspect);

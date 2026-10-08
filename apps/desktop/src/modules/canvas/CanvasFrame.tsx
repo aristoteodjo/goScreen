@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 import { DeviceMockup } from "@/modules/device/DeviceMockup";
+import { useRecording } from "@/modules/recording/store";
 import { type CanvasPoint, frameSizeOf, type ProjectDevice, useProject } from "@/modules/studio/store/project";
 import { useEditor } from "@/modules/studio/store/editor";
 import { snapViewportSize } from "./snap";
@@ -34,13 +35,15 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
   const [resizing, setResizing] = useState(false);
 
   if (!def) return null;
+  // A live Android source dictates its own size, rotation and navigation.
+  const live = device.source.kind === "android" ? device.source : null;
   const frame = frameSizeOf(device);
   const viewport = device.viewport ?? { width: def.viewport.width, height: def.viewport.height };
   const shown =
     device.orientation === "portrait" ? viewport : { width: viewport.height, height: viewport.width };
 
   const startMove = (e: PointerEvent<HTMLElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || useRecording.getState().active) return;
     e.stopPropagation();
     select(device.id);
     const zoom = useCanvasView.getState().zoom;
@@ -64,7 +67,7 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
   };
 
   const startResize = (edge: ResizeEdge) => (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || useRecording.getState().active) return;
     e.stopPropagation();
     select(device.id);
     const zoom = useCanvasView.getState().zoom;
@@ -115,8 +118,10 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
             <span className="shrink-0 font-mono text-[10.5px] tabular-nums opacity-70">
               {shown.width}×{shown.height}
             </span>
-            {device.viewport ? <span className="shrink-0 text-[10.5px] text-signal">custom</span> : null}
+            {device.viewport && !live ? <span className="shrink-0 text-[10.5px] text-signal">custom</span> : null}
+            {live ? <span className="shrink-0 font-mono text-[10.5px] text-emerald-400">{live.serial}</span> : null}
           </button>
+          {live ? null : (
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex shrink-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5">
@@ -133,14 +138,17 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
             </TooltipTrigger>
             <TooltipContent>Follow the shared URL and scroll</TooltipContent>
           </Tooltip>
-          <FrameButton
-            label="Rotate"
-            icon={RotateClockwiseIcon}
-            onClick={() =>
-              updateDevice(device.id, { orientation: device.orientation === "portrait" ? "landscape" : "portrait" })
-            }
-          />
-          {device.viewport ? (
+          )}
+          {live ? null : (
+            <FrameButton
+              label="Rotate"
+              icon={RotateClockwiseIcon}
+              onClick={() =>
+                updateDevice(device.id, { orientation: device.orientation === "portrait" ? "landscape" : "portrait" })
+              }
+            />
+          )}
+          {device.viewport && !live ? (
             <FrameButton
               label="Reset to native size"
               icon={RefreshIcon}
@@ -159,9 +167,13 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
         onFramePointerDown={startMove}
       />
 
-      <Handle edge="right" onPointerDown={startResize("right")} />
-      <Handle edge="bottom" onPointerDown={startResize("bottom")} />
-      <Handle edge="corner" onPointerDown={startResize("corner")} />
+      {live ? null : (
+        <>
+          <Handle edge="right" onPointerDown={startResize("right")} />
+          <Handle edge="bottom" onPointerDown={startResize("bottom")} />
+          <Handle edge="corner" onPointerDown={startResize("corner")} />
+        </>
+      )}
 
       {resizing ? (
         <div

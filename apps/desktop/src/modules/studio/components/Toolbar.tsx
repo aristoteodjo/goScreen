@@ -16,6 +16,7 @@ import { normalizeUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 import { useReload } from "@/modules/interaction/runtime";
 import type { CaptureControls } from "@/modules/recording/useCapture";
+import { useCaptureSettings } from "@/modules/recording/settings";
 import { useRecording } from "@/modules/recording/store";
 import { ASPECTS, type AspectId } from "../store/aspect";
 import { type ViewMode, useEditor } from "../store/editor";
@@ -29,11 +30,16 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
   const view = useEditor((s) => s.view);
   const setView = useEditor((s) => s.setView);
   // An unsynced selected device has its own address; edit that one.
-  const ownDevice = useProject((s) => s.devices.find((d) => d.id === selectedId && !d.synced));
+  const ownDevice = useProject((s) =>
+    s.devices.find((d) => d.id === selectedId && !d.synced && d.source.kind === "web"),
+  );
   const url = ownDevice ? (ownDevice.url ?? sharedUrl) : sharedUrl;
   const aspect = useProject((s) => s.aspect);
   const setAspect = useProject((s) => s.setAspect);
-  const allSynced = useProject((s) => s.devices.length > 0 && s.devices.every((d) => d.synced));
+  const allSynced = useProject((s) => {
+    const web = s.devices.filter((d) => d.source.kind === "web");
+    return web.length > 0 && web.every((d) => d.synced);
+  });
   const setAllSynced = useProject((s) => s.setAllSynced);
   const reloadAll = useReload((s) => s.reloadAll);
   const queryClient = useQueryClient();
@@ -146,6 +152,11 @@ function RecordButton({ capture }: { capture: CaptureControls }) {
   }, [startedAt]);
 
   const busy = capture.isStarting || capture.isStopping;
+  const barOpen = useCaptureSettings((s) => s.barOpen);
+  const setBarOpen = useCaptureSettings((s) => s.setBarOpen);
+  // Record opens the capture bar; while recording this is the Stop button,
+  // kept in the toolbar so it is never inside the captured area.
+  const onClick = () => (capture.recording ? capture.toggleRecording() : setBarOpen(!barOpen));
   const elapsed = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
   const label = capture.recording
     ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
@@ -154,7 +165,7 @@ function RecordButton({ capture }: { capture: CaptureControls }) {
   return (
     <Button
       size="sm"
-      onClick={capture.toggleRecording}
+      onClick={onClick}
       disabled={busy}
       className={cn(
         "min-w-[92px] gap-1.5 tabular-nums",

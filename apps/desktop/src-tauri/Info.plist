@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCameraUsageDescription</key>
+  <string>goScreen records your camera as an overlay you can place and resize after recording.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>goScreen records your voice alongside the screen so you can narrate product videos.</string>
+</dict>
+</plist>

@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{State, WebviewWindow};
 
 use super::capture::{encode_args, PixelRect, ScreenCaptureProvider};
+use super::companion::{self, CaptureDevices};
 use super::ffmpeg;
 
 const STDERR_TAIL: usize = 40;
@@ -20,6 +21,16 @@ struct Session {
     video: PathBuf,
     started: Instant,
     stderr: Arc<Mutex<VecDeque<String>>>,
+    companion: Option<Companion>,
+}
+
+/// Camera and/or microphone process and where its files land.
+struct Companion {
+    child: Child,
+    camera: Option<PathBuf>,
+    mic: Option<PathBuf>,
+    /// First companion output relative to the first screen frame.
+    offset_ms: f64,
 }
 
 #[derive(Default)]
@@ -39,6 +50,19 @@ pub struct RecordingResult {
     video_path: String,
     interactions_path: String,
     duration_ms: u64,
+    camera_path: Option<String>,
+    mic_path: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingStarted {
+    video_path: String,
+    // Set when the camera/microphone could not start; the screen still records.
+    companion_warning: Option<String>,
+    // Time from the command call to the ffmpeg spawn. The frontend adds it to
+    // its own call time to align interaction timestamps with frame 0.
+    spawn_offset_ms: f64,
 }
 
 #[derive(Serialize)]
@@ -125,6 +149,57 @@ fn tail(lines: &Arc<Mutex<VecDeque<String>>>) -> String {
         .unwrap_or_default()
 }
 
+fn avfoundation_listing(bin: &Path) -> String {
+    Command::new(bin)
+        .args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stderr).into_owned())
+        .unwrap_or_default()
+}
+
+/// Cameras and microphones the recorder can use alongside the screen.
+#[tauri::command(async)]
+pub fn capture_devices() -> Result<CaptureDevices, String> {
+    if !cfg!(target_os = "macos") {
+        return Ok(CaptureDevices::default());
+    }
+    let bin = ffmpeg_bin()?;
+    Ok(companion::parse_avfoundation_devices(&avfoundation_listing(&bin)))
+}
+
+/// Starts the camera/mic FFmpeg and waits for its first output. A failure
+/// here never blocks the screen recording: it comes back as a warning.
+fn start_companion(bin: &Path, video: &Path, camera: Option<u32>, mic: Option<u32>, screen_zero: Instant) -> Result<Option<Companion>, String> {
+    let Some((args, outputs)) = companion::companion_args(camera, mic, video) else { return Ok(None) };
+    if !cfg!(target_os = "macos") {
+        return Err("Camera and microphone capture are only available on macOS for now.".into());
+    }
+    let spawned = Instant::now();
+    let mut child = companion::spawn(bin, &args).map_err(|e| format!("camera/mic: {e}"))?;
+    orphan::remember(child.id());
+    let first = loop {
+        let ready = outputs.camera.iter().chain(outputs.mic.iter()).any(|p| p.exists());
+        if ready {
+            break Instant::now();
+        }
+        let exited = matches!(child.try_wait(), Ok(Some(_)));
+        if exited || spawned.elapsed() > FIRST_FRAME_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("The camera or microphone did not start. Allow Camera and Microphone access for goScreen \
+(in development: for the app that launched it) in System Settings > Privacy & Security."
+                .into());
+        }
+        std::thread::sleep(Duration::from_millis(15));
+    };
+    let offset_ms = if first >= screen_zero {
+        first.duration_since(screen_zero).as_secs_f64() * 1000.0
+    } else {
+        -(screen_zero.duration_since(first).as_secs_f64() * 1000.0)
+    };
+    Ok(Some(Companion { child, camera: outputs.camera, mic: outputs.mic, offset_ms }))
+}
+
 // Blocking work (ffmpeg probing, graceful stop) must stay off the main thread.
 #[tauri::command(async)]
 pub fn recording_start(
@@ -132,7 +207,10 @@ pub fn recording_start(
     state: State<'_, RecordingState>,
     region: CaptureRegion,
     fps: Option<u32>,
-) -> Result<String, String> {
+    camera: Option<u32>,
+    microphone: Option<u32>,
+) -> Result<RecordingStarted, String> {
+    let called = Instant::now();
     let mut slot = state.0.lock().map_err(|_| "recording state poisoned")?;
     if slot.is_some() {
         return Err("A recording is already running.".into());
@@ -143,6 +221,7 @@ pub fn recording_start(
     let input = provider(&bin)?.input(rect, fps.unwrap_or(60).clamp(15, 60), false);
     let args = encode_args(input, &video.to_string_lossy(), false);
 
+    let spawned = Instant::now();
     let mut child = Command::new(&bin)
         .args(&args)
         .stdin(Stdio::piped())
@@ -167,27 +246,164 @@ pub fn recording_start(
         });
     }
 
-    std::thread::sleep(Duration::from_millis(400));
-    if let Ok(Some(status)) = child.try_wait() {
-        return Err(format!("ffmpeg exited early ({status}):\n{}", tail(&stderr)));
-    }
+    orphan::remember(child.id());
+
+    // FFmpeg only creates the output once the screen delivers a first frame.
+    // Without the Screen Recording permission it never does and would hang
+    // forever, so a missing file is a failure, not a slow start.
+    let first_frame = loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            orphan::forget();
+            return Err(format!("ffmpeg exited early ({status}):\n{}", tail(&stderr)));
+        }
+        if video.exists() {
+            break Instant::now();
+        }
+        if spawned.elapsed() > FIRST_FRAME_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            orphan::forget();
+            let _ = std::fs::remove_file(&video);
+            return Err(NO_FRAMES.into());
+        }
+        std::thread::sleep(Duration::from_millis(15));
+    };
+
+    let (companion, companion_warning) = match start_companion(&bin, &video, camera, microphone, first_frame) {
+        Ok(c) => (c, None),
+        Err(e) => (None, Some(e)),
+    };
 
     log::info!("recording started -> {}", video.display());
     let path = video.to_string_lossy().to_string();
     *slot = Some(Session {
         child,
         video,
-        started: Instant::now(),
+        started: first_frame,
         stderr,
+        companion,
     });
-    Ok(path)
+    Ok(RecordingStarted {
+        video_path: path,
+        companion_warning,
+        // Interaction time zero is the first captured frame, not the spawn.
+        spawn_offset_ms: first_frame.duration_since(called).as_secs_f64() * 1000.0,
+    })
+}
+
+const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(6);
+
+const NO_FRAMES: &str = "The screen sent no image. Allow screen recording for goScreen in System Settings > \
+Privacy & Security > Screen Recording (in development: for the terminal that runs it), then restart the app.";
+
+/// Asks FFmpeg to finish the file: `q` on stdin, then SIGINT, then kill.
+/// Each step gets a few seconds so the MP4 index (moov) is written.
+fn finish(child: &mut Child) {
+    if let Some(stdin) = child.stdin.as_mut() {
+        let _ = stdin.write_all(b"q\n");
+        let _ = stdin.flush();
+    }
+    if wait_for(child, Duration::from_secs(4)) {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        let _ = Command::new("kill").args(["-INT", &child.id().to_string()]).status();
+        if wait_for(child, Duration::from_secs(4)) {
+            return;
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn wait_for(child: &mut Child, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
+            Ok(None) => return false,
+            Err(_) => return true,
+        }
+    }
+}
+
+/// Stops a running capture when the app quits normally.
+pub fn shutdown(state: &RecordingState) {
+    if let Some(mut session) = state.0.lock().ok().and_then(|mut s| s.take()) {
+        if let Some(c) = session.companion.as_mut() {
+            finish(&mut c.child);
+        }
+        finish(&mut session.child);
+        orphan::forget();
+    }
+}
+
+/// A capture FFmpeg outlives an app that was killed (crash, dev rebuild).
+/// Its pid is kept on disk so the next launch can stop it.
+pub mod orphan {
+    use std::path::PathBuf;
+
+    fn file() -> Option<PathBuf> {
+        dirs::cache_dir().map(|d| d.join("goScreen").join("recording.pid"))
+    }
+
+    pub fn remember(pid: u32) {
+        if let Some(f) = file() {
+            if let Some(dir) = f.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let mut pids = std::fs::read_to_string(&f).unwrap_or_default();
+            pids.push_str(&format!("{pid}\n"));
+            let _ = std::fs::write(f, pids);
+        }
+    }
+
+    pub fn forget() {
+        if let Some(f) = file() {
+            let _ = std::fs::remove_file(f);
+        }
+    }
+
+    /// Kills the remembered process only if it is still an ffmpeg.
+    pub fn reap() {
+        let Some(f) = file() else { return };
+        let pids: Vec<u32> = std::fs::read_to_string(&f)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| l.trim().parse().ok())
+            .collect();
+        for pid in pids {
+            reap_one(pid);
+        }
+        let _ = std::fs::remove_file(f);
+    }
+
+    fn reap_one(pid: u32) {
+        #[cfg(unix)]
+        {
+            use std::process::Command;
+            let comm = Command::new("ps")
+                .args(["-p", &pid.to_string(), "-o", "comm="])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                .unwrap_or_default();
+            if comm.trim().ends_with("ffmpeg") {
+                log::warn!("stopping orphaned capture ffmpeg {pid}");
+                let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = pid;
+    }
 }
 
 // Blocking work (ffmpeg probing, graceful stop) must stay off the main thread.
 #[tauri::command(async)]
 pub fn recording_stop(
     state: State<'_, RecordingState>,
-    interactions: serde_json::Value,
+    mut interactions: serde_json::Value,
 ) -> Result<RecordingResult, String> {
     let mut session = state
         .0
@@ -197,26 +413,32 @@ pub fn recording_stop(
         .ok_or("No recording is running.")?;
     let duration_ms = session.started.elapsed().as_millis() as u64;
 
-    if let Some(stdin) = session.child.stdin.as_mut() {
-        let _ = stdin.write_all(b"q\n");
-        let _ = stdin.flush();
-    }
-    let deadline = Instant::now() + Duration::from_secs(15);
-    loop {
-        match session.child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(50)),
-            _ => {
-                let _ = session.child.kill();
-                let _ = session.child.wait();
-                break;
-            }
-        }
-    }
+    finish(&mut session.child);
+    let companion = session.companion.take().map(|mut c| {
+        finish(&mut c.child);
+        c
+    });
+    orphan::forget();
 
     let size = std::fs::metadata(&session.video).map(|m| m.len()).unwrap_or(0);
     if size == 0 {
         return Err(format!("Recording produced no video:\n{}", tail(&session.stderr)));
+    }
+
+    // Companion files are referenced by name: the folder can move as a whole.
+    let existing = |p: &Option<PathBuf>| p.as_ref().filter(|p| p.is_file()).cloned();
+    let camera = companion.as_ref().and_then(|c| existing(&c.camera));
+    let mic = companion.as_ref().and_then(|c| existing(&c.mic));
+    let file_name = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned());
+    if let Some(obj) = interactions.as_object_mut() {
+        obj.insert(
+            "media".into(),
+            serde_json::json!({
+                "camera": camera.as_ref().and_then(file_name),
+                "mic": mic.as_ref().and_then(file_name),
+                "offsetMs": companion.as_ref().map(|c| c.offset_ms).unwrap_or(0.0),
+            }),
+        );
     }
 
     let sidecar = session.video.with_extension("interactions.json");
@@ -227,6 +449,8 @@ pub fn recording_stop(
         video_path: session.video.to_string_lossy().to_string(),
         interactions_path: sidecar.to_string_lossy().to_string(),
         duration_ms,
+        camera_path: camera.map(|p| p.to_string_lossy().into_owned()),
+        mic_path: mic.map(|p| p.to_string_lossy().into_owned()),
     })
 }
 
@@ -237,12 +461,31 @@ pub async fn screenshot_capture(window: WebviewWindow, region: CaptureRegion) ->
     let out = output_path(dirs::picture_dir(), "png")?;
     let input = provider(&bin)?.input(rect, 30, false);
     let args = encode_args(input, &out.to_string_lossy(), true);
-    let result = tauri::async_runtime::spawn_blocking(move || Command::new(bin).args(&args).output())
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| format!("ffmpeg: {e}"))?;
-    if !result.status.success() || !out.exists() {
-        return Err(format!("Screenshot failed:\n{}", String::from_utf8_lossy(&result.stderr)));
-    }
-    Ok(out.to_string_lossy().to_string())
+    let target = out.clone();
+    // Same hang as recording without permission: bounded, never forever.
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut child = Command::new(bin)
+            .args(&args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("ffmpeg: {e}"))?;
+        if !wait_for(&mut child, FIRST_FRAME_TIMEOUT) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(NO_FRAMES.to_string());
+        }
+        let mut stderr = String::new();
+        if let Some(mut pipe) = child.stderr.take() {
+            let _ = std::io::Read::read_to_string(&mut pipe, &mut stderr);
+        }
+        let ok = child.wait().map(|s| s.success()).unwrap_or(false);
+        if !ok || !target.exists() {
+            return Err(format!("Screenshot failed:\n{stderr}"));
+        }
+        Ok(target.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

@@ -82,10 +82,16 @@ export function Stage() {
               <div
                 key={d.id}
                 className="absolute top-0 left-0 will-change-transform"
-                style={{
-                  transform: instanceTransform(d),
-                  filter: d.renderMode === "flat" ? undefined : shadowToCss(d.shadow),
-                }}
+                style={
+                  recording
+                    ? // Captured flat: screens must be upright rectangles to be cut
+                      // out as layers. Rotation and tilt are re-applied in the editor.
+                      { transform: `translate(${d.x}px, ${d.y}px) translate(-50%, -50%) scale(${d.scale})` }
+                    : {
+                        transform: instanceTransform(d),
+                        filter: d.renderMode === "flat" ? undefined : shadowToCss(d.shadow),
+                      }
+                }
               >
                 <DeviceMockup
                   instance={d}

@@ -6,6 +6,10 @@ export function setStageElement(el: HTMLElement | null) {
   element = el;
 }
 
+export function stageElement(): HTMLElement | null {
+  return element;
+}
+
 // Window-relative CSS pixels, which Rust converts to physical screen pixels.
 export function stageRegion(): CaptureRegion | null {
   if (!element) return null;

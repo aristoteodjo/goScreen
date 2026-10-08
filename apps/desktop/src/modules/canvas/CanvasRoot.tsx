@@ -1,5 +1,6 @@
 import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { deviceUrl, useProject } from "@/modules/studio/store/project";
+import { useRecording } from "@/modules/recording/store";
 import { useEditor } from "@/modules/studio/store/editor";
 import { CanvasFrame } from "./CanvasFrame";
 import { attachCanvas, canvasCommands } from "./commands";
@@ -57,6 +58,8 @@ export function CanvasRoot() {
     if (!host) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      // The recorded region is fixed for the whole take.
+      if (useRecording.getState().active) return;
       const v = useCanvasView.getState();
       // Trackpad pinch arrives as ctrl+wheel on macOS.
       if (e.ctrlKey || e.metaKey) {
@@ -115,6 +118,7 @@ export function CanvasRoot() {
   }, [hasDevices]);
 
   const startPan = (e: PointerEvent<HTMLDivElement>) => {
+    if (useRecording.getState().active) return;
     const onBackground = e.target === hostRef.current || e.target === layerRef.current;
     if (!(e.button === 1 || (e.button === 0 && (onBackground || spaceHeld)))) return;
     e.preventDefault();

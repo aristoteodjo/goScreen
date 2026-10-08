@@ -14,7 +14,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { registry } from "@/lib/registry";
+import { AndroidPanel } from "@/modules/android/AndroidPanel";
 import { canvasCommands } from "@/modules/canvas/commands";
+import { RecordingsPanel } from "@/modules/recording/RecordingsPanel";
 import { useEditor } from "../store/editor";
 import { useProject } from "../store/project";
 
@@ -66,6 +68,9 @@ export function StudioSidebar() {
                     >
                       <HugeiconsIcon icon={iconFor(def?.category ?? "phone")} strokeWidth={1.75} />
                       <span>{def?.name ?? d.deviceId}</span>
+                      {d.source.kind === "android" ? (
+                        <span className="ml-auto size-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden="true" />
+                      ) : null}
                     </SidebarMenuButton>
                     <SidebarMenuAction showOnHover onClick={() => removeDevice(d.id)} aria-label="Remove device">
                       <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.75} />
@@ -76,6 +81,8 @@ export function StudioSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <AndroidPanel />
+        <RecordingsPanel />
         {groups.map((group) => (
           <SidebarGroup key={group.id}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>

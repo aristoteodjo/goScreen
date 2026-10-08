@@ -5,8 +5,11 @@ import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
+import { AndroidScreen } from "@/modules/android/AndroidScreen";
 import { registerFrame } from "@/modules/interaction/bridge";
 import { useReload, useRuntime } from "@/modules/interaction/runtime";
+import { registerGlass, registerScreen } from "@/modules/recording/stagePoint";
+import { useRecording } from "@/modules/recording/store";
 import type { ProjectDevice } from "@/modules/studio/store/project";
 import { Cutout } from "./Cutout";
 import { StatusBar } from "./StatusBar";
@@ -24,15 +27,21 @@ type Props = {
 // Renders one device at its natural frame size. Callers position it.
 export function DeviceMockup({ instance, url, selected, framesInteractive, onFramePointerDown }: Props) {
   const device = registry.get(instance.deviceId) ?? registry.list()[0];
-  const { src, bump } = useStableSource(instance.id, url);
+  const live = instance.source.kind === "android" ? instance.source : null;
+  const { src, bump } = useStableSource(instance.id, live ? "" : url);
   const content = useDeviceContent(src, device);
   const nonce = useReload((s) => s.nonce);
+  // Hardware details are redrawn by the editor, so the model can change
+  // after capture; they must not be burned into the recorded glass.
+  const recording = useRecording((s) => s.active);
 
   const { frame, screen, bezel } = resolveScreenLayout(device, instance.orientation, instance.viewport);
   const color = device.frame.colors.find((c) => c.id === instance.colorId) ?? device.frame.colors[0];
   const portrait = instance.orientation === "portrait";
   const handheld = device.category === "phone" || device.category === "tablet";
-  const showStatusBar = handheld && portrait && instance.statusBar === "auto" && device.statusBar.style !== "none";
+  // A live Android screen draws its own status bar and navigation.
+  const showStatusBar =
+    !live && handheld && portrait && instance.statusBar === "auto" && device.statusBar.style !== "none";
 
   return (
     <div className="relative" style={{ width: frame.width, height: frame.height }}>
@@ -57,14 +66,27 @@ export function DeviceMockup({ instance, url, selected, framesInteractive, onFra
         }}
       />
       <div
+        ref={(el) => {
+          registerGlass(instance.id, el);
+          return () => registerGlass(instance.id, null);
+        }}
         className="absolute overflow-hidden bg-black"
         style={{ left: bezel, top: bezel, width: screen.width, height: screen.height, borderRadius: device.frame.screenRadius }}
       >
-        <Cutout cutout={device.cutout} orientation={instance.orientation} />
+        {recording ? null : <Cutout cutout={device.cutout} orientation={instance.orientation} />}
         <div className="flex h-full w-full flex-col bg-white">
           {showStatusBar ? <StatusBar style={device.statusBar.style} height={device.safeArea.top} /> : null}
-          <div className="relative min-h-0 flex-1">
-            {content.data ? (
+          <div
+            className="relative min-h-0 flex-1"
+            ref={(el) => {
+              registerScreen(instance.id, el);
+              return () => registerScreen(instance.id, null);
+            }}
+          >
+            <CornerMarkers />
+            {live ? (
+              <AndroidScreen instanceId={instance.id} serial={live.serial} interactive={framesInteractive} />
+            ) : content.data ? (
               <iframe
                 key={`${content.data.proxiedUrl}#${nonce}.${bump}`}
                 ref={(el) => {
@@ -86,7 +108,7 @@ export function DeviceMockup({ instance, url, selected, framesInteractive, onFra
             )}
           </div>
         </div>
-        {device.homeIndicator && portrait ? (
+        {device.homeIndicator && portrait && !live && !recording ? (
           <div
             aria-hidden="true"
             className="pointer-events-none absolute bottom-2 left-1/2 h-[5px] w-[134px] -translate-x-1/2 rounded-full bg-black/80"
@@ -111,6 +133,19 @@ function useStableSource(instanceId: string, url: string) {
     setState((s) => ({ src: url, bump: s.src === url ? s.bump + 1 : s.bump }));
   }, [url, instanceId]);
   return state;
+}
+
+// Zero-size points at the screen corners; see recording/stagePoint.ts.
+function CornerMarkers() {
+  const base = "pointer-events-none absolute size-0";
+  return (
+    <>
+      <span aria-hidden="true" data-corner="tl" className={cn(base, "top-0 left-0")} />
+      <span aria-hidden="true" data-corner="tr" className={cn(base, "top-0 right-0")} />
+      <span aria-hidden="true" data-corner="br" className={cn(base, "right-0 bottom-0")} />
+      <span aria-hidden="true" data-corner="bl" className={cn(base, "bottom-0 left-0")} />
+    </>
+  );
 }
 
 function ScreenMessage({ message, error = false }: { message: string; error?: boolean }) {

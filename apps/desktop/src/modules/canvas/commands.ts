@@ -13,6 +13,11 @@ export function attachCanvas(h: HTMLElement | null, l: HTMLElement | null) {
   layer = l;
 }
 
+/** The visible canvas viewport, for recording it. */
+export function canvasElement(): HTMLElement | null {
+  return host;
+}
+
 // Discrete jumps ease in; continuous gestures stay instant.
 function animateTo(view: View) {
   if (layer) {

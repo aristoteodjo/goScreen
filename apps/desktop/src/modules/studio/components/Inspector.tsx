@@ -23,6 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
+import { AndroidControls } from "@/modules/android/AndroidControls";
 import { BACKGROUND_PRESETS, backgroundToCss } from "../store/backgrounds";
 import { useEditor } from "../store/editor";
 import { type ProjectDevice, useProject } from "../store/project";
@@ -73,6 +74,7 @@ function DeviceSection({ instance }: { instance: ProjectDevice }) {
   const remove = useProject((s) => s.removeDevice);
   const device = registry.get(instance.deviceId);
   if (!device) return null;
+  const live = instance.source.kind === "android" ? instance.source : null;
   const set = (patch: Partial<ProjectDevice>) => update(instance.id, patch);
   const size = instance.viewport ?? { width: device.viewport.width, height: device.viewport.height };
   const setSize = (axis: "width" | "height", raw: string) => {
@@ -121,6 +123,10 @@ function DeviceSection({ instance }: { instance: ProjectDevice }) {
         </Select>
       </Row>
 
+      {live ? <AndroidControls serial={live.serial} /> : null}
+
+      {live ? null : (
+      <>
       <Row label="Orientation">
         <ToggleGroup
           type="single"
@@ -174,6 +180,8 @@ function DeviceSection({ instance }: { instance: ProjectDevice }) {
           <span className="block text-muted-foreground">Follows the shared URL, navigation and scroll.</span>
         </label>
       </div>
+      </>
+      )}
 
       <Separator />
 

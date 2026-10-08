@@ -71,3 +71,11 @@ export function subscribeBridge(listener: Listener): () => void {
     listeners.delete(listener);
   };
 }
+
+/**
+ * Feeds an event from a non-iframe source (an Android screen) into the same
+ * pipeline as bridge messages: selection, recording log, sync.
+ */
+export function emitLocal(instanceId: string, event: BridgeEvent) {
+  for (const listener of listeners) listener(instanceId, event);
+}
