@@ -26,12 +26,21 @@ importers:
       '@fontsource/jetbrains-mono':
         specifier: ^5.2.8
         version: 5.3.0
+      '@goscreen/android-source':
+        specifier: workspace:*
+        version: link:../../packages/android-source
+      '@goscreen/content-source':
+        specifier: workspace:*
+        version: link:../../packages/content-source
       '@goscreen/device-engine':
         specifier: workspace:*
         version: link:../../packages/device-engine
       '@goscreen/device-registry':
         specifier: workspace:*
         version: link:../../packages/device-registry
+      '@goscreen/render-engine':
+        specifier: workspace:*
+        version: link:../../packages/render-engine
       '@hugeicons/core-free-icons':
         specifier: ^4.3.5
         version: 4.3.5
@@ -233,6 +242,31 @@ importers:
         specifier: ^4.1.10
         version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
 
+  packages/android-source:
+    dependencies:
+      '@goscreen/content-source':
+        specifier: workspace:*
+        version: link:../content-source
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
+  packages/content-source:
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
   packages/device-engine:
     dependencies:
       '@goscreen/device-registry':
@@ -260,6 +294,19 @@ importers:
         version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
 
   packages/entitlements:
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
+  packages/render-engine:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       typescript:
         specifier: ~6.0.3
