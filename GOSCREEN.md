@@ -47,6 +47,26 @@ Séparés comme demandé par le cahier des charges, jamais un store géant :
 | Runtime State | `modules/interaction/runtime.ts` | location réelle de chaque page, nonce de reload |
 | Recording State | `modules/recording/store.ts` | actif, startedAt, journal d'interactions |
 
+## Vues : Canvas et Scène
+
+- **Canvas** (`modules/canvas/`) : espace infini pour comparer les devices côte à côte (modèle Instatic).
+  La caméra `translate(pan) scale(zoom)` est écrite directement dans le DOM via `useCanvasView.subscribe`.
+  Les frames, qui hébergent chacune une page vivante, ne se re-rendent jamais pendant un pan ou un zoom.
+  Les maths sont pures (`math.ts`, testées). Les tailles qui doivent rester lisibles (étiquettes, poignées)
+  sont divisées par `--canvas-zoom`.
+- **Scène** (`modules/studio/components/Stage.tsx`) : la composition vidéo (ratio, fond, ombre, rotation).
+  Record bascule toujours en Scène, car la zone capturée est le stage.
+- `DeviceMockup` est le rendu commun aux deux vues. Changer de vue remonte les iframes.
+
+## Synchro entre devices
+
+- Chaque device a `synced`. Les devices synchronisés partagent l'URL du projet, la navigation et le scroll ;
+  les autres gardent leur propre `url`.
+- Seules les navigations causées par l'utilisateur sont propagées : clic sur un lien, ou changement de route SPA
+  dans les 1,5 s qui suivent une saisie. Les redirections au chargement ne le sont pas, sinon deux devices
+  redirigés différemment selon leur UA se rechargeraient en boucle.
+- `useStableSource` évite de recharger le device qui a lui-même navigué quand l'URL partagée le rattrape.
+
 ## Rendu web dans le device : iframe + proxy local
 
 Décision clé. Une WebView native ne peut ni pivoter, ni être mise en perspective, ni composée dans le DOM.
