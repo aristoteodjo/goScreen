@@ -105,6 +105,17 @@ export const editActions = {
     });
   },
 
+  /** A blur box at the playhead, to hide sensitive data; drag it over the spot. */
+  addBlur(mode: "blur" | "pixelate" = "blur") {
+    addOverlay({
+      ...overlayAt(4, { width: 0.25, height: 0.08, enter: "fade", exit: "fade", motion: 0.2 }),
+      kind: "blur",
+      mode,
+      strength: mode === "blur" ? 0.02 : 0.018,
+      radius: 0.01,
+    });
+  },
+
   /** A title card cut in at the playhead (or appended at the end). */
   addSlide() {
     const edit = useEdit.getState().edit;

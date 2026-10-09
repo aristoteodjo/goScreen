@@ -1,5 +1,6 @@
 import type { ShapeKind } from "@goscreen/render-engine";
 import {
+  BlurIcon,
   Copy01Icon,
   Cursor01Icon,
   HandGrabIcon,
@@ -103,6 +104,15 @@ export function TimelineToolbar() {
               {s.label}
             </DropdownMenuItem>
           ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <ToolButton icon={BlurIcon} label="Blur" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onSelect={() => editActions.addBlur("blur")}>Blur</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => editActions.addBlur("pixelate")}>Pixelate</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <ToolButton icon={PresentationBarChart01Icon} label="Slide" onClick={editActions.addSlide} />

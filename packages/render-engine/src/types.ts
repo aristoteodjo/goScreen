@@ -158,7 +158,11 @@ export type ImageOverlay = OverlayBase & { kind: "image"; asset: string; radius:
 export type VideoOverlay = OverlayBase & { kind: "video"; asset: string; in: number; volume: number; radius: number };
 export type ShapeKind = "arrow" | "rect" | "ellipse" | "highlight";
 export type ShapeOverlay = OverlayBase & { kind: "shape"; shape: ShapeKind; color: string; stroke: number };
-export type Overlay = TextOverlay | ImageOverlay | VideoOverlay | ShapeOverlay;
+// Hides what is under it: sensitive data in a recording. Strength is a
+// fraction of the output's short side (blur radius or pixel block size).
+export type BlurMode = "blur" | "pixelate";
+export type BlurOverlay = OverlayBase & { kind: "blur"; mode: BlurMode; strength: number; radius: number };
+export type Overlay = TextOverlay | ImageOverlay | VideoOverlay | ShapeOverlay | BlurOverlay;
 
 export type AudioClip = {
   id: string;

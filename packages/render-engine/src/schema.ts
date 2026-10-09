@@ -245,6 +245,13 @@ const overlaySchema = z.discriminatedUnion("kind", [
     color,
     stroke: z.number().min(0).max(0.1).catch(0.008),
   }),
+  z.object({
+    ...overlayBase,
+    kind: z.literal("blur"),
+    mode: z.enum(["blur", "pixelate"]).catch("blur"),
+    strength: z.number().min(0.002).max(0.1).catch(0.02),
+    radius: z.number().min(0).max(0.5).catch(0.01),
+  }),
 ]);
 
 const audioClipSchema = z.object({

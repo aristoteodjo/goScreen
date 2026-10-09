@@ -454,7 +454,7 @@ export function Timeline() {
                           onStart={dragFree("overlay", o, "start", overlayLanes)}
                           onEnd={dragFree("overlay", o, "end", overlayLanes)}
                         >
-                          {o.kind === "text" ? o.text : o.kind === "shape" ? o.shape : assetName(o.asset)}
+                          {o.kind === "text" ? o.text : o.kind === "shape" ? o.shape : o.kind === "blur" ? `Blur · ${o.mode}` : assetName(o.asset)}
                         </Block>
                       </TimelineItemMenu>
                     ))}
@@ -678,6 +678,7 @@ const OVERLAY_COLOR: Record<Overlay["kind"], string> = {
   image: "bg-gradient-to-b from-emerald-500 to-emerald-700 text-white",
   video: "bg-gradient-to-b from-emerald-600 to-emerald-800 text-white",
   shape: "bg-gradient-to-b from-rose-500 to-rose-700 text-white",
+  blur: "bg-[repeating-linear-gradient(45deg,rgba(148,163,184,0.55)_0_6px,rgba(100,116,139,0.55)_6px_12px)] text-white",
 };
 
 /** A track row: a header pinned on the left, then the track itself. */

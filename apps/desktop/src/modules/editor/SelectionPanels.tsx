@@ -296,6 +296,41 @@ export function OverlayPanel() {
           />
         </Section>
       ) : null}
+      {overlay.kind === "blur" ? (
+        <Section title="Hide" hint="Drag the box over what must not be seen. Everything under it is hidden.">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={overlay.mode}
+            onValueChange={(v) => v && set({ mode: v } as Partial<Overlay>)}
+            className="grid w-full grid-cols-2"
+          >
+            <ToggleGroupItem value="blur" className="text-[11px]">
+              Blur
+            </ToggleGroupItem>
+            <ToggleGroupItem value="pixelate" className="text-[11px]">
+              Pixelate
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <SliderRow
+            value={overlay.strength}
+            min={0.004}
+            max={0.06}
+            step={0.001}
+            format={(v) => `${Math.round(v * 1000)}`}
+            onChange={(strength) => set({ strength } as Partial<Overlay>, "blur-strength")}
+          />
+          <SliderRow
+            value={overlay.radius}
+            min={0}
+            max={0.1}
+            step={0.005}
+            format={pct}
+            onChange={(radius) => set({ radius } as Partial<Overlay>, "blur-radius")}
+          />
+        </Section>
+      ) : null}
       {overlay.kind === "image" || overlay.kind === "video" ? (
         <Section title="Corners">
           <SliderRow

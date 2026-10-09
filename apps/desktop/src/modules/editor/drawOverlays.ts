@@ -249,6 +249,46 @@ function drawMedia(ctx: CanvasRenderingContext2D, image: CanvasImageSource | nul
   ctx.restore();
 }
 
+let pixelScratch: HTMLCanvasElement | null = null;
+
+/**
+ * Blurs or pixelates what is already painted under the box: the canvas is
+ * drawn back onto itself, clipped to the box. Overlays on lower lanes are
+ * hidden too; those above stay sharp.
+ */
+function drawBlur(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "blur" }>, r: DOMRectLike, out: Size) {
+  const short = Math.min(out.width, out.height);
+  const source = ctx.canvas;
+  // Output px -> canvas px (the context is scaled by the preview density).
+  const k = source.width / out.width;
+  ctx.save();
+  // Motion and rotation would shift the copy against what it hides: blurs stay put.
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.beginPath();
+  ctx.roundRect(r.x, r.y, r.width, r.height, o.radius * short);
+  ctx.clip();
+  if (o.mode === "blur") {
+    // Bleeding in from outside the box keeps edges blurred, not sharp.
+    ctx.filter = `blur(${Math.max(1, o.strength * short * k)}px)`;
+    ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, out.width, out.height);
+  } else {
+    const block = Math.max(2, o.strength * short);
+    const w = Math.max(1, Math.round(r.width / block));
+    const h = Math.max(1, Math.round(r.height / block));
+    pixelScratch ??= document.createElement("canvas");
+    pixelScratch.width = w;
+    pixelScratch.height = h;
+    const p = pixelScratch.getContext("2d");
+    if (p) {
+      p.imageSmoothingEnabled = true;
+      p.drawImage(source, r.x * k, r.y * k, r.width * k, r.height * k, 0, 0, w, h);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(pixelScratch, 0, 0, w, h, r.x, r.y, r.width, r.height);
+    }
+  }
+  ctx.restore();
+}
+
 /** Every overlay showing at timeline time t, above the composed video, in output px. */
 export function drawOverlays(ctx: CanvasRenderingContext2D, overlays: Overlay[], t: number, out: Size, mediaOf: MediaOf) {
   for (const o of activeOverlays(overlays, t)) {
@@ -259,7 +299,8 @@ export function drawOverlays(ctx: CanvasRenderingContext2D, overlays: Overlay[],
     ctx.globalAlpha = o.opacity;
     applyMotion(ctx, m, r.x + r.width / 2, r.y + r.height / 2, out, o.rotation);
     const short = Math.min(out.width, out.height);
-    if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out);
+    if (o.kind === "blur") drawBlur(ctx, o, r, out);
+    else if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out);
     else if (o.kind === "shape") drawShape(ctx, o, m, r, out);
     else drawMedia(ctx, mediaOf(o), r, o.radius * short);
     ctx.restore();
