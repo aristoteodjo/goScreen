@@ -36,8 +36,15 @@ const SHAPES: { id: CameraShape; label: string }[] = [
  */
 function useCameraStream(name: string | null) {
   const [stream, setStream] = useState<MediaStream | null>(null);
+  // Why the preview failed, shown in the bubble instead of a silent spinner.
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (!name || !navigator.mediaDevices?.getUserMedia) return;
+    setError(null);
+    if (!name) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("This window cannot preview cameras.");
+      return;
+    }
     let alive = true;
     let current: MediaStream | null = null;
     (async () => {
@@ -48,8 +55,15 @@ function useCameraStream(name: string | null) {
         current = await navigator.mediaDevices.getUserMedia({ video, audio: false });
         if (alive) setStream(current);
         else for (const t of current.getTracks()) t.stop();
-      } catch {
-        if (alive) setStream(null);
+      } catch (e) {
+        if (!alive) return;
+        setStream(null);
+        const denied = e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError");
+        setError(
+          denied
+            ? "Camera access is blocked. Allow it in System Settings → Privacy → Camera."
+            : `Camera preview failed${e instanceof Error ? `: ${e.message}` : ""}`,
+        );
       }
     })();
     return () => {
@@ -58,7 +72,7 @@ function useCameraStream(name: string | null) {
       setStream(null);
     };
   }, [name]);
-  return stream;
+  return { stream, error };
 }
 
 const overlaps = (a: Rect, b: DOMRect) =>
@@ -87,7 +101,7 @@ export function LiveCamera() {
   });
   const name = devices.data?.cameras.find((c) => c.index === cameraIndex)?.name ?? null;
   const shown = cameraIndex !== null && bubble.visible;
-  const stream = useCameraStream(shown ? name : null);
+  const { stream, error: cameraError } = useCameraStream(shown ? name : null);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -171,7 +185,7 @@ export function LiveCamera() {
               />
               {stream ? null : (
                 <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-[11px] text-white/60">
-                  {name ? "Starting camera…" : "Camera unavailable"}
+                  {cameraError ?? (name ? "Starting camera…" : "Camera unavailable")}
                 </div>
               )}
           </ContextMenuTrigger>
