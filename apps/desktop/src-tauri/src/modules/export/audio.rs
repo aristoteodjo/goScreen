@@ -40,30 +40,85 @@ pub fn wav(samples: &[i16]) -> Vec<u8> {
     out
 }
 
-/// Microphone track placement in the export.
-pub struct MicMix {
-    /// Input index of the mic file in the FFmpeg command.
+/// One stretch of an audio file placed on the export timeline: a cut of
+/// the microphone under a recording clip, a music clip, a video's sound.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Piece {
+    /// Input index of the file in the FFmpeg command.
     pub input: usize,
-    /// Mic start relative to the first screen frame (can be negative).
-    pub offset_ms: f64,
-    /// Trim start of the export, in source milliseconds.
-    pub trim_start_ms: f64,
+    /// Start and length inside the file, in seconds.
+    pub from: f64,
+    pub duration: f64,
+    /// Where it starts in the export, in milliseconds.
+    pub at_ms: u64,
+    pub speed: f64,
     pub volume: f64,
+    pub fade_in: f64,
+    pub fade_out: f64,
 }
 
-/// filter_complex for the export soundtrack: one click (input 1) at each
-/// tap time and/or the microphone aligned on the trimmed video, padded with
-/// silence so `-shortest` lets the video decide the length.
-pub fn mix_filter(clicks_ms: &[u64], volume: f64, mic: Option<&MicMix>) -> Option<String> {
+/// A stretch requested in source time, moved onto a file that starts
+/// `offset` seconds after the source (the mic starts a little late or early).
+/// Whatever falls before the file's start is dropped, shifting `at` along.
+pub fn on_file(from: f64, duration: f64, at: f64, speed: f64, offset: f64) -> Option<(f64, f64, f64)> {
+    let local = from - offset;
+    let (skip, local) = if local < 0.0 { (-local, 0.0) } else { (0.0, local) };
+    let left = duration - skip;
+    (left > 0.001).then(|| (local, left, at + skip / speed.max(0.01)))
+}
+
+/// atempo only takes 0.5..2 per stage on older FFmpeg: chain stages.
+fn tempo_chain(speed: f64) -> String {
+    let mut speed = speed.clamp(0.0625, 16.0);
+    let mut out = String::new();
+    while speed > 2.0 + 1e-9 {
+        out.push_str(",atempo=2");
+        speed /= 2.0;
+    }
+    while speed < 0.5 - 1e-9 {
+        out.push_str(",atempo=0.5");
+        speed /= 0.5;
+    }
+    if (speed - 1.0).abs() > 1e-6 {
+        out.push_str(&format!(",atempo={speed:.4}"));
+    }
+    out
+}
+
+fn piece_filter(p: &Piece, label: &str) -> String {
+    let length = p.duration / p.speed.max(0.01);
+    let mut f = format!(
+        "[{}:a]atrim=start={:.3}:duration={:.3},asetpts=PTS-STARTPTS{}",
+        p.input,
+        p.from.max(0.0),
+        p.duration,
+        tempo_chain(p.speed)
+    );
+    if p.fade_in > 0.0 {
+        f.push_str(&format!(",afade=t=in:st=0:d={:.3}", p.fade_in.min(length)));
+    }
+    if p.fade_out > 0.0 {
+        let d = p.fade_out.min(length);
+        f.push_str(&format!(",afade=t=out:st={:.3}:d={d:.3}", (length - d).max(0.0)));
+    }
+    let at = p.at_ms;
+    f.push_str(&format!(",volume={:.3},adelay={at}|{at}{label}", p.volume.clamp(0.0, 2.0)));
+    f
+}
+
+/// filter_complex for the export soundtrack: one click (input 1, when there
+/// are clicks) at each tap time, plus every audio piece, padded with silence
+/// so `-shortest` lets the video decide the length.
+pub fn mix_filter(clicks_ms: &[u64], volume: f64, pieces: &[Piece]) -> Option<String> {
     let volume = volume.clamp(0.0, 1.0);
     let mut parts: Vec<String> = Vec::new();
-    let mut labels: Vec<&str> = Vec::new();
+    let mut labels: Vec<String> = Vec::new();
 
     match clicks_ms {
         [] => {}
         [one] => {
             parts.push(format!("[1:a]adelay={one}|{one},volume={volume:.3}[clk]"));
-            labels.push("[clk]");
+            labels.push("[clk]".into());
         }
         many => {
             let n = many.len();
@@ -77,28 +132,19 @@ pub fn mix_filter(clicks_ms: &[u64], volume: f64, mic: Option<&MicMix>) -> Optio
                 ";{delayed}amix=inputs={n}:normalize=0:dropout_transition=0,volume={volume:.3}[clk]"
             ));
             parts.push(f);
-            labels.push("[clk]");
+            labels.push("[clk]".into());
         }
     }
 
-    if let Some(m) = mic {
-        // Where the mic sits on the exported timeline.
-        let shift = m.offset_ms - m.trim_start_ms;
-        let (skip, delay) = if shift >= 0.0 { (0.0, shift.round() as u64) } else { (-shift / 1000.0, 0) };
-        parts.push(format!(
-            "[{}:a]atrim=start={skip:.3},asetpts=PTS-STARTPTS,adelay={delay}|{delay},volume={:.3}[mic]",
-            m.input,
-            m.volume.clamp(0.0, 2.0)
-        ));
-        labels.push("[mic]");
+    for (i, p) in pieces.iter().enumerate() {
+        let label = format!("[p{i}]");
+        parts.push(piece_filter(p, &label));
+        labels.push(label);
     }
 
     match labels.len() {
         0 => None,
-        1 => {
-            let label = labels[0];
-            Some(format!("{};{label}apad[aout]", parts.join(";")))
-        }
+        1 => Some(format!("{};{}apad[aout]", parts.join(";"), labels[0])),
         n => Some(format!(
             "{};{}amix=inputs={n}:normalize=0:dropout_transition=0,apad[aout]",
             parts.join(";"),
@@ -123,26 +169,43 @@ mod tests {
 
     #[test]
     fn mixes_clicks_at_their_times() {
-        assert_eq!(mix_filter(&[], 1.0, None), None);
+        assert_eq!(mix_filter(&[], 1.0, &[]), None);
         assert_eq!(
-            mix_filter(&[1500], 0.5, None).unwrap(),
+            mix_filter(&[1500], 0.5, &[]).unwrap(),
             "[1:a]adelay=1500|1500,volume=0.500[clk];[clk]apad[aout]"
         );
-        let f = mix_filter(&[0, 2000], 2.0, None).unwrap();
+        let f = mix_filter(&[0, 2000], 2.0, &[]).unwrap();
         assert!(f.starts_with("[1:a]asplit=2[s0][s1];[s0]adelay=0|0[d0];[s1]adelay=2000|2000[d1]"));
         assert!(f.ends_with("volume=1.000[clk];[clk]apad[aout]"));
     }
 
     #[test]
-    fn aligns_the_microphone_on_the_trimmed_video() {
-        let late = MicMix { input: 1, offset_ms: 120.0, trim_start_ms: 0.0, volume: 1.0 };
+    fn places_pieces_with_speed_fades_and_delay() {
+        let mic = Piece { input: 1, from: 2.0, duration: 3.0, at_ms: 500, speed: 1.0, volume: 1.0, fade_in: 0.0, fade_out: 0.0 };
         assert_eq!(
-            mix_filter(&[], 1.0, Some(&late)).unwrap(),
-            "[1:a]atrim=start=0.000,asetpts=PTS-STARTPTS,adelay=120|120,volume=1.000[mic];[mic]apad[aout]"
+            mix_filter(&[], 1.0, &[mic]).unwrap(),
+            "[1:a]atrim=start=2.000:duration=3.000,asetpts=PTS-STARTPTS,volume=1.000,adelay=500|500[p0];[p0]apad[aout]"
         );
-        let trimmed = MicMix { input: 2, offset_ms: 100.0, trim_start_ms: 2100.0, volume: 0.5 };
-        let f = mix_filter(&[500], 1.0, Some(&trimmed)).unwrap();
-        assert!(f.contains("[2:a]atrim=start=2.000,asetpts=PTS-STARTPTS,adelay=0|0,volume=0.500[mic]"));
-        assert!(f.ends_with("[clk][mic]amix=inputs=2:normalize=0:dropout_transition=0,apad[aout]"));
+        let fast = Piece { input: 2, from: 0.0, duration: 4.0, at_ms: 0, speed: 4.0, volume: 0.5, fade_in: 0.2, fade_out: 0.5 };
+        let f = mix_filter(&[100], 1.0, &[fast]).unwrap();
+        assert!(f.contains("asetpts=PTS-STARTPTS,atempo=2,atempo=2.0000,afade=t=in:st=0:d=0.200,afade=t=out:st=0.500:d=0.500"));
+        assert!(f.ends_with("[clk][p0]amix=inputs=2:normalize=0:dropout_transition=0,apad[aout]"));
+    }
+
+    #[test]
+    fn chains_tempo_stages() {
+        assert_eq!(tempo_chain(1.0), "");
+        assert_eq!(tempo_chain(1.5), ",atempo=1.5000");
+        assert_eq!(tempo_chain(0.25), ",atempo=0.5,atempo=0.5000");
+        assert_eq!(tempo_chain(3.0), ",atempo=2,atempo=1.5000");
+    }
+
+    #[test]
+    fn moves_source_time_onto_a_late_file() {
+        // The mic starts 0.5s after the screen: source 0.2..2.2 is 0..1.7 on file, 0.3s later.
+        let (from, duration, at) = on_file(0.2, 2.0, 1.0, 1.0, 0.5).unwrap();
+        assert!((from - 0.0).abs() < 1e-9 && (duration - 1.7).abs() < 1e-9 && (at - 1.3).abs() < 1e-9);
+        assert_eq!(on_file(1.0, 2.0, 0.0, 1.0, -0.5), Some((1.5, 2.0, 0.0)));
+        assert_eq!(on_file(0.0, 0.2, 0.0, 1.0, 1.0), None);
     }
 }

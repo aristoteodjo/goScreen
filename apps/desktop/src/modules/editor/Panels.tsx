@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { CameraPanel, DevicesPanel } from "./LayerPanels";
 import { Section, SliderRow, useChange } from "./PanelKit";
+import { ClipPanel, MusicPanel, OverlayPanel } from "./SelectionPanels";
 import { useSession } from "./session";
 import { type Panel, useEdit, usePlayback } from "./store";
 
@@ -75,11 +76,14 @@ export function PanelContent() {
       {panel === "touch" ? <TouchPanel /> : null}
       {panel === "zoom" ? <ZoomPanel /> : null}
       {panel === "audio" ? <AudioPanel /> : null}
+      {panel === "clip" ? <ClipPanel /> : null}
+      {panel === "overlay" ? <OverlayPanel /> : null}
+      {panel === "music" ? <MusicPanel /> : null}
     </aside>
   );
 }
 
-const GRADIENTS: EditBackground[] = [
+export const GRADIENTS: EditBackground[] = [
   { kind: "gradient", from: "#1e2a78", to: "#ff6f91", angle: 160 },
   { kind: "gradient", from: "#0f1020", to: "#5b5fc7", angle: 135 },
   { kind: "gradient", from: "#ff7a45", to: "#7a1fd6", angle: 135 },
@@ -94,7 +98,7 @@ const GRADIENTS: EditBackground[] = [
   { kind: "color", value: "#000000" },
 ];
 
-const bgCss = (bg: EditBackground) =>
+export const bgCss = (bg: EditBackground) =>
   bg.kind === "gradient" ? `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})` : bg.kind === "color" ? bg.value : "transparent";
 
 function BackgroundPanel() {

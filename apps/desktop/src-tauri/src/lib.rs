@@ -7,6 +7,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(proxy::ProxyState::default())
         .manage(recording::RecordingState::default())
         .manage(android::AndroidState::default())
@@ -27,6 +28,7 @@ pub fn run() {
             android::commands::android_stream_close,
             android::commands::android_input,
             media::recording_open,
+            media::asset_import,
             media::edit_save,
             media::recordings_list,
             modules::site::site_pages,

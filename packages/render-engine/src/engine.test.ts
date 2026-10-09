@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fullClip,
   autoFocus,
   cameraAt,
   composeFrame,
@@ -118,8 +119,13 @@ describe("touches", () => {
     expect(touchesAt(list, 2)).toHaveLength(0);
   });
 
-  it("times click sounds relative to the trim", () => {
-    expect(tapTimes([tap(1, 0, 0), tap(3, 0, 0), tap(9, 0, 0)], 2, 8)).toEqual([1]);
+  it("times click sounds on the timeline, skipping cut and muted parts", () => {
+    const taps = [tap(1, 0, 0), tap(3, 0, 0), tap(9, 0, 0)];
+    expect(tapTimes(taps, [fullClip("a", 2, 8)])).toEqual([1]);
+    // 3s sits in the second clip, played at 2x after a 1s clip.
+    const clips = [fullClip("a", 0, 1), { ...fullClip("b", 2, 10), speed: 2 }];
+    expect(tapTimes(taps, clips)).toEqual([1.5, 4.5]);
+    expect(tapTimes(taps, [fullClip("a", 0, 1), { ...fullClip("b", 2, 10), muted: true }])).toEqual([]);
   });
 });
 

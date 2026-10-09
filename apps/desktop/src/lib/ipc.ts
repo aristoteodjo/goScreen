@@ -1,3 +1,4 @@
+import type { AudioPiece } from "@goscreen/render-engine";
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 
@@ -38,7 +39,18 @@ const openedRecordingSchema = z.object({
   name: z.string(),
   interactions: z.unknown().nullable(),
   edit: z.unknown().nullable(),
+  // Asset file name -> local media URL.
+  assets: z.record(z.string(), z.string().url()).catch({}),
 });
+
+const importedAssetSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  kind: z.enum(["image", "video", "audio"]),
+  file: z.string().min(1),
+  url: z.string().url(),
+});
+export type ImportedAsset = z.infer<typeof importedAssetSchema>;
 export type OpenedRecording = z.infer<typeof openedRecordingSchema>;
 
 const recordingEntrySchema = z.object({
@@ -110,11 +122,10 @@ export const ipc = {
   exportFrame: async (jpeg: ArrayBuffer) => {
     await invoke("export_frame", new Uint8Array(jpeg));
   },
-  exportFinish: async (
-    clicks: number[],
-    volume: number,
-    mic: { videoPath: string; trimStartMs: number; volume: number } | null,
-  ) => z.string().min(1).parse(await invoke("export_finish", { clicks, volume, mic })),
+  exportFinish: async (videoPath: string, clicks: number[], volume: number, pieces: AudioPiece[]) =>
+    z.string().min(1).parse(await invoke("export_finish", { videoPath, clicks, volume, pieces })),
+  assetImport: async (videoPath: string, source: string) =>
+    importedAssetSchema.parse(await invoke("asset_import", { videoPath, source })),
   exportCancel: async () => {
     await invoke("export_cancel");
   },

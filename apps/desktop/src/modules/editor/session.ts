@@ -1,7 +1,16 @@
-import { type RecordedLayer, type RecordedPointer, type Size, type Timeline, timelineOf } from "@goscreen/render-engine";
+import {
+  clipAt,
+  type EditState,
+  type RecordedLayer,
+  type RecordedPointer,
+  type Size,
+  type Timeline,
+  timelineOf,
+} from "@goscreen/render-engine";
 import { create } from "zustand";
 import { geometryOf } from "./devices";
-import { trimEnd, useEdit, usePlayback } from "./store";
+import { pooledEntries } from "./media";
+import { timelineEnd, useEdit, usePlayback } from "./store";
 
 type Opened = {
   videoPath: string;
@@ -13,6 +22,8 @@ type Opened = {
   layers: RecordedLayer[];
   // Camera/mic start, in seconds after the first screen frame.
   mediaOffset: number;
+  // Imported asset file name -> local media URL.
+  assetUrls: Record<string, string>;
 };
 
 // The opened recording. Runtime only: the source of truth is on disk.
@@ -26,6 +37,7 @@ type SessionStore = Opened & {
   setCamera: (camera: HTMLVideoElement | null) => void;
   setMic: (mic: HTMLAudioElement | null) => void;
   setSource: (source: Size) => void;
+  addAssetUrl: (file: string, url: string) => void;
 };
 
 export const useSession = create<SessionStore>((set) => ({
@@ -37,6 +49,7 @@ export const useSession = create<SessionStore>((set) => ({
   pointers: [],
   layers: [],
   mediaOffset: 0,
+  assetUrls: {},
   source: null,
   video: null,
   camera: null,
@@ -46,6 +59,7 @@ export const useSession = create<SessionStore>((set) => ({
   setCamera: (camera) => set({ camera }),
   setMic: (mic) => set({ mic }),
   setSource: (source) => set({ source }),
+  addAssetUrl: (file, url) => set((s) => ({ assetUrls: { ...s.assetUrls, [file]: url } })),
 }));
 
 let cachedTimeline: { key: unknown[]; value: Timeline } | null = null;
@@ -80,88 +94,108 @@ export function requestPaint() {
   });
 }
 
-/** Companion media (camera, mic) follow the screen video with their offset. */
-function companions(): HTMLMediaElement[] {
-  const { camera, mic } = useSession.getState();
-  return [camera, mic].filter((m): m is HTMLVideoElement | HTMLAudioElement => m !== null);
+/** URL of an imported asset, by asset id. */
+export function assetUrl(edit: EditState, id: string): string | null {
+  const file = edit.assets.find((a) => a.id === id)?.file;
+  return file ? (useSession.getState().assetUrls[file] ?? null) : null;
 }
 
-function syncCompanions(t: number, playing: boolean) {
-  const offset = useSession.getState().mediaOffset;
-  for (const m of companions()) {
-    const local = t - offset;
-    if (local < 0 || (Number.isFinite(m.duration) && local > m.duration)) {
-      if (!m.paused) m.pause();
-      continue;
-    }
-    // Small drift is left alone: seeking a playing element stutters.
-    if (!playing || Math.abs(m.currentTime - local) > 0.15) m.currentTime = local;
-    if (playing && m.paused) void m.play().catch(() => {});
-    if (!playing && !m.paused) m.pause();
+// Media follow the timeline clock. Small drift is left alone: seeking a
+// playing element stutters.
+const DRIFT = 0.2;
+
+function follow(m: HTMLMediaElement, local: number | null, playing: boolean, rate = 1) {
+  if (local === null || local < 0 || (Number.isFinite(m.duration) && local > m.duration)) {
+    if (!m.paused) m.pause();
+    return;
+  }
+  if (m.playbackRate !== rate) m.playbackRate = rate;
+  if (!playing || Math.abs(m.currentTime - local) > DRIFT) m.currentTime = local;
+  if (playing && m.paused) void m.play().catch(() => {});
+  if (!playing && !m.paused) m.pause();
+}
+
+/** Puts the recording, its companions and every imported media at timeline time T. */
+function syncMedia(t: number, playing: boolean) {
+  const { video, camera, mic, mediaOffset } = useSession.getState();
+  const { edit } = useEdit.getState();
+  const p = clipAt(edit.clips, t);
+  const rec = p && p.clip.kind === "recording" ? p.clip : null;
+  const source = rec && p ? Math.min(rec.out, rec.in + (t - p.start) * rec.speed) : null;
+  const rate = rec?.speed ?? 1;
+  if (video) follow(video, source, playing, rate);
+  if (camera) follow(camera, source === null ? null : source - mediaOffset, playing, rate);
+  if (mic) {
+    mic.muted = rec?.muted ?? true;
+    follow(mic, source === null ? null : source - mediaOffset, playing, rate);
+  }
+  for (const [id, { el }] of pooledEntries()) {
+    const o = edit.overlays.find((x) => x.id === id);
+    const a = o ? null : edit.audio.find((x) => x.id === id);
+    const item = o?.kind === "video" ? { start: o.start, duration: o.duration, in: o.in, volume: o.volume } : a;
+    if (!item) continue;
+    const local = t >= item.start && t <= item.start + item.duration ? t - item.start + item.in : null;
+    el.volume = Math.min(1, item.volume);
+    follow(el, local, playing);
   }
 }
 
 let loop = 0;
+// Wall clock anchor of the running playback.
+let anchor = { wall: 0, t: 0 };
 
 function tick() {
-  const video = useSession.getState().video;
-  const { duration, setTime, setPlaying } = usePlayback.getState();
-  if (!video) return;
-  const end = trimEnd(useEdit.getState().edit, duration);
-  if (video.currentTime >= end - 0.01 || video.ended) {
-    video.pause();
-    video.currentTime = end;
-    setTime(end);
-    setPlaying(false);
-    syncCompanions(end, false);
+  const end = timelineEnd(useEdit.getState().edit);
+  const t = anchor.t + (performance.now() - anchor.wall) / 1000;
+  if (t >= end) {
+    usePlayback.getState().setTime(end);
+    usePlayback.getState().setPlaying(false);
+    syncMedia(end, false);
     painter?.();
     return;
   }
-  setTime(video.currentTime);
-  syncCompanions(video.currentTime, true);
+  usePlayback.getState().setTime(t);
+  syncMedia(t, true);
   painter?.();
   loop = requestAnimationFrame(tick);
 }
 
 export const player = {
   play() {
-    const video = useSession.getState().video;
-    if (!video) return;
-    const { duration } = usePlayback.getState();
-    const { trim } = useEdit.getState().edit;
-    const end = trimEnd(useEdit.getState().edit, duration);
-    if (video.currentTime >= end - 0.05 || video.currentTime < trim.start) video.currentTime = trim.start;
+    const end = timelineEnd(useEdit.getState().edit);
+    let t = usePlayback.getState().time;
+    if (t >= end - 0.05) t = 0;
+    anchor = { wall: performance.now(), t };
+    usePlayback.getState().setTime(t);
     usePlayback.getState().setPlaying(true);
-    void video.play().catch(() => usePlayback.getState().setPlaying(false));
+    syncMedia(t, true);
     cancelAnimationFrame(loop);
     loop = requestAnimationFrame(tick);
   },
   pause() {
-    useSession.getState().video?.pause();
     cancelAnimationFrame(loop);
     usePlayback.getState().setPlaying(false);
-    syncCompanions(usePlayback.getState().time, false);
+    syncMedia(usePlayback.getState().time, false);
   },
   toggle() {
     if (usePlayback.getState().playing) player.pause();
     else player.play();
   },
   seek(t: number) {
-    const video = useSession.getState().video;
-    const { duration } = usePlayback.getState();
-    const clamped = Math.max(0, Math.min(duration, t));
+    const end = timelineEnd(useEdit.getState().edit);
+    const clamped = Math.max(0, Math.min(end, t));
     usePlayback.getState().setTime(clamped);
-    if (video) video.currentTime = clamped;
-    syncCompanions(clamped, usePlayback.getState().playing);
+    anchor = { wall: performance.now(), t: clamped };
+    syncMedia(clamped, usePlayback.getState().playing);
     requestPaint();
   },
   step(dt: number) {
     player.seek(usePlayback.getState().time + dt);
   },
   first() {
-    player.seek(useEdit.getState().edit.trim.start);
+    player.seek(0);
   },
   last() {
-    player.seek(trimEnd(useEdit.getState().edit, usePlayback.getState().duration));
+    player.seek(timelineEnd(useEdit.getState().edit));
   },
 };

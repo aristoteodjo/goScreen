@@ -10,7 +10,7 @@ import {
 import { type EditorCommand, editorCommands } from "./commands";
 import { usePlayback } from "./store";
 
-const GROUPS: EditorCommand["group"][] = ["Playback", "Edit", "Zoom"];
+const GROUPS: EditorCommand["group"][] = ["Playback", "Edit", "Add", "Zoom"];
 
 export function EditorPalette({ openExport }: { openExport: () => void }) {
   const open = usePlayback((s) => s.paletteOpen);

@@ -1,36 +1,60 @@
-import type { EditBackground, EditState, Frame, Rect, Timeline } from "@goscreen/render-engine";
+import {
+  clipAt,
+  composeFrame,
+  type EditState,
+  type Frame,
+  type Rect,
+  type Size,
+  sourceTimeAt,
+  type Timeline,
+} from "@goscreen/render-engine";
 import { drawDevice } from "./devices";
+import { drawOverlays, drawSlide, fillBackground, type MediaOf } from "./drawOverlays";
 
 export type Sources = {
   video: CanvasImageSource | null;
   camera: HTMLVideoElement | null;
 };
 
-const REFERENCE = 1080;
+export type TimelineSources = Sources & { mediaOf: MediaOf };
 
-function fillBackground(ctx: CanvasRenderingContext2D, bg: EditBackground, w: number, h: number) {
-  if (bg.kind === "none") {
-    ctx.fillStyle = "#000";
-  } else if (bg.kind === "color") {
-    ctx.fillStyle = bg.value;
+/**
+ * Draws timeline time t: the clip playing (recording or slide), then the
+ * overlays above it. Preview and export both go through here.
+ */
+export function drawAt(
+  ctx: CanvasRenderingContext2D,
+  sources: TimelineSources,
+  edit: EditState,
+  timeline: Timeline,
+  output: Size,
+  t: number,
+  pixelScale: number,
+) {
+  const p = clipAt(edit.clips, t);
+  if (p?.clip.kind === "slide") {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.scale(pixelScale, pixelScale);
+    drawSlide(ctx, p.clip, t - p.start, output);
+    ctx.restore();
   } else {
-    // CSS angles: 0deg points up, clockwise.
-    const a = ((bg.angle - 90) * Math.PI) / 180;
-    const half = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
-    const cx = w / 2;
-    const cy = h / 2;
-    const g = ctx.createLinearGradient(
-      cx - Math.cos(a) * half,
-      cy - Math.sin(a) * half,
-      cx + Math.cos(a) * half,
-      cy + Math.sin(a) * half,
-    );
-    g.addColorStop(0, bg.from);
-    g.addColorStop(1, bg.to);
-    ctx.fillStyle = g;
+    const hidden = p?.clip.kind === "recording" && p.clip.cameraHidden;
+    const e = hidden ? { ...edit, camera: { ...edit.camera, visible: false } } : edit;
+    const s = sourceTimeAt(edit.clips, t) ?? 0;
+    drawFrame(ctx, sources, composeFrame(e, timeline, output, s), e, pixelScale, timeline);
   }
-  ctx.fillRect(0, 0, w, h);
+  if (edit.overlays.length === 0) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingQuality = "high";
+  ctx.scale(pixelScale, pixelScale);
+  drawOverlays(ctx, edit.overlays, t, output, sources.mediaOf);
+  ctx.restore();
 }
+
+const REFERENCE = 1080;
 
 function roundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number) {
   ctx.beginPath();

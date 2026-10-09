@@ -85,10 +85,91 @@ export type CameraEdit = {
   mirror: boolean;
 };
 
+// A stretch of the screen recording on the main track, in source seconds.
+// Camera, mic, zooms and touches follow it: they live in source time.
+export type RecordingClip = {
+  id: string;
+  kind: "recording";
+  in: number;
+  out: number;
+  speed: number;
+  muted: boolean;
+  cameraHidden: boolean;
+};
+
+/** Enter / exit motion of a text, an overlay or a slide. */
+export type Animation = "none" | "fade" | "slide-up" | "slide-left" | "pop" | "typewriter" | "words" | "wipe";
+
+// A full-frame title card on the main track, in place of the recording.
+export type SlideClip = {
+  id: string;
+  kind: "slide";
+  duration: number;
+  background: EditBackground;
+  title: string;
+  subtitle: string;
+  color: string;
+  font: string;
+  animation: Animation;
+};
+
+export type MainClip = RecordingClip | SlideClip;
+
+// Overlays sit on lanes above the video, free in timeline time. Position
+// is the center as a fraction of the output; sizes are fractions too.
+export type OverlayBase = {
+  id: string;
+  lane: number;
+  start: number;
+  duration: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  opacity: number;
+  enter: Animation;
+  exit: Animation;
+  // Seconds each of the enter and exit motions take.
+  motion: number;
+};
+
+export type TextStyle = {
+  font: string;
+  // Line height as a fraction of the output height.
+  size: number;
+  weight: number;
+  color: string;
+  align: "left" | "center" | "right";
+  background: string | null;
+};
+
+export type TextOverlay = OverlayBase & { kind: "text"; text: string; style: TextStyle };
+export type ImageOverlay = OverlayBase & { kind: "image"; asset: string; radius: number };
+export type VideoOverlay = OverlayBase & { kind: "video"; asset: string; in: number; volume: number; radius: number };
+export type ShapeKind = "arrow" | "rect" | "ellipse" | "highlight";
+export type ShapeOverlay = OverlayBase & { kind: "shape"; shape: ShapeKind; color: string; stroke: number };
+export type Overlay = TextOverlay | ImageOverlay | VideoOverlay | ShapeOverlay;
+
+export type AudioClip = {
+  id: string;
+  lane: number;
+  start: number;
+  duration: number;
+  asset: string;
+  in: number;
+  volume: number;
+  fadeIn: number;
+  fadeOut: number;
+};
+
+// A file added to the edit, copied next to the recording (`<stem>.assets/`).
+export type Asset = { id: string; name: string; kind: "image" | "video" | "audio"; file: string; duration: number | null };
+
 // Everything the editor adds on top of the recording. Source files are
 // never modified, so every effect stays editable.
 export type EditState = {
-  version: 1;
+  version: 2;
   aspect: AspectId;
   background: EditBackground;
   // Fraction of the output's short side left around a flat video.
@@ -97,7 +178,11 @@ export type EditState = {
   radius: number;
   // 0..1 strength of the drop shadow.
   shadow: number;
-  trim: { start: number; end: number | null };
+  // Main track, played back to back. Zooms below are in source time.
+  clips: MainClip[];
+  overlays: Overlay[];
+  audio: AudioClip[];
+  assets: Asset[];
   zooms: ZoomSegment[];
   touch: { style: TouchStyle; color: string; size: number };
   sound: { clicks: boolean; volume: number };

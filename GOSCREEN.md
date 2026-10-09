@@ -184,6 +184,19 @@ n'en sait rien.
   mixer les sons de tap synthétisés. Sortie `~/Movies/goScreen/<nom>-export-<stamp>.mp4`.
 - `buildAutoZooms` (render-engine) propose des zooms à la première ouverture ; tout reste éditable.
 
+### Montage (EditState v2)
+
+- **Piste principale** = séquence de clips joués bout à bout (`sequence.ts`, pur et testé) : clips d'enregistrement
+  (`in`/`out` en temps source, `speed`, `muted`, `cameraHidden`) et slides plein cadre. Split, trim, réordonnancement
+  et suppression sont en *ripple*. Le temps de la timeline (`usePlayback.time`) est le temps de séquence ;
+  zooms, touches, caméra et micro restent en **temps source** et suivent les clips (`sourceTimeAt`, `timelineTimesOf`).
+- **Overlays** (texte, image, vidéo, forme) et **audio** (musique) : libres en temps timeline, sur des lanes.
+  Animations d'entrée/sortie pures (`motion.ts`), dessinées par `drawOverlays.ts` en preview comme à l'export.
+- Les médias ajoutés sont copiés dans `<stem>.assets/` (`asset_import`) et servis par le serveur média.
+- L'export mixe la bande-son par morceaux (`audioPieces` -> `export_finish`) : micro découpé par clip, musiques, sons de tap.
+- UI : `Timeline.tsx` (pistes), `TimelineToolbar.tsx` (ajout de contenu, split, zoom de timeline),
+  `TimelineMenus.tsx` (clic droit), `SelectionPanels.tsx` (propriétés de l'élément sélectionné), `actions.ts`.
+
 ## Vérifications
 
 - Frontend : `pnpm -r check-types`, `pnpm -r test`, `pnpm lint`
@@ -192,7 +205,7 @@ n'en sait rien.
 
 ## Prochaines tranches verticales
 
-1. Éditeur : curseur pour les sources web, motion blur, presets, crop, caméra (webcam) ; export plus rapide.
+1. Éditeur : curseur pour les sources web, motion blur, transitions entre clips, crop ; export plus rapide.
 2. Android : drag en direct, audio (`AndroidAudioProvider`), « Synchronize Interactions » multi-device.
 3. `project.json` versionné, avec migrations.
 4. Connexion desktop -> web (jeton dans le keychain, entitlements vérifiés côté serveur).

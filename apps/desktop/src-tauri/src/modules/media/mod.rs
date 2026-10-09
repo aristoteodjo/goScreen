@@ -65,7 +65,15 @@ fn mime_for(path: &Path) -> &'static str {
         Some("mp4") | Some("m4v") => "video/mp4",
         Some("mov") => "video/quicktime",
         Some("webm") => "video/webm",
-        Some("m4a") => "audio/mp4",
+        Some("m4a") | Some("aac") => "audio/mp4",
+        Some("mp3") => "audio/mpeg",
+        Some("wav") => "audio/wav",
+        Some("ogg") => "audio/ogg",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
         _ => "application/octet-stream",
     }
 }
@@ -221,6 +229,74 @@ pub struct OpenedRecording {
     edit: Option<serde_json::Value>,
     camera_url: Option<String>,
     mic_url: Option<String>,
+    /// Files added in the editor, by file name inside the assets folder.
+    assets: HashMap<String, String>,
+}
+
+/// What an imported file is, from its extension. None: not importable.
+pub fn asset_kind(path: &Path) -> Option<&'static str> {
+    match path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref() {
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "svg") => Some("image"),
+        Some("mp4" | "mov" | "m4v" | "webm") => Some("video"),
+        Some("mp3" | "m4a" | "aac" | "wav" | "ogg") => Some("audio"),
+        _ => None,
+    }
+}
+
+/// `rec.mp4` -> `rec.assets/`: media added in the editor travel with the recording.
+pub fn assets_dir(video: &Path) -> PathBuf {
+    video.with_extension("assets")
+}
+
+/// A file of the assets folder, by bare name only.
+pub fn asset_file(video: &Path, name: &str) -> Option<PathBuf> {
+    if name.is_empty() || name.contains(['/', '\\']) || name.starts_with('.') {
+        return None;
+    }
+    let path = assets_dir(video).join(name);
+    path.is_file().then_some(path)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedAsset {
+    id: String,
+    name: String,
+    kind: &'static str,
+    file: String,
+    url: String,
+}
+
+/// Copies a picked file next to the recording, so the edit never depends on
+/// where the original lives, and serves it to the editor.
+#[tauri::command]
+pub async fn asset_import(state: State<'_, MediaState>, video_path: String, source: String) -> Result<ImportedAsset, String> {
+    let video = recording_path(&video_path)?;
+    let source = PathBuf::from(source);
+    let kind = asset_kind(&source).ok_or("This file type cannot be added. Use an image, a video or an audio file.")?;
+    if !source.is_file() {
+        return Err(format!("{} no longer exists.", source.display()));
+    }
+    let ext = source.extension().and_then(|e| e.to_str()).unwrap_or_default().to_ascii_lowercase();
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let file = format!("{id}.{ext}");
+    let dir = assets_dir(&video);
+    let target = dir.join(&file);
+    let copy_from = source.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+        std::fs::copy(&copy_from, &target).map(|_| ()).map_err(|e| format!("copy: {e}"))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let url = state.publish(assets_dir(&video).join(&file)).await?;
+    Ok(ImportedAsset {
+        name: source.file_stem().and_then(|s| s.to_str()).unwrap_or("Media").to_string(),
+        id,
+        kind,
+        file,
+        url,
+    })
 }
 
 /// A companion file named in the interactions sidecar: a bare file name in
@@ -255,10 +331,20 @@ pub async fn recording_open(state: State<'_, MediaState>, video_path: String) ->
         Some(p) => Some(state.publish(p).await?),
         None => None,
     };
+    let mut assets = HashMap::new();
+    if let Ok(read) = std::fs::read_dir(assets_dir(&path)) {
+        for entry in read.filter_map(Result::ok) {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if let Some(file) = asset_file(&path, &name) {
+                assets.insert(name, state.publish(file).await?);
+            }
+        }
+    }
     Ok(OpenedRecording {
         name: path.file_stem().and_then(|s| s.to_str()).unwrap_or("Recording").to_string(),
         camera_url,
         mic_url,
+        assets,
         interactions,
         edit: read_json(&sidecar(&path, "edit.json")),
         video_path: path.to_string_lossy().into_owned(),
@@ -357,6 +443,18 @@ mod tests {
         assert_eq!(companion_file(video, Some("/etc/passwd")), None);
         assert_eq!(companion_file(video, Some(".hidden")), None);
         assert_eq!(companion_file(video, None), None);
+    }
+
+    #[test]
+    fn assets_stay_in_their_folder_and_are_typed() {
+        let video = Path::new("/tmp/rec.mp4");
+        assert_eq!(assets_dir(video), PathBuf::from("/tmp/rec.assets"));
+        assert_eq!(asset_file(video, "../rec.mp4"), None);
+        assert_eq!(asset_file(video, ".DS_Store"), None);
+        assert_eq!(asset_kind(Path::new("logo.PNG")), Some("image"));
+        assert_eq!(asset_kind(Path::new("clip.mov")), Some("video"));
+        assert_eq!(asset_kind(Path::new("song.mp3")), Some("audio"));
+        assert_eq!(asset_kind(Path::new("notes.txt")), None);
     }
 
     #[test]

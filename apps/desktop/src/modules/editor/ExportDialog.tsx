@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { exportVideo } from "./exportVideo";
-import { currentTimeline, player, useSession } from "./session";
+import { assetUrl, currentTimeline, player, useSession } from "./session";
 import { useEdit } from "./store";
 
 const RESOLUTIONS = [
@@ -49,6 +49,7 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         cameraUrl,
         mediaOffset,
         hasMic: micUrl !== null,
+        assetUrl: (id) => assetUrl(useEdit.getState().edit, id),
         name,
         longSide,
         fps,

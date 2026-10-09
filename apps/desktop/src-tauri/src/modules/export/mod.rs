@@ -7,7 +7,7 @@ mod audio;
 use std::{
     collections::VecDeque,
     io::{BufRead, BufReader, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
@@ -141,30 +141,56 @@ pub fn export_frame(state: State<'_, ExportState>, request: tauri::ipc::Request<
     Ok(())
 }
 
-/// Microphone of the exported recording, resolved from its sidecar.
 #[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MicRequest {
-    video_path: String,
-    trim_start_ms: f64,
-    volume: f64,
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum AudioSource {
+    /// The recording's microphone; times are source times.
+    Mic,
+    /// A file of the recording's assets folder; times are file times.
+    Asset { file: String },
 }
 
-fn resolve_mic(req: &MicRequest) -> Option<(PathBuf, f64)> {
-    let video = crate::modules::media::recording_path(&req.video_path).ok()?;
+/// One stretch of sound on the export timeline (see `audio::Piece`).
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PieceRequest {
+    source: AudioSource,
+    from: f64,
+    duration: f64,
+    /// Timeline seconds.
+    at: f64,
+    speed: f64,
+    volume: f64,
+    fade_in: f64,
+    fade_out: f64,
+}
+
+/// The microphone file and its offset (seconds) from the first screen frame.
+fn resolve_mic(video: &Path) -> Option<(PathBuf, f64)> {
     let json: serde_json::Value =
         serde_json::from_slice(&std::fs::read(video.with_extension("interactions.json")).ok()?).ok()?;
     let media = json.get("media")?;
-    let file = crate::modules::media::companion_file(&video, media.get("mic")?.as_str())?;
-    Some((file, media.get("offsetMs").and_then(|v| v.as_f64()).unwrap_or(0.0)))
+    let file = crate::modules::media::companion_file(video, media.get("mic")?.as_str())?;
+    Some((file, media.get("offsetMs").and_then(|v| v.as_f64()).unwrap_or(0.0) / 1000.0))
+}
+
+/// A video without a sound track would fail the whole mix.
+fn has_audio(bin: &Path, file: &Path) -> bool {
+    Command::new(bin)
+        .args(["-hide_banner", "-i"])
+        .arg(file)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stderr).contains("Audio:"))
+        .unwrap_or(false)
 }
 
 #[tauri::command(async)]
 pub fn export_finish(
     state: State<'_, ExportState>,
+    video_path: String,
     clicks: Vec<f64>,
     volume: f64,
-    mic: Option<MicRequest>,
+    pieces: Vec<PieceRequest>,
 ) -> Result<String, String> {
     let mut session = state
         .0
@@ -179,25 +205,60 @@ pub fn export_finish(
         let _ = std::fs::remove_file(&session.video);
         return Err(format!("Encoding failed:\n{detail}"));
     }
+    let bin = ffmpeg::locate().ok_or("FFmpeg disappeared during export.")?;
 
     let clicks_ms: Vec<u64> = clicks
         .iter()
         .filter(|t| t.is_finite() && **t >= 0.0)
         .map(|t| (t * 1000.0).round() as u64)
         .collect();
-    let mic = mic.as_ref().and_then(|m| resolve_mic(m).map(|(path, offset)| (path, offset, m)));
-    let mic_mix = mic.as_ref().map(|(_, offset, m)| audio::MicMix {
-        input: if clicks_ms.is_empty() { 1 } else { 2 },
-        offset_ms: *offset,
-        trim_start_ms: m.trim_start_ms,
-        volume: m.volume,
-    });
-    let Some(filter) = audio::mix_filter(&clicks_ms, volume, mic_mix.as_ref()) else {
+    let recording = crate::modules::media::recording_path(&video_path).ok();
+    let mic = recording.as_deref().and_then(resolve_mic);
+
+    // Inputs: 0 = the silent video, 1 = the click (if any), then one per piece.
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut placed: Vec<audio::Piece> = Vec::new();
+    let first = if clicks_ms.is_empty() { 1 } else { 2 };
+    for p in &pieces {
+        if !(p.duration.is_finite() && p.from.is_finite() && p.at.is_finite()) || p.duration <= 0.0 {
+            continue;
+        }
+        let (file, offset) = match &p.source {
+            AudioSource::Mic => match &mic {
+                Some((file, offset)) => (file.clone(), *offset),
+                None => continue,
+            },
+            AudioSource::Asset { file } => {
+                let Some(path) = recording.as_deref().and_then(|v| crate::modules::media::asset_file(v, file)) else {
+                    continue;
+                };
+                if !has_audio(&bin, &path) {
+                    continue;
+                }
+                (path, 0.0)
+            }
+        };
+        let Some((from, duration, at)) = audio::on_file(p.from, p.duration, p.at.max(0.0), p.speed, offset) else {
+            continue;
+        };
+        placed.push(audio::Piece {
+            input: first + files.len(),
+            from,
+            duration,
+            at_ms: (at * 1000.0).round() as u64,
+            speed: p.speed,
+            volume: p.volume,
+            fade_in: p.fade_in,
+            fade_out: p.fade_out,
+        });
+        files.push(file);
+    }
+
+    let Some(filter) = audio::mix_filter(&clicks_ms, volume, &placed) else {
         std::fs::rename(&session.video, &session.output).map_err(|e| e.to_string())?;
         return Ok(session.output.to_string_lossy().into_owned());
     };
 
-    let bin = ffmpeg::locate().ok_or("FFmpeg disappeared during export.")?;
     let click = session.video.with_extension("click.wav");
     let mut cmd = Command::new(bin);
     cmd.args(["-hide_banner", "-y", "-i"]).arg(&session.video);
@@ -205,8 +266,8 @@ pub fn export_finish(
         std::fs::write(&click, audio::wav(&audio::click_samples())).map_err(|e| e.to_string())?;
         cmd.arg("-i").arg(&click);
     }
-    if let Some((path, _, _)) = &mic {
-        cmd.arg("-i").arg(path);
+    for file in &files {
+        cmd.arg("-i").arg(file);
     }
     let out = cmd
         .args(["-filter_complex", &filter, "-map", "0:v", "-map", "[aout]"])

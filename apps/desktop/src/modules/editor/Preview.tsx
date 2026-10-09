@@ -1,9 +1,69 @@
-import { composeFrame, fitInto, hitLayer, outputSize, type Point } from "@goscreen/render-engine";
+import {
+  activeOverlays,
+  composeFrame,
+  type EditState,
+  fitInto,
+  hitLayer,
+  type Overlay,
+  outputSize,
+  type Point,
+  type Size,
+  sourceTimeAt,
+} from "@goscreen/render-engine";
 import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { drawFrame } from "./render";
-import { currentTimeline, requestPaint, setPainter, useSession } from "./session";
+import { overlayBox } from "./drawOverlays";
+import { imageFor, pooled, prunePool } from "./media";
+import { drawAt, type TimelineSources } from "./render";
+import { assetUrl, currentTimeline, requestPaint, setPainter, useSession } from "./session";
 import { useEdit, usePlayback } from "./store";
+
+/** Live media for overlays, from the preview pools. */
+function previewSources(edit: EditState): TimelineSources {
+  const { video, camera } = useSession.getState();
+  return {
+    video: video && video.readyState >= 2 ? video : null,
+    camera,
+    mediaOf: (o) => {
+      if (o.kind !== "image" && o.kind !== "video") return null;
+      const url = assetUrl(edit, o.asset);
+      if (!url) return null;
+      if (o.kind === "image") return imageFor(url, requestPaint);
+      const el = pooled(o.id, "video", url, requestPaint) as HTMLVideoElement;
+      el.muted = true;
+      return el.readyState >= 2 ? el : null;
+    },
+  };
+}
+
+/** Keeps one media element per video overlay and audio clip, for playback. */
+function syncPool(edit: EditState) {
+  const alive = new Set<string>();
+  for (const o of edit.overlays) {
+    const url = o.kind === "video" ? assetUrl(edit, o.asset) : null;
+    if (!url) continue;
+    alive.add(o.id);
+    pooled(o.id, "video", url, requestPaint);
+  }
+  for (const a of edit.audio) {
+    const url = assetUrl(edit, a.asset);
+    if (!url) continue;
+    alive.add(a.id);
+    pooled(a.id, "audio", url, requestPaint);
+  }
+  prunePool(alive);
+}
+
+/** Top-most overlay under an output point at time t. */
+function hitOverlay(overlays: Overlay[], t: number, p: Point, out: Size): Overlay | null {
+  const shown = activeOverlays(overlays, t);
+  for (let i = shown.length - 1; i >= 0; i -= 1) {
+    const r = overlayBox(shown[i], out);
+    const pad = 6;
+    if (p.x >= r.x - pad && p.x <= r.x + r.width + pad && p.y >= r.y - pad && p.y <= r.y + r.height + pad) return shown[i];
+  }
+  return null;
+}
 
 const MARGIN = 24;
 
@@ -44,35 +104,59 @@ export function Preview() {
     if (!ctx) return;
     setPainter(() => {
       const timeline = currentTimeline();
-      const { video, camera } = useSession.getState();
       if (!timeline) return;
       const { edit } = useEdit.getState();
       const t = usePlayback.getState().time;
-      const ready = video && video.readyState >= 2 ? video : null;
-      drawFrame(ctx, { video: ready, camera }, composeFrame(edit, timeline, output, t), edit, canvas.width / output.width, timeline);
+      drawAt(ctx, previewSources(edit), edit, timeline, output, t, canvas.width / output.width);
     });
     requestPaint();
     return () => setPainter(null);
   }, [output, backingW, backingH]);
 
   useEffect(() => {
+    syncPool(useEdit.getState().edit);
+    const offPool = useEdit.subscribe((s, prev) => {
+      if (s.edit.overlays !== prev.edit.overlays || s.edit.audio !== prev.edit.audio) syncPool(s.edit);
+    });
+    const offAssets = useSession.subscribe((s, prev) => {
+      if (s.assetUrls !== prev.assetUrls) syncPool(useEdit.getState().edit);
+    });
     const offEdit = useEdit.subscribe(requestPaint);
     const offTime = usePlayback.subscribe((s, prev) => {
       if (!s.playing && s.time !== prev.time) requestPaint();
     });
     return () => {
+      offPool();
+      offAssets();
       offEdit();
       offTime();
     };
   }, []);
 
+  /** Pointer -> output pixel, before the zoom camera (overlays live here). */
+  const toScreen = (clientX: number, clientY: number): Point | null => {
+    const canvas = canvasRef.current;
+    if (!output || !canvas) return null;
+    const r = canvas.getBoundingClientRect();
+    return { x: ((clientX - r.left) / r.width) * output.width, y: ((clientY - r.top) / r.height) * output.height };
+  };
+
+  /** The recording frame under the playhead, or null on a slide. */
+  const frameNow = () => {
+    const timeline = currentTimeline();
+    const { edit } = useEdit.getState();
+    const s = sourceTimeAt(edit.clips, usePlayback.getState().time);
+    if (!output || !timeline || s === null) return null;
+    return { frame: composeFrame(edit, timeline, output, s), timeline };
+  };
+
   /** Pointer -> output pixel, undoing the zoom camera. */
   const toOutput = (clientX: number, clientY: number): Point | null => {
-    const timeline = currentTimeline();
+    const now = frameNow();
     const canvas = canvasRef.current;
-    if (!output || !timeline || !canvas) return null;
+    if (!output || !now || !canvas) return null;
+    const { frame } = now;
     const r = canvas.getBoundingClientRect();
-    const frame = composeFrame(useEdit.getState().edit, timeline, output, usePlayback.getState().time);
     const sx = ((clientX - r.left) / r.width) * output.width;
     const sy = ((clientY - r.top) / r.height) * output.height;
     return {
@@ -83,10 +167,24 @@ export function Preview() {
 
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (e.button !== 0 || !output) return;
-    const p = toOutput(e.clientX, e.clientY);
-    const timeline = currentTimeline();
-    if (!p || !timeline) return;
     const { change } = useEdit.getState();
+
+    // Overlays sit above everything: they take the click first.
+    const screen = toScreen(e.clientX, e.clientY);
+    const t = usePlayback.getState().time;
+    const hit = screen ? hitOverlay(useEdit.getState().edit.overlays, t, screen, output) : null;
+    if (hit && screen) {
+      usePlayback.getState().select({ kind: "overlay", id: hit.id });
+      dragOverlay(e, hit, screen, "move");
+      return;
+    }
+
+    const p = toOutput(e.clientX, e.clientY);
+    const now = frameNow();
+    if (!p || !now) {
+      usePlayback.getState().select(null);
+      return;
+    }
 
     // With a zoom selected, a click pins where it looks.
     if (selectedZoom) {
@@ -96,7 +194,7 @@ export function Preview() {
     }
     if (!layered) return;
 
-    const frame = composeFrame(useEdit.getState().edit, timeline, output, usePlayback.getState().time);
+    const { frame } = now;
     const id = hitLayer(frame.layers, p);
     usePlayback.getState().selectLayer(id);
     if (!id) return;
@@ -127,6 +225,42 @@ export function Preview() {
     el.addEventListener("pointercancel", onUp);
   };
 
+  /** Moves an overlay, or resizes it from its corner; sizes are fractions of the output. */
+  const dragOverlay = (e: PointerEvent<HTMLElement>, o: Overlay, from: Point, mode: "move" | "resize") => {
+    if (!output) return;
+    e.stopPropagation();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const onMove = (ev: globalThis.PointerEvent) => {
+      const q = toScreen(ev.clientX, ev.clientY);
+      if (!q) return;
+      const dx = (q.x - from.x) / output.width;
+      const dy = (q.y - from.y) / output.height;
+      useEdit.getState().change(
+        (ed) => ({
+          ...ed,
+          overlays: ed.overlays.map((x) => {
+            if (x.id !== o.id) return x;
+            if (mode === "move") return { ...x, x: o.x + dx, y: o.y + dy };
+            // Grows from the opposite corner; media keep their aspect.
+            const width = Math.max(0.02, o.width + dx);
+            const height = x.kind === "image" || x.kind === "video" ? (width * o.height) / o.width : Math.max(0.02, o.height + dy);
+            return { ...x, width, height, x: o.x - o.width / 2 + width / 2, y: o.y - o.height / 2 + height / 2 };
+          }),
+        }),
+        `overlay-${mode}-${o.id}`,
+      );
+    };
+    const onUp = () => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+  };
+
   return (
     <div ref={hostRef} className="relative flex min-h-0 flex-1 items-center justify-center">
       {css ? (
@@ -142,11 +276,57 @@ export function Preview() {
           style={{ width: css.width, height: css.height }}
         />
       ) : null}
+      {css && output ? <SelectionBox css={css} output={output} onResize={dragOverlay} toScreen={toScreen} /> : null}
       {selectedZoom ? (
         <Hint>Click where the zoom should look</Hint>
       ) : layered && !selectedLayer ? (
         <Hint>Click a device to restyle it, drag to move it</Hint>
       ) : null}
+    </div>
+  );
+}
+
+/** Frame and resize handle around the selected overlay, while it shows. */
+function SelectionBox({
+  css,
+  output,
+  onResize,
+  toScreen,
+}: {
+  css: Size;
+  output: Size;
+  onResize: (e: PointerEvent<HTMLElement>, o: Overlay, from: Point, mode: "resize") => void;
+  toScreen: (x: number, y: number) => Point | null;
+}) {
+  const selection = usePlayback((s) => s.selection);
+  const time = usePlayback((s) => s.time);
+  const overlay = useEdit((s) => (selection?.kind === "overlay" ? s.edit.overlays.find((o) => o.id === selection.id) : undefined));
+  if (!overlay || time < overlay.start || time > overlay.start + overlay.duration) return null;
+  const r = overlayBox(overlay, output);
+  const k = css.width / output.width;
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <div className="relative" style={{ width: css.width, height: css.height }}>
+        <div
+          className="absolute border border-violet-400"
+          style={{
+            left: r.x * k,
+            top: r.y * k,
+            width: r.width * k,
+            height: r.height * k,
+            transform: overlay.rotation ? `rotate(${overlay.rotation}deg)` : undefined,
+          }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-auto absolute -right-1.5 -bottom-1.5 size-3 cursor-nwse-resize rounded-sm border border-violet-400 bg-white"
+            onPointerDown={(e) => {
+              const p = toScreen(e.clientX, e.clientY);
+              if (p) onResize(e, overlay, p, "resize");
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { DEFAULT_EDIT, type EditState } from "@goscreen/render-engine";
+import { DEFAULT_EDIT, type EditState, sequenceDuration } from "@goscreen/render-engine";
 import { create } from "zustand";
 
 const HISTORY_LIMIT = 100;
@@ -55,10 +55,16 @@ export const useEdit = create<EditStore>((set, get) => ({
   },
 }));
 
-export type Panel = "devices" | "background" | "touch" | "zoom" | "camera" | "audio";
+export type Panel = "devices" | "background" | "touch" | "zoom" | "camera" | "audio" | "clip" | "overlay" | "music";
 export type Quality = 1 | 0.5 | 0.25;
 
-// Editor UI State: playback and panels. Never saved.
+/** A selected timeline item other than a zoom. */
+export type Selection = { kind: "clip" | "overlay" | "audio"; id: string };
+
+const PANEL_OF: Record<Selection["kind"], Panel> = { clip: "clip", overlay: "overlay", audio: "music" };
+
+// Editor UI State: playback and panels. Never saved. `time` is timeline
+// time (the sequence of clips); `duration` is the source recording's.
 type PlaybackStore = {
   time: number;
   duration: number;
@@ -67,6 +73,9 @@ type PlaybackStore = {
   quality: Quality;
   selectedZoom: string | null;
   selectedLayer: string | null;
+  selection: Selection | null;
+  // Pixels per timeline second; null fits the whole sequence.
+  scale: number | null;
   paletteOpen: boolean;
   setTime: (time: number) => void;
   setDuration: (duration: number) => void;
@@ -75,6 +84,8 @@ type PlaybackStore = {
   setQuality: (quality: Quality) => void;
   selectZoom: (id: string | null) => void;
   selectLayer: (id: string | null) => void;
+  select: (selection: Selection | null) => void;
+  setScale: (scale: number | null) => void;
   setPaletteOpen: (open: boolean) => void;
   reset: () => void;
 };
@@ -87,19 +98,32 @@ export const usePlayback = create<PlaybackStore>((set) => ({
   quality: 1,
   selectedZoom: null,
   selectedLayer: null,
+  selection: null,
+  scale: null,
   paletteOpen: false,
   setTime: (time) => set({ time }),
   setDuration: (duration) => set({ duration }),
   setPlaying: (playing) => set({ playing }),
   setPanel: (panel) => set({ panel }),
   setQuality: (quality) => set({ quality }),
-  selectZoom: (selectedZoom) => set(selectedZoom ? { selectedZoom, panel: "zoom" } : { selectedZoom }),
+  selectZoom: (selectedZoom) =>
+    set(selectedZoom ? { selectedZoom, selection: null, panel: "zoom" } : { selectedZoom }),
   selectLayer: (selectedLayer) =>
-    set(selectedLayer ? { selectedLayer, selectedZoom: null, panel: "devices" } : { selectedLayer }),
+    set(selectedLayer ? { selectedLayer, selectedZoom: null, selection: null, panel: "devices" } : { selectedLayer }),
+  select: (selection) =>
+    set(
+      selection
+        ? { selection, selectedZoom: null, selectedLayer: null, panel: PANEL_OF[selection.kind] }
+        : { selection: null },
+    ),
+  setScale: (scale) => set({ scale }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
-  reset: () => set({ time: 0, duration: 0, playing: false, selectedZoom: null, selectedLayer: null }),
+  reset: () =>
+    set({ time: 0, duration: 0, playing: false, selectedZoom: null, selectedLayer: null, selection: null, scale: null }),
 }));
 
-/** End of the kept range, in source seconds. */
-export const trimEnd = (edit: EditState, duration: number) =>
-  Math.min(duration, edit.trim.end ?? duration);
+/** Length of the edited video, in timeline seconds. */
+export const timelineEnd = (edit: EditState) => sequenceDuration(edit.clips);
+
+/** A short unique id for new timeline items. */
+export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;

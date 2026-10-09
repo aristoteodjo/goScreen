@@ -2,6 +2,7 @@ import {
   ASPECT_OPTIONS,
   type AspectId,
   buildAutoZooms,
+  clampToSource,
   DEFAULT_EDIT,
   EMPTY_RECORDING,
   type EditState,
@@ -46,7 +47,7 @@ import { ExportDialog } from "./ExportDialog";
 import { PanelContent, PanelRail } from "./Panels";
 import { Preview } from "./Preview";
 import { player, requestPaint, useSession } from "./session";
-import { type Quality, trimEnd, useEdit, usePlayback } from "./store";
+import { type Quality, timelineEnd, useEdit, usePlayback } from "./store";
 import { Timeline } from "./Timeline";
 import { useEditorShortcuts } from "./useEditorShortcuts";
 
@@ -86,6 +87,7 @@ export function EditorPage({ video }: { video: string }) {
       pointers: file.pointers,
       layers: file.layers,
       mediaOffset: file.mediaOffset,
+      assetUrls: data.assets,
     });
     useEdit.getState().load(saved ?? { ...DEFAULT_EDIT, camera: file.camera ?? DEFAULT_EDIT.camera });
     if (file.layers.length > 0) usePlayback.getState().setPanel("devices");
@@ -118,6 +120,12 @@ export function EditorPage({ video }: { video: string }) {
     const source = { width: el.videoWidth, height: el.videoHeight };
     useSession.getState().setSource(source);
     usePlayback.getState().setDuration(el.duration);
+    // Clips saved as "until the end" get the real end now.
+    const clamped = clampToSource(useEdit.getState().edit.clips, el.duration);
+    if (clamped !== useEdit.getState().edit.clips) {
+      const { edit, past, future } = useEdit.getState();
+      useEdit.setState({ edit: { ...edit, clips: clamped }, past, future });
+    }
     if (needsAutoZoom.current) {
       needsAutoZoom.current = false;
       const { pointers, layers, cameraUrl } = useSession.getState();
@@ -128,7 +136,7 @@ export function EditorPage({ video }: { video: string }) {
       const placed = layers.length > 0 ? initialLayers(layers, area) : null;
       useEdit.getState().load({ ...edit, zooms, layers: placed });
     }
-    player.seek(useEdit.getState().edit.trim.start);
+    player.seek(0);
   };
 
   return (
@@ -338,14 +346,12 @@ function PreviewHeader() {
 function Transport() {
   const time = usePlayback((s) => s.time);
   const playing = usePlayback((s) => s.playing);
-  const duration = usePlayback((s) => s.duration);
-  const end = useEdit((s) => trimEnd(s.edit, duration));
-  const start = useEdit((s) => s.edit.trim.start);
+  const end = useEdit((s) => timelineEnd(s.edit));
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-center gap-3">
       <span className="w-20 text-right font-mono text-[12px] text-muted-foreground tabular-nums">
-        {formatTime(Math.max(0, time - start), true)}
+        {formatTime(time, true)}
       </span>
       <IconButton label="Go to start (Cmd ←)" icon={PreviousIcon} onClick={player.first} />
       <Button
@@ -359,7 +365,7 @@ function Transport() {
       </Button>
       <IconButton label="Go to end (Cmd →)" icon={NextIcon} onClick={player.last} />
       <span className="w-20 font-mono text-[12px] text-muted-foreground tabular-nums">
-        {formatTime(Math.max(0, end - start), true)}
+        {formatTime(end, true)}
       </span>
     </div>
   );

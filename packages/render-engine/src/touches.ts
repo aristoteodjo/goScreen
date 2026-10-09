@@ -1,4 +1,5 @@
-import type { RecordedPointer, TouchMark } from "./types";
+import { recordingSpans } from "./sequence";
+import type { MainClip, RecordedPointer, TouchMark } from "./types";
 
 /** Time for a ring to grow in when the finger lands. */
 const PRESS = 0.12;
@@ -54,9 +55,15 @@ export function touchesAt(
   return out;
 }
 
-/** Tap times in output seconds, for click sound effects. */
-export function tapTimes(pointers: RecordedPointer[], trimStart: number, trimEnd: number): number[] {
-  return pointers
-    .filter((p) => p.kind === "down" && p.t >= trimStart && p.t <= trimEnd)
-    .map((p) => p.t - trimStart);
+/** Tap times in timeline seconds, for click sound effects. Muted clips stay silent. */
+export function tapTimes(pointers: RecordedPointer[], clips: MainClip[]): number[] {
+  const out: number[] = [];
+  for (const p of pointers) {
+    if (p.kind !== "down") continue;
+    for (const span of recordingSpans(clips)) {
+      const c = span.clip;
+      if (!c.muted && p.t >= c.in && p.t < c.out) out.push(span.start + (p.t - c.in) / c.speed);
+    }
+  }
+  return out.sort((a, b) => a - b);
 }
