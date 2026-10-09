@@ -78,15 +78,15 @@ function fitScaleFor(d: Pick<DeviceInstance, "deviceId" | "orientation" | "viewp
   return Math.min((stage.height * 0.78) / frame.height, (stage.width * 0.42) / frame.width);
 }
 
-// The scene follows the device count: each device starts from its size when
-// alone, then all shrink together (and wrap to rows) until they fit.
+// The scene follows the device count. All devices share one scale, so a
+// laptop stays bigger than a phone (CSS px track real size); it starts at the
+// smallest "alone" size, then shrinks (and wraps to rows) until all fit.
 function relayout(state: Pick<ProjectState, "aspect" | "devices">): ProjectDevice[] {
   const stage = ASPECTS[state.aspect];
+  const shared = Math.min(...state.devices.map((d) => fitScaleFor(d, state.aspect)));
   const items = state.devices.flatMap((d) => {
     const device = registry.get(d.deviceId);
-    return device
-      ? [{ id: d.id, orientation: d.orientation, scale: fitScaleFor(d, state.aspect), viewport: d.viewport, device }]
-      : [];
+    return device ? [{ id: d.id, orientation: d.orientation, scale: shared, viewport: d.viewport, device }] : [];
   });
   const placements = arrangeDevices(items, stage, 90);
   return state.devices.map((d) => ({ ...d, ...placements.get(d.id) }));

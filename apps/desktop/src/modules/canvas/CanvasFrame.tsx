@@ -102,12 +102,13 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
     <DeviceContextMenu id={device.id}>
       <div className="absolute" style={{ left: position.x, top: position.y, width: frame.width, height: frame.height }}>
       <div
-        className="absolute bottom-full left-0 origin-bottom-left pb-2"
+        // A container: on a narrow (zoomed-out) frame the label drops its extras instead of overlapping.
+        className="@container absolute bottom-full left-0 origin-bottom-left pb-2"
         style={{ width: `calc(${frame.width}px * var(--canvas-zoom, 1))`, transform: "scale(calc(1 / var(--canvas-zoom, 1)))" }}
       >
         <div
           className={cn(
-            "flex h-7 items-center gap-1 rounded-md px-1.5 text-xs transition-colors",
+            "flex h-7 items-center gap-1 overflow-hidden rounded-md px-1.5 text-xs transition-colors",
             selected ? "bg-signal/15 text-foreground" : "text-muted-foreground hover:bg-white/5",
           )}
         >
@@ -117,7 +118,7 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
             className="flex min-w-0 flex-1 cursor-grab items-center gap-2 text-left active:cursor-grabbing"
           >
             <span className="truncate font-medium text-foreground">{def.name}</span>
-            <span className="shrink-0 font-mono text-[10.5px] tabular-nums opacity-70">
+            <span className="hidden shrink-0 font-mono text-[10.5px] tabular-nums opacity-70 @min-[260px]:inline">
               {shown.width}×{shown.height}
             </span>
             {device.viewport && !live ? <span className="shrink-0 text-[10.5px] text-signal">custom</span> : null}
@@ -126,14 +127,14 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
           {live ? null : (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex shrink-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5">
+              <div className="hidden shrink-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 @min-[150px]:flex">
                 <Checkbox
                   id={`sync-${device.id}`}
                   checked={device.synced}
                   onCheckedChange={(v) => setSynced(device.id, v === true)}
                   className="size-3.5"
                 />
-                <label htmlFor={`sync-${device.id}`} className="cursor-pointer text-[11px]">
+                <label htmlFor={`sync-${device.id}`} className="hidden cursor-pointer text-[11px] @min-[200px]:inline">
                   Sync
                 </label>
               </div>
@@ -144,6 +145,7 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
           {live ? null : (
             <FrameButton
               label="Rotate"
+              secondary
               icon={RotateClockwiseIcon}
               onClick={() =>
                 updateDevice(device.id, { orientation: device.orientation === "portrait" ? "landscape" : "portrait" })
@@ -153,6 +155,7 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
           {device.viewport && !live ? (
             <FrameButton
               label="Reset to native size"
+              secondary
               icon={RefreshIcon}
               onClick={() => updateDevice(device.id, { viewport: null })}
             />
@@ -224,7 +227,18 @@ function Handle({ edge, onPointerDown }: { edge: ResizeEdge; onPointerDown: (e: 
 
 type IconType = typeof Cancel01Icon;
 
-function FrameButton({ label, icon, onClick }: { label: string; icon: IconType; onClick: () => void }) {
+function FrameButton({
+  label,
+  icon,
+  onClick,
+  secondary,
+}: {
+  label: string;
+  icon: IconType;
+  onClick: () => void;
+  // Hidden when the label row is too narrow; Remove always stays.
+  secondary?: boolean;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -232,7 +246,10 @@ function FrameButton({ label, icon, onClick }: { label: string; icon: IconType; 
           type="button"
           aria-label={label}
           onClick={onClick}
-          className="flex size-6 shrink-0 items-center justify-center rounded hover:bg-white/10 hover:text-foreground"
+          className={cn(
+            "size-6 shrink-0 items-center justify-center rounded hover:bg-white/10 hover:text-foreground",
+            secondary ? "hidden @min-[120px]:flex" : "flex",
+          )}
         >
           <HugeiconsIcon icon={icon} size={13} strokeWidth={1.75} />
         </button>

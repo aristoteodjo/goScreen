@@ -661,7 +661,7 @@ export function Timeline() {
           })}
 
           <Playhead x={(t) => HEADER + GUTTER + x(t)} />
-          {blade !== null ? (
+          {blade !== null && tool === "blade" ? (
             <div
               className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-rose-400/80"
               style={{ left: HEADER + GUTTER + x(blade) }}
