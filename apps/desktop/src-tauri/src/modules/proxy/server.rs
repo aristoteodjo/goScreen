@@ -31,12 +31,16 @@ struct ListenerKey {
     origin: String,
     user_agent: String,
     touch: bool,
+    // Opened by a redirect from a public site: may only reach public addresses.
+    public_only: bool,
 }
 
 struct Inner {
     client: reqwest::Client,
     // Cross-origin relay: public addresses only, checked at connect time.
     relay: reqwest::Client,
+    // Finds where a public site lands, without following it into the network.
+    probe_public: reqwest::Client,
     probe: reqwest::Client,
     listeners: Mutex<HashMap<ListenerKey, u16>>,
 }
@@ -56,6 +60,12 @@ impl Default for ProxyState {
             .timeout(Duration::from_secs(60))
             .build()
             .expect("relay client builds");
+        let probe_public = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .dns_resolver(Arc::new(PublicResolver))
+            .timeout(Duration::from_secs(15))
+            .build()
+            .expect("public probe client builds");
         let probe = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
             .timeout(Duration::from_secs(15))
@@ -64,6 +74,7 @@ impl Default for ProxyState {
         Self(Arc::new(Inner {
             client,
             relay,
+            probe_public,
             probe,
             listeners: Mutex::new(HashMap::new()),
         }))
@@ -76,6 +87,21 @@ struct Ctx {
     proxy_origin: String,
     user_agent: String,
     touch: bool,
+    public_only: bool,
+}
+
+impl Ctx {
+    /// Upstream client: a listener a public site led to never reaches
+    /// private addresses, whatever its name resolves to.
+    fn client(&self) -> &reqwest::Client {
+        if self.public_only { &self.inner.relay } else { &self.inner.client }
+    }
+
+    /// Whether this listener may reach local and private addresses: only a
+    /// site the user opened that is itself local (a dev server).
+    fn allows_local(&self) -> bool {
+        !self.public_only && is_local_origin(&self.origin)
+    }
 }
 
 // Boxed so the handler -> listener -> handler cycle has a nameable type.
@@ -101,6 +127,7 @@ fn ensure_listener(
             proxy_origin: format!("http://127.0.0.1:{port}"),
             user_agent: key.user_agent.clone(),
             touch: key.touch,
+            public_only: key.public_only,
         });
         let app = Router::new().fallback(handle).with_state(ctx);
         tauri::async_runtime::spawn(async move {
@@ -139,11 +166,13 @@ pub async fn proxy_open(
     if !matches!(target.scheme(), "http" | "https") {
         return Err("only http and https URLs can be previewed".into());
     }
+    // A site the user opens on localhost may reach local addresses; a public
+    // one may not, even through its redirects or DNS.
+    let local = is_local_origin(&target.origin().ascii_serialization());
+    let probe = if local { &state.0.probe } else { &state.0.probe_public };
     // Land on the post-redirect origin (example.com -> www.example.com) so
     // root-relative assets resolve against the right host.
-    let resolved = match state
-        .0
-        .probe
+    let resolved = match probe
         .get(target.clone())
         .header(header::USER_AGENT, &user_agent)
         .send()
@@ -152,10 +181,14 @@ pub async fn proxy_open(
         Ok(resp) => resp.url().clone(),
         Err(e) => return Err(format!("could not reach {}: {e}", target.host_str().unwrap_or(""))),
     };
+    if !local && relay_target(resolved.as_str(), false).is_err() {
+        return Err("This site redirects to a local or private address.".into());
+    }
     let key = ListenerKey {
         origin: resolved.origin().ascii_serialization(),
         user_agent,
         touch,
+        public_only: !local,
     };
     let port = ensure_listener(state.0.clone(), key).await?;
     let mut proxied_url = format!("http://127.0.0.1:{port}{}", path_and_query(&resolved));
@@ -216,8 +249,7 @@ async fn forward(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
     let headers = upstream_headers(ctx, &parts.headers, false);
 
     let resp = ctx
-        .inner
-        .client
+        .client()
         .request(parts.method, &upstream)
         .headers(headers)
         .body(body)
@@ -301,7 +333,7 @@ fn upstream_headers(ctx: &Ctx, incoming: &HeaderMap, relayed: bool) -> HeaderMap
 /// so APIs that only allow that origin answer (see `relay.rs`).
 async fn relay(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
     let raw = relay_param(req.uri().query()).ok_or("Relay needs a u= parameter.")?;
-    let allow_local = is_local_origin(&ctx.origin);
+    let allow_local = ctx.allows_local();
     let target = relay_target(&raw, allow_local)?;
     // Names are checked by the relay client's resolver at connect time (no
     // rebinding window); IP literals by `relay_target`. Redirects are never
@@ -351,10 +383,16 @@ async fn rewrite_location(ctx: &Arc<Ctx>, upstream: &str, value: &HeaderValue) -
     let proxy_origin = if origin == ctx.origin {
         ctx.proxy_origin.clone()
     } else {
+        // A public site must not lead the preview into the user's network.
+        if relay_target(next.as_str(), ctx.allows_local()).is_err() {
+            log::warn!("proxy {}: refused redirect to {next}", ctx.origin);
+            return None;
+        }
         let key = ListenerKey {
             origin,
             user_agent: ctx.user_agent.clone(),
             touch: ctx.touch,
+            public_only: !ctx.allows_local(),
         };
         let port = ensure_listener(ctx.inner.clone(), key).await.ok()?;
         format!("http://127.0.0.1:{port}")
@@ -405,7 +443,7 @@ mod tests {
     async fn proxies_html_without_framing_headers() {
         let origin = upstream().await;
         let state = ProxyState::default();
-        let key = ListenerKey { origin: origin.clone(), user_agent: "TestUA".into(), touch: true };
+        let key = ListenerKey { origin: origin.clone(), user_agent: "TestUA".into(), touch: true, public_only: false };
         let port = ensure_listener(state.0.clone(), key.clone()).await.unwrap();
         assert_eq!(ensure_listener(state.0.clone(), key).await.unwrap(), port);
 

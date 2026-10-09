@@ -90,6 +90,9 @@ Une iframe peut, mais les sites publics la bloquent (`X-Frame-Options`). D'où :
    `/__goscreen/relay?u=…`, que le proxy rejoue avec la vraie origine du site (les API à liste blanche CORS
    répondent). Jamais de cookies relayés ; localhost, IP privées et noms résolus vers elles sont refusés
    (sauf si le site prévisualisé est lui-même local).
+   Même règle pour la navigation : un site public (ouvert par l'utilisateur ou atteint par redirection) a des
+   listeners `public_only` dont le client résout le DNS en écartant les adresses privées à la connexion ; une
+   redirection vers localhost / une IP privée est refusée. Seul un site ouvert en local peut joindre le local.
 5. L'iframe est sandboxée **sans** `allow-top-navigation` : une page prévisualisée ne peut pas naviguer la fenêtre du studio.
 
 Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certains logins ; le HTML non UTF-8 est décodé en lossy.
