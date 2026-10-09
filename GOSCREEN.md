@@ -226,61 +226,82 @@ n'en sait rien.
 - Rust : `cd apps/desktop/src-tauri && cargo test` (via `portly temp`)
 - Web : `pnpm --filter @goscreen/web auth:migrate` après un changement de schéma better-auth
 
-## Plan : vidéos produit automatiques (« 8 propositions par site »)
+## Plan : vidéos produit automatiques, pilotées par la campagne
 
-But : une URL -> 8 montages prêts (pub de lancement, explainer, tour, vertical…) dans le style des démos SaaS en
-motion design. Une seule capture ; chaque proposition est un `EditState` généré, donc une preview live
-(`composeFrame`) et un montage éditable, jamais 8 exports. Site de test : **https://oeufsdor.vercel.app/**.
+But : une URL + le brief d'une campagne client -> 8 montages prêts, dans le style des démos SaaS en motion design.
+Rien n'est écrit pour un site en particulier : tout dérive de **trois entrées** :
 
-Ce que le site de test exerce (relevé le 2026-10-09) :
-- meta riches (`og:title`, `description`, `og:site_name` « OEUF D'OR », `lang="fr"`), `h1` + 6 `h2` de section
-  (« Disponible maintenant », « Meilleurs prix du moment », « Le marché en chiffres », « Comment ça marche »…) ;
-- couleurs en chaîne de variables (`--primary: var(--yolk)`) : l'extraction doit **résoudre les `var()`** ;
-  `theme-color` (#f7f7f2) n'est que le fond, la vraie couleur de marque est dans le favicon SVG (#e9a100) ;
-- polices Bricolage Grotesque (titres) + Atkinson Hyperlegible (texte) ;
-- `sitemap.xml` de 8 pages (accueil, offres, packs mois/année, catégories, 2 fiches producteur).
+1. le **site** (marque, pages, sections, repères), lu automatiquement ;
+2. la **campagne** (objectif, cible, ton, offre, CTA, canaux), saisie ou complétée par le client ;
+3. le **catalogue de recettes** (structures de montage génériques), qui ne connaît ni l'un ni l'autre.
 
-### Tranche A : marque du site (Rust, pur + testé)
-- `modules/site/brand.rs` : `site_brand(url)` -> `{ name, title, tagline, lang, colors: { background, primary,
-  accent, ink }, fonts: { heading, body }, logo }`. Sources : meta/og, `h1`, CSS liée (variables `--primary`,
-  `--accent`, `--background`, `--foreground` avec résolution des `var()`), favicon SVG / `og:image`.
-  Même garde réseau que le proxy (`public_only`).
-- `site_sections(url)` : titres `h2` par page, pour écrire les textes des scènes.
-- Test : fixtures HTML/CSS d'oeufsdor dans `tests/` (primary = #e9a100 ou la valeur de `--yolk`).
+Une seule capture ; chaque proposition est un `EditState` généré, donc une preview live (`composeFrame`) et un
+montage éditable, jamais 8 exports.
+
+### Site de référence (fixture, pas cible)
+https://oeufsdor.vercel.app/ sert de **cas de test**, jamais de cas particulier dans le code. Il exerce
+(relevé le 2026-10-09) : meta/og riches, `lang="fr"`, un `h1` + 6 `h2` de section ; couleurs en chaîne de
+variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la marque est dans le favicon SVG) ;
+2 polices (titres / texte) ; `sitemap.xml` de 8 pages. Ajouter au moins un second site au profil opposé
+(SaaS anglophone, sombre, sans sitemap) pour vérifier que rien ne dépend du premier.
+
+### Modèle `Campaign` (package `@goscreen/campaign`, pur, zod)
+- `{ objective, audience, tone, offer, cta: { label, url }, channels, language, durationHint, focus, brand }`
+  - `objective` : `launch | acquisition | promo | feature | recruit-supply | awareness` ;
+  - `channels` -> formats déduits (`instagram-reel`/`tiktok` = 9:16, `linkedin` = 1:1 ou 16:9, `youtube` = 16:9…) ;
+  - `focus` : pages ou sections à mettre en avant (sinon choisies par score) ;
+  - `brand` : surcharges de la marque extraite (couleur, logo, police) ;
+  - `tone` règle rythme, transitions, animations de texte et tempo de musique.
+- `defaultCampaign(brand, sections)` propose un brief rempli depuis le site ; le client corrige.
+- Sauvé avec le projet (`<stem>.campaign.json`), parse champ par champ avec repli.
+
+### Tranche A : lecture du site (Rust, pur + testé)
+- `modules/site/brand.rs` : `site_brand(url)` -> `{ name, tagline, description, lang, colors: { background,
+  primary, accent, ink }, fonts: { heading, body }, logo }`. Sources par priorité : variables CSS courantes
+  (`--primary`, `--brand`, `--accent`, `--background`, `--foreground`, résolution des `var()`), couleur dominante
+  du logo / favicon SVG, `theme-color` ; meta/og, `h1`. Même garde réseau que le proxy (`public_only`).
+- `site_sections(url)` : sections par page avec un **rôle** déduit génériquement (structure + mots-clés multilingues) :
+  `hero | features | pricing | stats | how-it-works | testimonials | listing | faq | cta | other`.
+- Fixtures de chaque site de référence dans `tests/`.
 
 ### Tranche B : chapitres et repères dans la prise (journal v4, rétrocompatible)
-- `runTour` écrit `chapters: [{ url, title, start, end }]` (temps depuis la frame 0) : une page = un chapitre.
-- Le bridge répond à `marks` : rectangles (en `u, v` du verre, comme les touches) du `h1`, des `h2`, des boutons
-  CTA, des cartes et des chiffres clés visibles, notés à chaque pause du tour -> `marks: [{ t, kind, text, u, v, w, h }]`.
-- Parse champ par champ avec repli : un journal v3 s'ouvre sans chapitres ni repères.
+- `runTour` écrit `chapters: [{ url, title, start, end }]` : une page = un chapitre.
+- Le bridge répond à `marks` : rectangles (en `u, v` du verre) des titres, CTA, cartes et chiffres visibles,
+  avec leur rôle, notés à chaque pause -> `marks: [{ t, role, text, u, v, w, h }]`.
+- Le tour peut suivre `campaign.focus` (pages à parcourir, ordre) plutôt que tout le sitemap.
+- Un journal v3 s'ouvre sans chapitres ni repères.
 
 ### Tranche C : recettes (render-engine, pur + testé)
-- `recipes.ts` : `buildProposals(recording, brand, sections) -> Proposal[]` où `Proposal = { id, label, ratio, edit: EditState }`.
-- Briques réutilisées : `SlideClip` (accroche, CTA, logo), clips coupés par chapitre, `buildAutoZooms` remplacé
-  par des zooms **sur les repères** (« Meilleurs prix du moment » -> zoom sur la carte), overlays texte animés,
-  transitions, couleurs et polices de la marque.
-- MVP, 3 recettes : **Pub de lancement** (15 s, 16:9 : accroche, 3 sections, CTA), **Tour des fonctionnalités**
-  (30-40 s, un chapitre par page), **Vertical réseaux sociaux** (15 s, 9:16, mobile seul).
-- Ensuite, 5 recettes : Explainer (problème -> solution), Vitrine multi-device, Hero 3D, Prix + CTA (packs), Teaser rythmé.
+- Une recette = `{ id, label, objectives, formats, needs: Role[], build(ctx) -> EditState }`, où
+  `ctx = { recording, brand, sections, campaign, format }`. Aucune ne cite un site.
+- `buildProposals(ctx) -> Proposal[8]` : **score** chaque couple (recette, format) selon l'objectif, les canaux et
+  les rôles disponibles (pas de « Prix + CTA » sans section `pricing`), puis garde les 8 meilleurs, variés.
+- Textes : accroche, bénéfices et CTA viennent de la campagne, sinon des sections ; langue = `campaign.language`.
+  Point d'extension `CopyProvider` (gabarits locaux par défaut, rédaction IA plus tard via le web).
+- Zooms sur les **repères** du rôle visé (remplace `buildAutoZooms` dans ces montages).
+- Catalogue : Pub de lancement, Tour des fonctionnalités, Vertical réseaux sociaux (MVP) ; puis Explainer
+  (problème -> solution), Vitrine multi-device, Hero 3D, Prix + CTA, Teaser rythmé.
 
 ### Tranche D : bouton « Propositions » (desktop)
-- Dialogue URL -> marque + pages -> Site tour automatique (desktop + mobile synchronisés, mode Separately) ->
-  galerie de 8 vignettes animées (preview live) -> « Ouvrir dans l'éditeur » écrit `<stem>.edit.json`.
+- URL -> lecture du site -> formulaire de brief prérempli (objectif, cible, offre, CTA, canaux) -> tour
+  automatique (devices selon les formats) -> galerie des 8 previews live, avec la raison du choix ->
+  « Ouvrir dans l'éditeur » écrit `<stem>.edit.json`. Changer le brief régénère sans refaire la capture.
 
 ### Tranche E : finition motion design
-- Caméra 3D animée (images clés de tilt/rotation du device), cartes flottantes (un repère détaché du verre,
-  ombre + échelle), typographie lettre à lettre / masque, synchro sur le tempo de la musique, curseur synthétique.
+- Caméra 3D animée, cartes flottantes (un repère détaché du verre), typographie lettre à lettre / masque,
+  synchro sur le tempo, curseur synthétique.
 
-### Critères du test oeufsdor
-1. `site_brand` renvoie « OEUF D'OR », la tagline du `h1`, l'orange du jaune d'œuf, Bricolage Grotesque.
-2. Le tour couvre les 8 pages du sitemap, avec 8 chapitres dans le journal.
-3. La Pub de lancement montre l'accroche, zoome sur « Meilleurs prix du moment », « Classement des producteurs »
-   et « Comment ça marche », puis se termine sur le logo + l'URL, aux couleurs du site.
-4. Les 3 propositions MVP s'exportent sans retouche ; toute modification reste possible dans l'éditeur.
+### Critères de test (sur chaque site de référence)
+1. `site_brand` et `site_sections` trouvent nom, accroche, couleur de marque, polices et rôles des sections.
+2. Deux briefs différents sur le même site (ex. `acquisition` + Instagram vs `launch` + YouTube) donnent des
+   propositions différentes en format, ordre, textes et sections mises en avant.
+3. Les recettes sans les rôles nécessaires ne sont pas proposées.
+4. Les propositions s'exportent sans retouche et restent entièrement éditables.
+5. `grep -ri oeufsdor packages apps` ne trouve que des fixtures de test.
 
 ## Prochaines tranches verticales
 
-0. Vidéos produit automatiques : tranches A à E ci-dessus, testées sur oeufsdor.vercel.app.
+0. Vidéos produit automatiques pilotées par la campagne : tranches A à E ci-dessus (oeufsdor = fixture de référence).
 1. Éditeur : curseur pour les sources web, motion blur, transitions entre clips, crop ; export plus rapide.
 2. Android : drag en direct, audio (`AndroidAudioProvider`), « Synchronize Interactions » multi-device.
 3. `project.json` versionné, avec migrations.
