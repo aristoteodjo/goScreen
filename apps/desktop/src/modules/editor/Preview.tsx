@@ -14,6 +14,7 @@ import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { cn } from "@/lib/utils";
 import { overlayBox } from "./drawOverlays";
 import { imageFor, pooled, prunePool } from "./media";
+import { PreviewMenu, type PreviewTarget } from "./PreviewMenu";
 import { previewStill } from "./stills";
 import { drawAt, type TimelineSources } from "./render";
 import { assetUrl, currentTimeline, requestPaint, setPainter, useSession } from "./session";
@@ -79,6 +80,7 @@ export function Preview() {
   const viewZoom = usePlayback((s) => s.viewZoom);
   const tool = usePlayback((s) => s.tool);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [menuTarget, setMenuTarget] = useState<PreviewTarget | null>(null);
   const selectedZoom = usePlayback((s) => s.selectedZoom);
   const selectedLayer = usePlayback((s) => s.selectedLayer);
   const hasLayers = useEdit((s) => s.edit.layers !== null);
@@ -212,6 +214,21 @@ export function Preview() {
     };
   };
 
+  /** What a right-click lands on: an overlay first, then a device, else empty space. */
+  const targetAt = (clientX: number, clientY: number): PreviewTarget | null => {
+    if (!output) return null;
+    const screen = toScreen(clientX, clientY);
+    if (!screen) return null;
+    const t = usePlayback.getState().time;
+    const hit = hitOverlay(useEdit.getState().edit.overlays, t, screen, output);
+    if (hit) return { kind: "overlay", id: hit.id };
+    const p = toOutput(clientX, clientY);
+    const now = frameNow();
+    const id = p && now ? hitLayer(now.frame.layers, p) : null;
+    if (id) return { kind: "layer", id };
+    return { kind: "empty", at: { x: screen.x / output.width, y: screen.y / output.height } };
+  };
+
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (e.button === 1 || (e.button === 0 && usePlayback.getState().tool === "hand")) {
       pan(e);
@@ -322,7 +339,12 @@ export function Preview() {
         }}
       >
         {css ? (
-          <div className="relative m-auto shrink-0" style={{ width: css.width, height: css.height, margin: viewZoom === null ? "auto" : MARGIN }}>
+          <PreviewMenu target={menuTarget}>
+          <div
+            className="relative m-auto shrink-0"
+            style={{ width: css.width, height: css.height, margin: viewZoom === null ? "auto" : MARGIN }}
+            onContextMenuCapture={(e) => setMenuTarget(targetAt(e.clientX, e.clientY))}
+          >
             <canvas
               ref={canvasRef}
               data-preview-canvas
@@ -342,6 +364,7 @@ export function Preview() {
             />
             {output ? <SelectionBox css={css} output={output} onResize={dragOverlay} toScreen={toScreen} /> : null}
           </div>
+          </PreviewMenu>
         ) : null}
       </div>
       {selectedZoom ? (

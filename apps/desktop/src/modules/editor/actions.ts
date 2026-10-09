@@ -15,6 +15,7 @@ import {
   splitAt,
   type TextOverlay,
   type Transition,
+  type LayerEdit,
   MIC_ASSET,
   placeClips,
 } from "@goscreen/render-engine";
@@ -74,10 +75,11 @@ export const TEXT_PRESETS: { id: string; label: string; enter: Animation; patch:
 ];
 
 export const editActions = {
-  addText(preset = TEXT_PRESETS[0]) {
+  /** `at` places it where the user right-clicked (fractions of the output). */
+  addText(preset = TEXT_PRESETS[0], at?: { x: number; y: number }) {
     const big = preset.id === "title";
     addOverlay({
-      ...overlayAt(3, { ...preset.patch, enter: preset.enter, motion: big ? 0.9 : 0.5 }),
+      ...overlayAt(3, { ...preset.patch, ...at, enter: preset.enter, motion: big ? 0.9 : 0.5 }),
       kind: "text",
       text: big ? "Your headline" : preset.id === "caption" ? "Add a caption" : "Type something…",
       style: {
@@ -108,9 +110,9 @@ export const editActions = {
   },
 
   /** A blur box at the playhead, to hide sensitive data; drag it over the spot. */
-  addBlur(mode: "blur" | "pixelate" = "blur") {
+  addBlur(mode: "blur" | "pixelate" = "blur", at?: { x: number; y: number }) {
     addOverlay({
-      ...overlayAt(4, { width: 0.25, height: 0.08, enter: "fade", exit: "fade", motion: 0.2 }),
+      ...overlayAt(4, { width: 0.25, height: 0.08, ...at, enter: "fade", exit: "fade", motion: 0.2 }),
       kind: "blur",
       mode,
       strength: mode === "blur" ? 0.02 : 0.018,
@@ -266,6 +268,19 @@ export const editActions = {
       ...ed,
       audio: ed.audio.filter((a) => a.asset !== MIC_ASSET),
       tracks: { ...ed.tracks, micMuted: false },
+    }));
+  },
+
+  /** Changes one recorded device (model, finish, frame...) from anywhere. */
+  setLayer(instanceId: string, patch: Partial<LayerEdit>) {
+    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => (l.instanceId === instanceId ? { ...l, ...patch } : l)) ?? null }));
+  },
+
+  /** Moves an overlay one lane up (in front) or down (behind). */
+  moveOverlayLane(id: string, by: 1 | -1) {
+    change((ed) => ({
+      ...ed,
+      overlays: ed.overlays.map((o) => (o.id === id ? { ...o, lane: Math.max(0, o.lane + by) } : o)),
     }));
   },
 
