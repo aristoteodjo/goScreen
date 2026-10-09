@@ -8,7 +8,6 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -21,7 +20,7 @@ import { useRecording } from "@/modules/recording/store";
 import { pageLabel } from "@/modules/tour/plan";
 import { useTour } from "@/modules/tour/store";
 import { ASPECTS, type AspectId } from "../store/aspect";
-import { type ViewMode, useEditor } from "../store/editor";
+import { useEditor } from "../store/editor";
 import { useProject } from "../store/project";
 
 export function Toolbar({ capture }: { capture: CaptureControls }) {
@@ -30,7 +29,6 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
   const navigateDevice = useProject((s) => s.navigateDevice);
   const selectedId = useEditor((s) => s.selectedId);
   const view = useEditor((s) => s.view);
-  const setView = useEditor((s) => s.setView);
   // An unsynced selected device has its own address; edit that one.
   const ownDevice = useProject((s) =>
     s.devices.find((d) => d.id === selectedId && !d.synced && d.source.kind === "web"),
@@ -69,16 +67,6 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
   return (
     <header data-tauri-drag-region className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger className="-ml-1" />
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
-        value={view}
-        onValueChange={(v) => v && setView(v as ViewMode)}
-      >
-        <ToggleGroupItem value="canvas" className="px-3 text-xs">Canvas</ToggleGroupItem>
-        <ToggleGroupItem value="scene" className="px-3 text-xs">Scene</ToggleGroupItem>
-      </ToggleGroup>
       <form onSubmit={submit} className="mx-auto w-full max-w-xl">
         <InputGroup className="h-8">
           <InputGroupAddon>

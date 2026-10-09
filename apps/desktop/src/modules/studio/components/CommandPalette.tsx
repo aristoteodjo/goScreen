@@ -49,8 +49,6 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
       <CommandList>
         <CommandEmpty>No command found.</CommandEmpty>
         <CommandGroup heading="View">
-          <CommandItem onSelect={run(() => useEditor.getState().setView("canvas"))}>Show canvas</CommandItem>
-          <CommandItem onSelect={run(() => useEditor.getState().setView("scene"))}>Show scene</CommandItem>
           <CommandItem onSelect={run(() => canvasCommands.fit())}>
             Fit all devices
             <CommandShortcut>Shift 1</CommandShortcut>

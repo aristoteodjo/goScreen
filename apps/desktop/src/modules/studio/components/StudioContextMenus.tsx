@@ -105,7 +105,6 @@ export function ViewContextMenu({ children }: { children: ReactElement }) {
   const recording = useRecording((s) => s.active);
   const hasDevices = useProject((s) => s.devices.length > 0);
   const bubbleHidden = useCaptureSettings((s) => s.camera !== null && !s.bubble.visible);
-  const other = view === "canvas" ? "scene" : "canvas";
 
   return (
     <ContextMenu disabled={recording}>
@@ -143,7 +142,6 @@ export function ViewContextMenu({ children }: { children: ReactElement }) {
             Show camera bubble
           </ContextMenuItem>
         ) : null}
-        <ContextMenuItem onClick={() => useEditor.getState().setView(other)}>Switch to {other}</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => useEditor.getState().setPaletteOpen(true)}>
           Add a device…

@@ -4,7 +4,8 @@ import {
   Cancel01Icon,
   Globe02Icon,
   GridViewIcon,
-  Image01Icon,
+  type Image01Icon,
+  Layers01Icon,
   Mic01Icon,
   MicOff01Icon,
   RecordIcon,
@@ -37,7 +38,6 @@ import type { CaptureControls } from "./useCapture";
 const MODES: { id: CaptureMode; label: string; hint: string; icon: typeof Image01Icon }[] = [
   { id: "device", label: "Device", hint: "The selected device only, at full resolution", icon: SmartPhone01Icon },
   { id: "canvas", label: "Canvas", hint: "Every device visible on the canvas", icon: GridViewIcon },
-  { id: "scene", label: "Scene", hint: "The devices placed in the scene", icon: Image01Icon },
 ];
 
 const NONE = "none";
@@ -100,7 +100,7 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
               separate && "bg-violet-500/25 text-violet-100",
             )}
           >
-            <HugeiconsIcon icon={GridViewIcon} size={20} strokeWidth={1.6} />
+            <HugeiconsIcon icon={Layers01Icon} size={20} strokeWidth={1.6} />
             Separately
           </button>
         ) : null}

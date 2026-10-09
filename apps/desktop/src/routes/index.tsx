@@ -8,10 +8,8 @@ import { SiteTourDialog } from "@/modules/tour/SiteTourDialog";
 import { useCapture } from "@/modules/recording/useCapture";
 import { CommandPalette } from "@/modules/studio/components/CommandPalette";
 import { Inspector } from "@/modules/studio/components/Inspector";
-import { Stage } from "@/modules/studio/components/Stage";
 import { StudioSidebar } from "@/modules/studio/components/StudioSidebar";
 import { Toolbar } from "@/modules/studio/components/Toolbar";
-import { useEditor } from "@/modules/studio/store/editor";
 import { bindCapture } from "@/modules/studio/actions";
 import { useBridgeWiring } from "@/modules/studio/useBridgeWiring";
 
@@ -21,7 +19,6 @@ export const Route = createFileRoute("/")({
 
 function Studio() {
   const capture = useCapture();
-  const view = useEditor((s) => s.view);
   bindCapture(capture);
   useBridgeWiring();
   useAndroidSync();
@@ -33,7 +30,7 @@ function Studio() {
         <div className="relative flex min-w-0 flex-1 flex-col">
           <Toolbar capture={capture} />
           <div className="relative flex min-h-0 flex-1 flex-col">
-            {view === "canvas" ? <CanvasRoot /> : <Stage />}
+            <CanvasRoot />
             <LiveCamera />
           </div>
           <CaptureBar capture={capture} />

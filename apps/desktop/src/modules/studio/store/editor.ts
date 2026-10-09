@@ -13,6 +13,7 @@ type EditorState = {
 };
 
 export const useEditor = create<EditorState>((set) => ({
+  // The studio shows the canvas only; composition happens in the editor.
   view: "canvas",
   selectedId: null,
   paletteOpen: false,
