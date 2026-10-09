@@ -11,6 +11,33 @@
     if (CFG.touch) Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 });
   } catch {}
 
+  // The page runs on 127.0.0.1, so APIs that only allow the real site's
+  // origin (CORS) would refuse it. Calls to another origin go through the
+  // proxy's relay, which replays them as the real site; absolute calls to
+  // the site itself stay on this listener.
+  const routed = (raw) => {
+    try {
+      const url = new URL(raw, location.href);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+      if (url.origin === location.origin) return null;
+      if (url.origin === CFG.origin) return CFG.proxyOrigin + url.pathname + url.search + url.hash;
+      return `${CFG.proxyOrigin}/__goscreen/relay?u=${encodeURIComponent(url.href)}`;
+    } catch {
+      return null;
+    }
+  };
+  const nativeFetch = window.fetch;
+  window.fetch = function (input, init) {
+    const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url;
+    const to = raw ? routed(raw) : null;
+    if (!to) return nativeFetch.call(this, input, init);
+    return nativeFetch.call(this, input instanceof Request ? new Request(to, input) : to, init);
+  };
+  const nativeOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    return nativeOpen.call(this, method, routed(String(url)) ?? url, ...rest);
+  };
+
   let pending = null;
   const flushPointer = () => {
     if (pending) post(pending);

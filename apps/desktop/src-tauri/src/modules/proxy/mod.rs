@@ -1,4 +1,5 @@
 mod bridge;
+mod relay;
 mod rewrite;
 pub mod server;
 

@@ -16,6 +16,9 @@ use tokio::sync::Mutex;
 use url::Url;
 
 use super::bridge::{bridge_script, BridgeConfig};
+use super::relay::{
+    is_local_origin, is_private, relay_location, relay_param, relay_target, DROPPED_RELAY_RESPONSE_HEADERS, RELAY_PATH,
+};
 use super::rewrite::{
     inject_bridge, is_html, rewrite_origin, rewrite_set_cookie, DROPPED_REQUEST_HEADERS,
     DROPPED_RESPONSE_HEADERS,
@@ -186,6 +189,10 @@ async fn forward(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
             .map_err(|e| e.to_string());
     }
 
+    if req.uri().path() == RELAY_PATH {
+        return relay(ctx, req).await;
+    }
+
     let path_q = req
         .uri()
         .path_and_query()
@@ -197,27 +204,7 @@ async fn forward(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
         .await
         .map_err(|e| format!("request body: {e}"))?;
 
-    let mut headers = HeaderMap::new();
-    for (name, value) in parts.headers.iter() {
-        if DROPPED_REQUEST_HEADERS.contains(&name.as_str()) {
-            continue;
-        }
-        if name == header::ORIGIN || name == header::REFERER {
-            if let Some(v) = value
-                .to_str()
-                .ok()
-                .and_then(|v| rewrite_origin(v, &ctx.proxy_origin, &ctx.origin))
-                .and_then(|v| HeaderValue::from_str(&v).ok())
-            {
-                headers.append(name.clone(), v);
-            }
-            continue;
-        }
-        headers.append(name.clone(), value.clone());
-    }
-    if let Ok(ua) = HeaderValue::from_str(&ctx.user_agent) {
-        headers.insert(header::USER_AGENT, ua);
-    }
+    let headers = upstream_headers(ctx, &parts.headers, false);
 
     let resp = ctx
         .inner
@@ -271,6 +258,84 @@ async fn forward(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
         Body::from(bytes)
     };
     builder.body(body).map_err(|e| e.to_string())
+}
+
+/// The page's request headers as the real site would send them: its own
+/// Origin and Referer, the device user agent. A relayed call carries no
+/// cookies: the browser's are for 127.0.0.1, not the API.
+fn upstream_headers(ctx: &Ctx, incoming: &HeaderMap, relayed: bool) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    for (name, value) in incoming.iter() {
+        if DROPPED_REQUEST_HEADERS.contains(&name.as_str()) || (relayed && name == header::COOKIE) {
+            continue;
+        }
+        if name == header::ORIGIN || name == header::REFERER {
+            if let Some(v) = value
+                .to_str()
+                .ok()
+                .and_then(|v| rewrite_origin(v, &ctx.proxy_origin, &ctx.origin))
+                .and_then(|v| HeaderValue::from_str(&v).ok())
+            {
+                headers.append(name.clone(), v);
+            }
+            continue;
+        }
+        headers.append(name.clone(), value.clone());
+    }
+    if let Ok(ua) = HeaderValue::from_str(&ctx.user_agent) {
+        headers.insert(header::USER_AGENT, ua);
+    }
+    headers
+}
+
+/// Replays a cross-origin fetch/XHR of the page with the real site as Origin,
+/// so APIs that only allow that origin answer (see `relay.rs`).
+async fn relay(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
+    let raw = relay_param(req.uri().query()).ok_or("Relay needs a u= parameter.")?;
+    let allow_local = is_local_origin(&ctx.origin);
+    let target = relay_target(&raw, allow_local)?;
+    if !allow_local {
+        // A public name can still point inside the network (DNS rebinding).
+        let host = target.host_str().unwrap_or_default().to_string();
+        let port = target.port_or_known_default().unwrap_or(443);
+        let addrs = tokio::net::lookup_host((host.as_str(), port))
+            .await
+            .map_err(|e| format!("relay lookup {host}: {e}"))?;
+        if addrs.into_iter().any(|a| is_private(a.ip())) {
+            return Err(format!("{host} points to a private address."));
+        }
+    }
+    let (parts, body) = req.into_parts();
+    let body = axum::body::to_bytes(body, MAX_REQUEST_BODY)
+        .await
+        .map_err(|e| format!("request body: {e}"))?;
+    let headers = upstream_headers(ctx, &parts.headers, true);
+    let resp = ctx
+        .inner
+        .client
+        .request(parts.method, target.clone())
+        .headers(headers)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("relay {target}: {e}"))?;
+
+    let mut builder = Response::builder().status(resp.status());
+    for (name, value) in resp.headers().iter() {
+        let n = name.as_str();
+        if DROPPED_RESPONSE_HEADERS.contains(&n) || DROPPED_RELAY_RESPONSE_HEADERS.contains(&n) {
+            continue;
+        }
+        if name == header::LOCATION {
+            if let Some(v) = value.to_str().ok().and_then(|v| relay_location(&target, v)) {
+                builder = builder.header(name, v);
+            }
+            continue;
+        }
+        builder = builder.header(name, value);
+    }
+    let bytes = resp.bytes().await.map_err(|e| format!("relay body: {e}"))?;
+    builder.body(Body::from(bytes)).map_err(|e| e.to_string())
 }
 
 // Same-origin redirects stay on this listener; cross-origin ones (SSO, apex

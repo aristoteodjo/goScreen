@@ -86,7 +86,11 @@ Une iframe peut, mais les sites publics la bloquent (`X-Frame-Options`). D'où :
    - surcharge `navigator.userAgent` et `maxTouchPoints` ;
    - poste au parent `pointer`, `down`, `up`, `scroll`, `navigate`, `location` (validés par zod côté app) ;
    - accepte `scrollTo`, `back` et `forward`.
-4. L'iframe est sandboxée **sans** `allow-top-navigation` : une page prévisualisée ne peut pas naviguer la fenêtre du studio.
+4. Relais cross-origin (`proxy/relay.rs`) : le bridge envoie les `fetch`/XHR vers une autre origine à
+   `/__goscreen/relay?u=…`, que le proxy rejoue avec la vraie origine du site (les API à liste blanche CORS
+   répondent). Jamais de cookies relayés ; localhost, IP privées et noms résolus vers elles sont refusés
+   (sauf si le site prévisualisé est lui-même local).
+5. L'iframe est sandboxée **sans** `allow-top-navigation` : une page prévisualisée ne peut pas naviguer la fenêtre du studio.
 
 Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certains logins ; le HTML non UTF-8 est décodé en lossy.
 
