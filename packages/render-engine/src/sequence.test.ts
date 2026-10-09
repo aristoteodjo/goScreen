@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   audioPieces,
   clampToSource,
+  clipsWithout,
   clipAt,
   DEFAULT_EDIT,
   dropIndex,
@@ -161,5 +162,32 @@ describe("soundtrack", () => {
     ]);
     expect(pieces.find((p) => p.source.kind === "asset")).toMatchObject({ from: 10, duration: 4, at: 1, volume: 0.5 });
     expect(audioPieces(edit, false).every((p) => p.source.kind === "asset")).toBe(true);
+  });
+});
+
+describe("clipsWithout", () => {
+  const id = (i: number) => `c${i}`;
+
+  it("cuts the paused stretches out of the take", () => {
+    const clips = clipsWithout([{ start: 4, end: 9 }, { start: 15, end: 16 }], id);
+    expect(clips.map((c) => [c.in, c.out])).toEqual([
+      [0, 4],
+      [9, 15],
+      [16, SOURCE_END],
+    ]);
+    expect(clips.map((c) => c.id)).toEqual(["c0", "c1", "c2"]);
+  });
+
+  it("merges overlapping pauses and skips slivers", () => {
+    const clips = clipsWithout([{ start: 3, end: 6 }, { start: 5, end: 8 }, { start: 8.1, end: 10 }, { start: 1, end: 1.01 }], id);
+    expect(clips.map((c) => [c.in, c.out])).toEqual([
+      [0, 3],
+      [10, SOURCE_END],
+    ]);
+  });
+
+  it("is one full clip without pauses, and starts later after a pause at 0", () => {
+    expect(clipsWithout([], id).map((c) => [c.in, c.out])).toEqual([[0, SOURCE_END]]);
+    expect(clipsWithout([{ start: 0, end: 2 }], id).map((c) => [c.in, c.out])).toEqual([[2, SOURCE_END]]);
   });
 });

@@ -117,6 +117,13 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
   En dev, c'est **Portly.app**. Arrêt : `q`, puis SIGINT, puis kill. Les PID sont notés dans le cache : un FFmpeg orphelin
   (crash, rebuild) est tué au lancement suivant.
 
+### Pause
+
+- Pause / Reprendre (toolbar, ⇧⌘P) ne coupe jamais la capture : les intervalles en pause (secondes depuis la
+  frame 0) partent dans le journal (`pauses`). À la première ouverture, `clipsWithout` (pur, testé) découpe la
+  piste principale autour d'eux ; caméra, micro, touches et zooms suivent (temps source). Un bord de clip tiré
+  récupère un passage coupé. Aucun redémarrage SCK/FFmpeg, donc aucune désynchro.
+
 ### Devices séparément
 
 - Option « Separately » de la barre de capture (Canvas/Scène, 2 devices ou plus). Sur le canvas, les devices

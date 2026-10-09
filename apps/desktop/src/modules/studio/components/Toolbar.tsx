@@ -1,4 +1,12 @@
-import { Camera01Icon, Globe02Icon, RecordIcon, RefreshIcon, StopIcon } from "@hugeicons/core-free-icons";
+import {
+  Camera01Icon,
+  Globe02Icon,
+  PauseIcon,
+  PlayIcon,
+  RecordIcon,
+  RefreshIcon,
+  StopIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
@@ -127,6 +135,7 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
           <TooltipContent>Screenshot</TooltipContent>
         </Tooltip>
         <TourProgress />
+        <PauseButton capture={capture} />
         <RecordButton capture={capture} />
       </div>
     </header>
@@ -146,8 +155,35 @@ function TourProgress() {
   );
 }
 
+/** Pause / resume the take. Stays in the toolbar, out of the captured area. */
+function PauseButton({ capture }: { capture: CaptureControls }) {
+  const paused = useRecording((s) => s.pausedAt !== null);
+  const started = useRecording((s) => s.clockZero !== null);
+  if (!capture.recording) return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!started || capture.isStopping}
+          onClick={capture.togglePause}
+          className={cn("gap-1.5", paused && "border-amber-400/60 text-amber-300")}
+        >
+          <HugeiconsIcon icon={paused ? PlayIcon : PauseIcon} strokeWidth={2} />
+          {paused ? "Resume" : "Pause"}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {paused ? "Resume recording" : "Pause: what happens until you resume is cut out"} (⇧⌘P)
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function RecordButton({ capture }: { capture: CaptureControls }) {
   const startedAt = useRecording((s) => s.startedAt);
+  const paused = useRecording((s) => s.pausedAt !== null);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!startedAt) return;
@@ -161,10 +197,11 @@ function RecordButton({ capture }: { capture: CaptureControls }) {
   // Record opens the capture bar; while recording this is the Stop button,
   // kept in the toolbar so it is never inside the captured area.
   const onClick = () => (capture.recording ? capture.toggleRecording() : setBarOpen(!barOpen));
-  const elapsed = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
-  const label = capture.recording
-    ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
-    : "Record";
+  // The clock shows what will be kept: paused time does not count.
+  const pausedFor = useRecording.getState().closedPauses().reduce((s, p) => s + (p.end - p.start), 0);
+  const elapsed = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000 - pausedFor)) : 0;
+  const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+  const label = capture.recording ? (paused ? `Paused ${clock}` : clock) : "Record";
 
   return (
     <Button

@@ -32,6 +32,9 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
         capture.toggleRecording();
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        capture.togglePause();
       }
     };
     window.addEventListener("keydown", onKey);

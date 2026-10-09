@@ -15,6 +15,7 @@ export type TakeJournal = {
   devices: { id: string }[];
   events: unknown[];
   camera: unknown;
+  pauses?: { start: number; end: number }[];
 };
 
 export type SplitPart = {

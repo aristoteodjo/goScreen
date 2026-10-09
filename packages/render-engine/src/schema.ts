@@ -55,6 +55,8 @@ const v3Schema = z.object({
   layers: z.array(layerSchema),
   pointers: z.array(pointerSchema),
   media: mediaSchema.optional(),
+  // Stretches recorded while paused (source seconds): cut out on first open.
+  pauses: z.array(z.object({ start: z.number(), end: z.number() })).optional().catch([]),
   // The webcam bubble as placed in the studio during the take.
   camera: cameraSchema.nullable().optional().catch(null),
 });
@@ -77,6 +79,7 @@ export type RecordingFile = {
   // Camera/mic start relative to the first screen frame.
   mediaOffset: number;
   camera: CameraEdit | null;
+  pauses: { start: number; end: number }[];
 };
 
 export const EMPTY_RECORDING: RecordingFile = {
@@ -86,6 +89,7 @@ export const EMPTY_RECORDING: RecordingFile = {
   pointers: [],
   mediaOffset: 0,
   camera: null,
+  pauses: [],
 };
 
 const ordered = (pointers: RecordedPointer[]) => pointers.filter((p) => p.t >= 0).sort((a, b) => a.t - b.t);
@@ -101,6 +105,7 @@ export function parseRecordingFile(json: unknown): RecordingFile {
       pointers: ordered(v3.data.pointers),
       mediaOffset: (v3.data.media?.offsetMs ?? 0) / 1000,
       camera: v3.data.camera ?? null,
+      pauses: v3.data.pauses ?? [],
     };
   }
   const v2 = v2Schema.safeParse(json);
@@ -112,6 +117,7 @@ export function parseRecordingFile(json: unknown): RecordingFile {
       pointers: ordered(v2.data.pointers),
       mediaOffset: 0,
       camera: null,
+      pauses: [],
     };
   }
   if (v1Schema.safeParse(json).success) return EMPTY_RECORDING;

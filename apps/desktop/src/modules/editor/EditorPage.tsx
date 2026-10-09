@@ -2,6 +2,7 @@ import {
   ASPECT_OPTIONS,
   type AspectId,
   buildAutoZooms,
+  clipsWithout,
   clampToSource,
   DEFAULT_EDIT,
   EMPTY_RECORDING,
@@ -92,7 +93,13 @@ export function EditorPage({ video }: { video: string }) {
       mediaOffset: file.mediaOffset,
       assetUrls: data.assets,
     });
-    useEdit.getState().load(saved ?? { ...DEFAULT_EDIT, camera: file.camera ?? DEFAULT_EDIT.camera });
+    // A first open cuts out what was recorded while paused.
+    const fresh = {
+      ...DEFAULT_EDIT,
+      camera: file.camera ?? DEFAULT_EDIT.camera,
+      clips: file.pauses.length > 0 ? clipsWithout(file.pauses, (i) => `clip-${i + 1}`) : DEFAULT_EDIT.clips,
+    };
+    useEdit.getState().load(saved ?? fresh);
     if (file.layers.length > 0) usePlayback.getState().setPanel("devices");
   }, [recording.data]);
 

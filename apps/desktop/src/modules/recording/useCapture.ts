@@ -166,6 +166,7 @@ export function useCapture() {
         pointers,
         devices: project.devices,
         events,
+        pauses: useRecording.getState().closedPauses(),
         // The editor opens the webcam where the bubble sat in the studio.
         camera: camera === null ? null : { ...bubble, visible: true, layout: "overlay" },
       };
@@ -234,6 +235,7 @@ export function useCapture() {
     /** Resolves once FFmpeg delivers frames; rejects when it cannot start. */
     startAsync: () => start.mutateAsync(),
     stopAsync: () => stop.mutateAsync(),
+    togglePause: () => useRecording.getState().togglePause(),
     isStarting: start.isPending,
     isStopping: stop.isPending,
     screenshot: () => screenshot.mutate(),

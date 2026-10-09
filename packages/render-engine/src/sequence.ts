@@ -127,6 +127,38 @@ export function setSpeed(clips: MainClip[], id: string, speed: number): MainClip
   return clips.map((c) => (c.id === id && c.kind === "recording" ? { ...c, speed } : c));
 }
 
+/** A stretch of the take recorded while paused, in source seconds. */
+export type Pause = { start: number; end: number };
+
+/**
+ * The main track of a take that was paused: one clip per stretch between
+ * pauses, so the paused parts are cut out (and can be brought back by
+ * dragging a clip edge). The last clip runs to the end of the source.
+ */
+export function clipsWithout(pauses: Pause[], id: (i: number) => string): RecordingClip[] {
+  const sorted = pauses
+    .filter((p) => p.end - p.start > 0.05)
+    .sort((a, b) => a.start - b.start)
+    .reduce<Pause[]>((out, p) => {
+      const last = out[out.length - 1];
+      if (last && p.start <= last.end) last.end = Math.max(last.end, p.end);
+      else out.push({ ...p });
+      return out;
+    }, []);
+  const clips: RecordingClip[] = [];
+  let from = 0;
+  for (const p of sorted) {
+    if (p.start - from >= MIN_CLIP) clips.push(recording(id(clips.length), from, p.start));
+    from = Math.max(from, p.end);
+  }
+  clips.push(recording(id(clips.length), from, SOURCE_END));
+  return clips;
+}
+
+function recording(id: string, start: number, end: number): RecordingClip {
+  return { id, kind: "recording", in: start, out: end, speed: 1, muted: false, cameraHidden: false, transition: null };
+}
+
 /** Once the source duration is known, no clip may reach past it. */
 export function clampToSource(clips: MainClip[], sourceDuration: number): MainClip[] {
   let changed = false;

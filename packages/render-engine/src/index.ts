@@ -19,6 +19,8 @@ export { DEFAULT_EDIT, EMPTY_RECORDING, fullClip, parseEditState, parseRecording
 export {
   clampToSource,
   clipAt,
+  clipsWithout,
+  type Pause,
   clipDuration,
   dropIndex,
   MIN_CLIP,

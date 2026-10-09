@@ -15,19 +15,45 @@ type RecordingState = {
   // What is being captured, in window CSS px. Fixed for the whole take.
   mode: CaptureMode | null;
   region: CaptureRegion | null;
+  // Pause keeps capturing; paused stretches (seconds from the first frame)
+  // are cut out when the take opens in the editor.
+  pausedAt: number | null;
+  pauses: { start: number; end: number }[];
   setActive: (active: boolean) => void;
+  togglePause: () => void;
+  /** Pauses so far, the running one closed now. */
+  closedPauses: () => { start: number; end: number }[];
   setClockZero: (t: number | null) => void;
   setCapture: (mode: CaptureMode | null, region: CaptureRegion | null) => void;
 };
 
-export const useRecording = create<RecordingState>((set) => ({
+const takeTime = (clockZero: number | null) => (clockZero === null ? 0 : (performance.now() - clockZero) / 1000);
+
+export const useRecording = create<RecordingState>((set, get) => ({
   active: false,
   startedAt: null,
   clockZero: null,
   mode: null,
   region: null,
+  pausedAt: null,
+  pauses: [],
   setActive: (active) =>
-    set(active ? { active, startedAt: Date.now(), clockZero: null } : { active, startedAt: null, clockZero: null, region: null }),
+    set(
+      active
+        ? { active, startedAt: Date.now(), clockZero: null, pausedAt: null, pauses: [] }
+        : { active, startedAt: null, clockZero: null, region: null, pausedAt: null },
+    ),
+  togglePause: () => {
+    const { active, clockZero, pausedAt, pauses } = get();
+    if (!active || clockZero === null) return;
+    const now = takeTime(clockZero);
+    if (pausedAt === null) set({ pausedAt: now });
+    else set({ pausedAt: null, pauses: [...pauses, { start: pausedAt, end: now }] });
+  },
+  closedPauses: () => {
+    const { clockZero, pausedAt, pauses } = get();
+    return pausedAt === null ? pauses : [...pauses, { start: pausedAt, end: takeTime(clockZero) }];
+  },
   setClockZero: (clockZero) => set({ clockZero }),
   setCapture: (mode, region) => set({ mode, region }),
 }));
