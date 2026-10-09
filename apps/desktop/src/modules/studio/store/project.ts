@@ -78,16 +78,18 @@ function fitScaleFor(d: Pick<DeviceInstance, "deviceId" | "orientation" | "viewp
   return Math.min((stage.height * 0.78) / frame.height, (stage.width * 0.42) / frame.width);
 }
 
+// The scene follows the device count: each device starts from its size when
+// alone, then all shrink together (and wrap to rows) until they fit.
 function relayout(state: Pick<ProjectState, "aspect" | "devices">): ProjectDevice[] {
   const stage = ASPECTS[state.aspect];
   const items = state.devices.flatMap((d) => {
     const device = registry.get(d.deviceId);
     return device
-      ? [{ id: d.id, orientation: d.orientation, scale: d.scale, viewport: d.viewport, device }]
+      ? [{ id: d.id, orientation: d.orientation, scale: fitScaleFor(d, state.aspect), viewport: d.viewport, device }]
       : [];
   });
-  const positions = arrangeDevices(items, stage, 90);
-  return state.devices.map((d) => ({ ...d, ...positions.get(d.id) }));
+  const placements = arrangeDevices(items, stage, 90);
+  return state.devices.map((d) => ({ ...d, ...placements.get(d.id) }));
 }
 
 // Lays frames left to right, bottoms aligned like devices on a desk.
@@ -123,8 +125,7 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
   },
   setAspect: (aspect) =>
     set((s) => {
-      const devices = s.devices.map((d) => ({ ...d, scale: fitScaleFor(d, aspect) }));
-      return { aspect, devices: relayout({ aspect, devices }) };
+      return { aspect, devices: relayout({ aspect, devices: s.devices }) };
     }),
   setBackground: (background) => set({ background }),
   setSynced: (id, synced) =>
@@ -222,7 +223,8 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
         }
         return next;
       });
-      return { devices };
+      // A new model or orientation changes its footprint: the scene re-fits.
+      return { devices: patch.deviceId || patch.orientation ? relayout({ aspect: s.aspect, devices }) : devices };
     }),
 
   moveOnCanvas: (id, point) => set((s) => ({ canvas: { ...s.canvas, [id]: point } })),

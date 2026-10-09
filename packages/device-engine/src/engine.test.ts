@@ -41,7 +41,42 @@ describe("layout", () => {
     const a = pos.get("a") ?? { x: Number.NaN, y: Number.NaN };
     const b = pos.get("b") ?? { x: Number.NaN, y: Number.NaN };
     expect((a.x + b.x) / 2).toBeCloseTo(stage.width / 2);
-    expect(a.y).toBe(stage.height / 2);
+    expect(a.y).toBeCloseTo(stage.height / 2);
+  });
+
+  const phones = (n: number, scale: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `p${i}`,
+      device: iphone,
+      orientation: "portrait" as const,
+      scale,
+      viewport: null,
+    }));
+  const frame = resolveScreenLayout(iphone, "portrait").frame;
+
+  it("shrinks devices as more are added so they all fit the stage", () => {
+    const stage = { width: 1920, height: 1080 };
+    // Each phone alone fills 78% of the stage height.
+    const alone = (stage.height * 0.78) / frame.height;
+    const scaleOf = (n: number) => arrangeDevices(phones(n, alone), stage).get("p0")?.scale ?? 0;
+    expect(scaleOf(1)).toBeCloseTo(alone);
+    expect(scaleOf(6)).toBeLessThan(scaleOf(3));
+    for (const p of arrangeDevices(phones(6, alone), stage).values()) {
+      const w = frame.width * p.scale;
+      const h = frame.height * p.scale;
+      expect(p.x - w / 2).toBeGreaterThanOrEqual(-1e-6);
+      expect(p.x + w / 2).toBeLessThanOrEqual(stage.width + 1e-6);
+      expect(p.y - h / 2).toBeGreaterThanOrEqual(-1e-6);
+      expect(p.y + h / 2).toBeLessThanOrEqual(stage.height + 1e-6);
+    }
+  });
+
+  it("stacks rows on a portrait stage when that keeps devices bigger", () => {
+    const stage = { width: 1080, height: 1920 };
+    const alone = (stage.width * 0.42) / frame.width;
+    const pos = [...arrangeDevices(phones(4, alone), stage).values()];
+    const rows = new Set(pos.map((p) => Math.round(p.y)));
+    expect(rows.size).toBeGreaterThan(1);
   });
 });
 
