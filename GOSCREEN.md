@@ -245,6 +245,21 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 2 polices (titres / texte) ; `sitemap.xml` de 8 pages. Ajouter au moins un second site au profil opposé
 (SaaS anglophone, sombre, sans sitemap) pour vérifier que rien ne dépend du premier.
 
+### Références vidéo (style à atteindre)
+- Playlist « What a Story » (100 vidéos, relevée le 2026-10-09) :
+  https://www.youtube.com/playlist?list=PLvr0s6WLGo2bCGXjB5ecHQ-JLPgmxMULe ; plus `wwIt5ZvROrs` (démo fintech) et
+  `SgmuplXU2iY` (pub de lancement LangEase). Ce sont des **références de style et de structure**, pas des gabarits à copier.
+- Genres observés -> recettes : *Explainer* (60-120 s), *Product launch* (45-70 s), *Teaser* (15-30 s),
+  *Product demo / walkthrough* (UI animée), *Video ad* (15-30 s), *Onboarding / tutorial*, *Booth video* (boucle
+  muette pour salon), *Integration* (« X x Y »), *Use case par secteur*. Le guide « 7 video types » de l'agence
+  (`XP6dqsEQyJE`) ajoute *Testimonial / case study*, *Review / comparison* et *Corporate*.
+- Structure dominante d'un explainer : accroche / problème -> apparition du produit (logo) -> 3 fonctionnalités en
+  UI animée (zoom sur un composant, carte flottante, curseur) -> bénéfice chiffré ou preuve -> CTA + URL ; voix off
+  sur toute la durée, musique rythmée, transitions sur les temps forts.
+- Atteignable nativement : UI animée à partir de la vraie capture, texte animé, cartes flottantes, caméra 3D,
+  transitions, voix off (enregistrée, plus tard synthétisée), musique. **Hors périmètre** : personnages 2D,
+  illustrations isométriques sur mesure, prises de vue réelles. Une recette ne promet jamais ces visuels.
+
 ### Modèle `Campaign` (package `@goscreen/campaign`, pur, zod)
 - `{ objective, audience, tone, offer, cta: { label, url }, channels, language, durationHint, focus, brand }`
   - `objective` : `launch | acquisition | promo | feature | recruit-supply | awareness` ;
@@ -279,8 +294,10 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 - Textes : accroche, bénéfices et CTA viennent de la campagne, sinon des sections ; langue = `campaign.language`.
   Point d'extension `CopyProvider` (gabarits locaux par défaut, rédaction IA plus tard via le web).
 - Zooms sur les **repères** du rôle visé (remplace `buildAutoZooms` dans ces montages).
-- Catalogue : Pub de lancement, Tour des fonctionnalités, Vertical réseaux sociaux (MVP) ; puis Explainer
-  (problème -> solution), Vitrine multi-device, Hero 3D, Prix + CTA, Teaser rythmé.
+- Catalogue aligné sur les genres de référence. MVP : **Product launch**, **Product demo / walkthrough**,
+  **Video ad verticale**. Puis : **Explainer** (problème -> solution, voix off), **Teaser** rythmé, **Integration**,
+  **Booth video** (boucle muette), **Use case** (une section `listing` / `stats` mise en scène), Prix + CTA.
+  Chaque recette suit la structure de son genre ; la campagne choisit lequel et règle durée, ton et textes.
 
 ### Tranche D : bouton « Propositions » (desktop)
 - URL -> lecture du site -> formulaire de brief prérempli (objectif, cible, offre, CTA, canaux) -> tour
@@ -298,6 +315,8 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 3. Les recettes sans les rôles nécessaires ne sont pas proposées.
 4. Les propositions s'exportent sans retouche et restent entièrement éditables.
 5. `grep -ri oeufsdor packages apps` ne trouve que des fixtures de test.
+6. Revue côte à côte avec 3 vidéos de la playlist du même genre : même structure de scènes, même rythme de
+   coupe (± 20 %), textes lisibles, CTA final présent.
 
 ## Prochaines tranches verticales
 
