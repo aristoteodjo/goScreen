@@ -35,7 +35,11 @@ pub fn encode_args(fps: u32, output: &str) -> Vec<String> {
     let fps = fps.clamp(15, 60).to_string();
     [
         "-hide_banner", "-y", "-f", "image2pipe", "-framerate", &fps, "-c:v", "mjpeg", "-i", "pipe:0",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-r", &fps,
+        // Browser JPEGs are full-range BT.601; tag and convert to BT.709 TV
+        // range so players do not wash out or shift colors.
+        "-vf", "scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=lanczos",
+        "-c:v", "libx264", "-preset", "slow", "-crf", "15", "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-r", &fps,
         "-movflags", "+faststart", output,
     ]
     .map(String::from)

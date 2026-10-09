@@ -4,7 +4,9 @@ import { useNavigate } from "@tanstack/react-router";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { type CaptureRegion, ipc } from "@/lib/ipc";
-import { canvasElement } from "@/modules/canvas/commands";
+import { canvasCommands, canvasElement } from "@/modules/canvas/commands";
+import type { View } from "@/modules/canvas/math";
+import { useCanvasView } from "@/modules/canvas/view";
 import { stageRegion } from "@/modules/studio/stageRef";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
@@ -28,6 +30,30 @@ function settingsAction(message: string) {
       : null;
   if (!pane) return undefined;
   return { label: "Open Settings", onClick: () => void ipc.openPrivacySettings(pane).catch(() => {}) };
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Canvas view to restore after a Device take, which zooms onto the device.
+let viewBeforeTake: View | null = null;
+
+function restoreCanvasView() {
+  if (viewBeforeTake) useCanvasView.getState().setView(viewBeforeTake);
+  viewBeforeTake = null;
+}
+
+/**
+ * A Device take records the glass at its on-screen size, so the device is
+ * first fitted to the canvas: more real pixels, a sharper video.
+ */
+async function frameDeviceForTake() {
+  const id = useEditor.getState().selectedId ?? useProject.getState().devices[0]?.id;
+  if (!id || useEditor.getState().view !== "canvas") return;
+  const { zoom, panX, panY } = useCanvasView.getState();
+  viewBeforeTake = { zoom, panX, panY };
+  canvasCommands.focus(id);
+  // Let the eased zoom land and the pages re-rasterize at the new scale.
+  await wait(400);
 }
 
 function boxOf(el: HTMLElement | null): CaptureRegion | null {
@@ -66,6 +92,7 @@ export function useCapture() {
       // Canvas and Scene record the view on screen; the view never changes here.
       const mode = captureMode();
       interactionLog.reset();
+      if (mode === "device") await frameDeviceForTake();
       // `active` flattens frames and hides UI chrome before FFmpeg starts.
       setActive(true);
       await nextFrame();
@@ -97,6 +124,7 @@ export function useCapture() {
     onError: (e) => {
       layerLog.stop();
       setActive(false);
+      restoreCanvasView();
       const message = errorMessage(e);
       toast.error("Could not start recording", {
         description: message,
@@ -125,6 +153,7 @@ export function useCapture() {
     },
     onSuccess: (result) => {
       setActive(false);
+      restoreCanvasView();
       if (!result?.videoPath) {
         toast.error("Recording finished without a video file.");
         return;
@@ -134,6 +163,7 @@ export function useCapture() {
     },
     onError: (e) => {
       setActive(false);
+      restoreCanvasView();
       toast.error("Recording failed", { description: errorMessage(e) });
     },
   });

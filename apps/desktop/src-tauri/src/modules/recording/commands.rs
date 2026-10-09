@@ -10,15 +10,37 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{State, WebviewWindow};
 
-use super::capture::{encode_args, PixelRect, ScreenCaptureProvider};
+use super::capture::{encode_args, window_crop, PixelRect, ScreenCaptureProvider, WindowCrop};
 use super::companion::{self, CaptureDevices};
 use super::ffmpeg;
 use super::permissions;
 
 const STDERR_TAIL: usize = 40;
 
+/// What records the screen pixels.
+enum Screen {
+    /// FFmpeg grabbing a screen region (Windows, Linux, older macOS).
+    Ffmpeg(Child),
+    /// ScreenCaptureKit recording the goScreen window alone.
+    #[cfg(target_os = "macos")]
+    Window(super::sck::Recording),
+}
+
+impl Screen {
+    fn finish(self) -> Result<(), String> {
+        match self {
+            Screen::Ffmpeg(mut child) => {
+                finish(&mut child);
+                Ok(())
+            }
+            #[cfg(target_os = "macos")]
+            Screen::Window(recording) => recording.finish(),
+        }
+    }
+}
+
 struct Session {
-    child: Child,
+    screen: Screen,
     video: PathBuf,
     started: Instant,
     stderr: Arc<Mutex<VecDeque<String>>>,
@@ -105,6 +127,27 @@ fn pixel_rect(window: &WebviewWindow, region: CaptureRegion) -> Result<PixelRect
         height: (region.height * scale).round() as u32,
     }
     .even())
+}
+
+/// The region in the window's own points, for a window capture.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn window_rect(window: &WebviewWindow, region: CaptureRegion) -> Result<WindowCrop, String> {
+    if region.width < 2.0 || region.height < 2.0 {
+        return Err("Capture region is empty.".into());
+    }
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let inner = window.inner_position().map_err(|e| e.to_string())?;
+    let outer = window.outer_position().map_err(|e| e.to_string())?;
+    let offset = (f64::from(inner.x - outer.x) / scale, f64::from(inner.y - outer.y) / scale);
+    Ok(window_crop((region.x, region.y, region.width, region.height), offset, scale))
+}
+
+/// Whether the screen is recorded through ScreenCaptureKit (window only).
+fn window_capture() -> bool {
+    #[cfg(target_os = "macos")]
+    return super::sck::available();
+    #[cfg(not(target_os = "macos"))]
+    false
 }
 
 #[cfg(target_os = "macos")]
@@ -199,29 +242,19 @@ fn start_companion(bin: &Path, video: &Path, camera: Option<u32>, mic: Option<u3
     Ok(Some(Companion { child, camera: outputs.camera, mic: outputs.mic, offset_ms }))
 }
 
-// Blocking work (ffmpeg probing, graceful stop) must stay off the main thread.
-#[tauri::command(async)]
-pub fn recording_start(
-    window: WebviewWindow,
-    state: State<'_, RecordingState>,
-    region: CaptureRegion,
-    fps: Option<u32>,
-    camera: Option<u32>,
-    microphone: Option<u32>,
-) -> Result<RecordingStarted, String> {
-    let called = Instant::now();
-    let mut slot = state.0.lock().map_err(|_| "recording state poisoned")?;
-    if slot.is_some() {
-        return Err("A recording is already running.".into());
-    }
-    let bin = ffmpeg_bin()?;
-    let rect = pixel_rect(&window, region)?;
-    let video = output_path(dirs::video_dir(), "mp4")?;
-    let input = provider(&bin)?.input(rect, fps.unwrap_or(60).clamp(15, 60), false);
+/// Region grab through FFmpeg. Returns once the first frame is on disk.
+fn start_ffmpeg(
+    bin: &Path,
+    rect: PixelRect,
+    fps: u32,
+    video: &Path,
+    stderr: &Arc<Mutex<VecDeque<String>>>,
+) -> Result<(Child, Instant), String> {
+    let input = provider(bin)?.input(rect, fps, false);
     let args = encode_args(input, &video.to_string_lossy(), false);
 
     let spawned = Instant::now();
-    let mut child = Command::new(&bin)
+    let mut child = Command::new(bin)
         .args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -230,7 +263,6 @@ pub fn recording_start(
         .map_err(|e| format!("could not start ffmpeg: {e}"))?;
 
     // FFmpeg blocks once its stderr pipe fills, so it must always be drained.
-    let stderr = Arc::new(Mutex::new(VecDeque::with_capacity(STDERR_TAIL)));
     if let Some(pipe) = child.stderr.take() {
         let sink = stderr.clone();
         std::thread::spawn(move || {
@@ -253,7 +285,7 @@ pub fn recording_start(
     let first_frame = loop {
         if let Ok(Some(status)) = child.try_wait() {
             orphan::forget();
-            return Err(format!("ffmpeg exited early ({status}):\n{}", tail(&stderr)));
+            return Err(format!("ffmpeg exited early ({status}):\n{}", tail(stderr)));
         }
         if video.exists() {
             break Instant::now();
@@ -262,10 +294,51 @@ pub fn recording_start(
             let _ = child.kill();
             let _ = child.wait();
             orphan::forget();
-            let _ = std::fs::remove_file(&video);
+            let _ = std::fs::remove_file(video);
             return Err(permissions::no_frames_message());
         }
         std::thread::sleep(Duration::from_millis(15));
+    };
+    Ok((child, first_frame))
+}
+
+#[cfg(target_os = "macos")]
+fn start_window(window: &WebviewWindow, region: CaptureRegion, fps: u32, video: &Path) -> Result<(Screen, Instant), String> {
+    let crop = window_rect(window, region)?;
+    let (recording, first) = super::sck::start(&crop, fps, video)?;
+    Ok((Screen::Window(recording), first))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn start_window(_: &WebviewWindow, _: CaptureRegion, _: u32, _: &Path) -> Result<(Screen, Instant), String> {
+    Err("Window capture is only available on macOS.".into())
+}
+
+// Blocking work (ffmpeg probing, graceful stop) must stay off the main thread.
+#[tauri::command(async)]
+pub fn recording_start(
+    window: WebviewWindow,
+    state: State<'_, RecordingState>,
+    region: CaptureRegion,
+    fps: Option<u32>,
+    camera: Option<u32>,
+    microphone: Option<u32>,
+) -> Result<RecordingStarted, String> {
+    let called = Instant::now();
+    let mut slot = state.0.lock().map_err(|_| "recording state poisoned")?;
+    if slot.is_some() {
+        return Err("A recording is already running.".into());
+    }
+    let bin = ffmpeg_bin()?;
+    let video = output_path(dirs::video_dir(), "mp4")?;
+    let fps = fps.unwrap_or(60).clamp(15, 60);
+    let stderr = Arc::new(Mutex::new(VecDeque::with_capacity(STDERR_TAIL)));
+    let (screen, first_frame) = if window_capture() {
+        start_window(&window, region, fps, &video)?
+    } else {
+        let rect = pixel_rect(&window, region)?;
+        let (child, first) = start_ffmpeg(&bin, rect, fps, &video, &stderr)?;
+        (Screen::Ffmpeg(child), first)
     };
 
     let (companion, companion_warning) = match start_companion(&bin, &video, camera, microphone, first_frame) {
@@ -276,7 +349,7 @@ pub fn recording_start(
     log::info!("recording started -> {}", video.display());
     let path = video.to_string_lossy().to_string();
     *slot = Some(Session {
-        child,
+        screen,
         video,
         started: first_frame,
         stderr,
@@ -332,7 +405,7 @@ pub fn shutdown(state: &RecordingState) {
         if let Some(c) = session.companion.as_mut() {
             finish(&mut c.child);
         }
-        finish(&mut session.child);
+        let _ = session.screen.finish();
         orphan::forget();
     }
 }
@@ -410,7 +483,7 @@ pub fn recording_stop(
         .ok_or("No recording is running.")?;
     let duration_ms = session.started.elapsed().as_millis() as u64;
 
-    finish(&mut session.child);
+    let screen = session.screen.finish();
     let companion = session.companion.take().map(|mut c| {
         finish(&mut c.child);
         c
@@ -419,7 +492,8 @@ pub fn recording_stop(
 
     let size = std::fs::metadata(&session.video).map(|m| m.len()).unwrap_or(0);
     if size == 0 {
-        return Err(format!("Recording produced no video:\n{}", tail(&session.stderr)));
+        let reason = screen.err().unwrap_or_else(|| tail(&session.stderr));
+        return Err(format!("Recording produced no video:\n{reason}"));
     }
 
     // Companion files are referenced by name: the folder can move as a whole.
@@ -453,6 +527,16 @@ pub fn recording_stop(
 
 #[tauri::command]
 pub async fn screenshot_capture(window: WebviewWindow, region: CaptureRegion) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    if window_capture() {
+        let crop = window_rect(&window, region)?;
+        let out = output_path(dirs::picture_dir(), "png")?;
+        let target = out.clone();
+        tauri::async_runtime::spawn_blocking(move || super::sck::screenshot(&crop, &target))
+            .await
+            .map_err(|e| e.to_string())??;
+        return Ok(out.to_string_lossy().to_string());
+    }
     let bin = ffmpeg_bin()?;
     let rect = pixel_rect(&window, region)?;
     let out = output_path(dirs::picture_dir(), "png")?;

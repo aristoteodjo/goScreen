@@ -63,6 +63,9 @@ export function drawFrame(
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // The default "low" smoothing turns every scaled screen soft.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.scale(pixelScale, pixelScale);
   // The camera moves over the whole composition, background included.

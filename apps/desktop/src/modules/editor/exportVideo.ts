@@ -42,7 +42,7 @@ async function seek(video: HTMLVideoElement, t: number) {
 
 function jpeg(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Frame encoding failed."))), "image/jpeg", 0.92),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Frame encoding failed."))), "image/jpeg", 0.98),
   );
 }
 

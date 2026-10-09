@@ -20,6 +20,33 @@ impl PixelRect {
     }
 }
 
+/// Part of a window to record: points in the window's own space, plus the
+/// output size in pixels (even, for yuv420p).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WindowCrop {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub pixel_width: u32,
+    pub pixel_height: u32,
+}
+
+/// `region` is in webview CSS px; `content_offset` is where the webview
+/// starts inside the window frame, in points (a title bar, if any).
+pub fn window_crop(region: (f64, f64, f64, f64), content_offset: (f64, f64), scale: f64) -> WindowCrop {
+    let (x, y, width, height) = region;
+    let even = |v: f64| ((v * scale).round() as u32 & !1).max(2);
+    WindowCrop {
+        x: x + content_offset.0,
+        y: y + content_offset.1,
+        width,
+        height,
+        pixel_width: even(width),
+        pixel_height: even(height),
+    }
+}
+
 pub trait ScreenCaptureProvider {
     /// FFmpeg input arguments plus an optional crop filter when the device
     /// can only grab whole screens.
@@ -145,6 +172,15 @@ mod tests {
     fn rect_rounds_down_to_even() {
         let r = PixelRect { x: 1, y: 2, width: 801, height: 599 }.even();
         assert_eq!((r.width, r.height), (800, 598));
+    }
+
+    #[test]
+    fn window_crop_offsets_and_scales() {
+        let c = window_crop((10.0, 20.0, 300.5, 201.0), (0.0, 28.0), 2.0);
+        assert_eq!((c.x, c.y, c.width, c.height), (10.0, 48.0, 300.5, 201.0));
+        assert_eq!((c.pixel_width, c.pixel_height), (600, 402));
+        let tiny = window_crop((0.0, 0.0, 0.2, 0.2), (0.0, 0.0), 1.0);
+        assert_eq!((tiny.pixel_width, tiny.pixel_height), (2, 2));
     }
 
     #[test]

@@ -30,3 +30,7 @@ reqwest = { version = "0.12", default-features = false, features = [
   "deflate",
 ] }
 tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "sync", "time"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Window-only capture: other apps' windows over goScreen never reach the video.
+screencapturekit = { version = "10.0.3", features = ["macos_15_0"] }

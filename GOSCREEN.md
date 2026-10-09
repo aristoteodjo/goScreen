@@ -125,14 +125,21 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
 ### Capture native
 
 Les iframes cross-origin ne se dessinent pas dans un `<canvas>`, donc la capture est native :
-`recording_start(region)` convertit le rectangle du stage (CSS px) en pixels physiques écran et lance FFmpeg
-via un `ScreenCaptureProvider` propre à chaque OS (avfoundation + crop sur macOS, gdigrab sur Windows, x11grab sur Linux).
+
+- **macOS 15+** : ScreenCaptureKit (`recording/sck.rs`) enregistre **la fenêtre goScreen seule** (filtre fenêtre +
+  `sourceRect`, encodage H.264 système via `SCRecordingOutput`). Une autre fenêtre, une notification ou un menu
+  par-dessus n'apparaît jamais dans la vidéo, et la fenêtre peut être sur n'importe quel écran. Les captures
+  d'écran passent par `SCScreenshotManager`. Le pont Swift de la crate exige le rpath `/usr/lib/swift` (`build.rs`).
+- **Ailleurs (repli)** : `recording_start(region)` convertit le rectangle (CSS px) en pixels physiques écran et lance
+  FFmpeg via un `ScreenCaptureProvider` (avfoundation + crop sur macOS < 15, gdigrab sur Windows, x11grab sur Linux).
+- La zone suit la vue à l'écran : Canvas et Scène enregistrent la vue courante (jamais de bascule) ; seul le mode
+  Device est mémorisé. Une prise Device cadre d'abord le device dans le canvas (plus de pixels), puis restaure la vue.
 Le curseur n'est **pas** gravé dans la vidéo. Les interactions sont écrites à côté du MP4 (`*.interactions.json`)
 pour garder touch, zoom et curseur éditables après la capture.
 
 - Sortie : `~/Movies/goScreen/` (vidéos), `~/Pictures/goScreen/` (captures).
-- macOS : la fenêtre doit être sur l'écran principal ; l'app (ou le terminal en dev) doit avoir la permission
-  « Enregistrement de l'écran ».
+- macOS : l'app (ou Portly en dev) doit avoir la permission « Enregistrement de l'écran ». Le repli FFmpeg
+  exige en plus que la fenêtre soit sur l'écran principal.
 - FFmpeg est cherché dans le PATH puis dans `/opt/homebrew/bin` et `/usr/local/bin` (une app GUI macOS a un PATH minimal).
 
 ## Sources de contenu
@@ -168,7 +175,8 @@ n'en sait rien.
   La vidéo est servie par un serveur média local (Range + CORS) pour que le canvas ne soit pas « tainted ».
 - Serveurs locaux de l'app (média, flux Android) : URL à jeton aléatoire 128 bits, CORS limité à l'origine
   du studio, toute autre `Origin` refusée (`local_http.rs`). Les sites prévisualisés vivent aussi sur 127.0.0.1.
-- Export : seek frame par frame -> JPEG -> `export_frame` (corps IPC brut) -> FFmpeg ; second passage pour
+- Export : seek frame par frame -> JPEG (q 0,98) -> `export_frame` (corps IPC brut) -> FFmpeg (x264 slow, CRF 15,
+  conversion explicite en BT.709) ; second passage pour
   mixer les sons de tap synthétisés. Sortie `~/Movies/goScreen/<nom>-export-<stamp>.mp4`.
 - `buildAutoZooms` (render-engine) propose des zooms à la première ouverture ; tout reste éditable.
 
