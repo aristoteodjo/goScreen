@@ -1,8 +1,6 @@
 import { sendToFrame, subscribeBridge } from "@/modules/interaction/bridge";
-import { useCaptureSettings } from "@/modules/recording/settings";
 import { useRecording } from "@/modules/recording/store";
 import type { CaptureControls } from "@/modules/recording/useCapture";
-import { useEditor, type ViewMode } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
 import { samePage, scrollRatioAt, type TourOptions } from "./plan";
 import { useTour } from "./store";
@@ -12,7 +10,6 @@ const SETTLE_MS = 700;
 
 class Cancelled extends Error {}
 
-const viewFor = (mode: string): ViewMode | null => (mode === "scene" ? "scene" : mode === "canvas" ? "canvas" : null);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -93,10 +90,7 @@ export async function runTour(pages: string[], options: TourOptions, capture: Ca
   const tour = useTour.getState();
   tour.set({ running: true, index: 0, total: pages.length, page: pages[0] });
   try {
-    // Everything that reloads frames happens before the camera rolls:
-    // switching view remounts them, then the first page loads.
-    const view = viewFor(useCaptureSettings.getState().mode);
-    if (view && useEditor.getState().view !== view) await afterLoads(() => useEditor.getState().setView(view));
+    // The first page loads before the camera rolls; the view stays as picked.
     await open(pages[0], false);
     await capture.startAsync();
     for (const [index, page] of pages.entries()) {

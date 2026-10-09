@@ -9,7 +9,7 @@ import { stageRegion } from "@/modules/studio/stageRef";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
 import { layerLog } from "./layerLog";
-import { useCaptureSettings } from "./settings";
+import { captureMode, useCaptureSettings } from "./settings";
 import { screenRect } from "./stagePoint";
 import { interactionLog, useRecording } from "./store";
 
@@ -62,10 +62,10 @@ export function useCapture() {
   const start = useMutation({
     mutationFn: async () => {
       if (useProject.getState().devices.length === 0) throw new Error("Add a device to record first.");
-      const { mode, camera, microphone } = useCaptureSettings.getState();
+      const { camera, microphone } = useCaptureSettings.getState();
+      // Canvas and Scene record the view on screen; the view never changes here.
+      const mode = captureMode();
       interactionLog.reset();
-      if (mode === "scene") useEditor.getState().setView("scene");
-      if (mode === "canvas") useEditor.getState().setView("canvas");
       // `active` flattens frames and hides UI chrome before FFmpeg starts.
       setActive(true);
       await nextFrame();
@@ -140,17 +140,12 @@ export function useCapture() {
 
   const screenshot = useMutation({
     mutationFn: async () => {
-      useEditor.getState().setView("scene");
+      // Same area as the next recording, from the view on screen.
       setActive(true);
       await nextFrame();
       await nextFrame();
-      const region = stageRegion();
-      if (!region) {
-        setActive(false);
-        throw new Error("The stage is not visible.");
-      }
       try {
-        return await ipc.screenshot(region);
+        return await ipc.screenshot(regionFor(captureMode()));
       } finally {
         setActive(false);
       }

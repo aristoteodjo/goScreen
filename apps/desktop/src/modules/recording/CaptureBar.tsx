@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useTour } from "@/modules/tour/store";
 import { useProject } from "@/modules/studio/store/project";
-import { useCaptureSettings } from "./settings";
+import { selectCaptureMode, useCaptureMode, useCaptureSettings } from "./settings";
 import { useRecording } from "./store";
 import type { CaptureControls } from "./useCapture";
 
@@ -47,7 +47,8 @@ const NONE = "none";
 export function CaptureBar({ capture }: { capture: CaptureControls }) {
   const open = useCaptureSettings((s) => s.barOpen);
   const active = useRecording((s) => s.active);
-  const { mode, camera, microphone, setMode, setCamera, setMicrophone, setBarOpen } = useCaptureSettings();
+  const { camera, microphone, setCamera, setMicrophone, setBarOpen } = useCaptureSettings();
+  const mode = useCaptureMode();
   const selectedId = useEditor((s) => s.selectedId);
   const selected = useProject((s) => s.devices.find((d) => d.id === selectedId));
   const hasDevices = useProject((s) => s.devices.length > 0);
@@ -76,7 +77,7 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
             key={m.id}
             type="button"
             title={m.hint}
-            onClick={() => setMode(m.id)}
+            onClick={() => selectCaptureMode(m.id)}
             className={cn(
               "flex w-[70px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] text-white/70 transition-colors hover:bg-white/5 hover:text-white",
               mode === m.id && "bg-white/10 text-white",

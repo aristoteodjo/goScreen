@@ -1,14 +1,17 @@
 import type { CaptureMode } from "@goscreen/render-engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { useEditor } from "@/modules/studio/store/editor";
 
 // What the next recording captures. Per machine, so it survives restarts.
+// Canvas and Scene are not stored: they follow the view on screen, so
+// recording never jumps to a view the user did not pick.
 type CaptureSettings = {
-  mode: CaptureMode;
+  deviceOnly: boolean;
   camera: number | null;
   microphone: number | null;
   barOpen: boolean;
-  setMode: (mode: CaptureMode) => void;
+  setDeviceOnly: (deviceOnly: boolean) => void;
   setCamera: (camera: number | null) => void;
   setMicrophone: (microphone: number | null) => void;
   setBarOpen: (open: boolean) => void;
@@ -17,19 +20,37 @@ type CaptureSettings = {
 export const useCaptureSettings = create<CaptureSettings>()(
   persist(
     (set) => ({
-      mode: "scene",
+      deviceOnly: false,
       camera: null,
       microphone: null,
       barOpen: false,
-      setMode: (mode) => set({ mode }),
+      setDeviceOnly: (deviceOnly) => set({ deviceOnly }),
       setCamera: (camera) => set({ camera }),
       setMicrophone: (microphone) => set({ microphone }),
       setBarOpen: (barOpen) => set({ barOpen }),
     }),
     {
       name: "goscreen.capture",
+      version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ mode: s.mode, camera: s.camera, microphone: s.microphone }),
+      partialize: (s) => ({ deviceOnly: s.deviceOnly, camera: s.camera, microphone: s.microphone }),
     },
   ),
 );
+
+/** The area the next capture records: the selected device, or the current view. */
+export function captureMode(): CaptureMode {
+  return useCaptureSettings.getState().deviceOnly ? "device" : useEditor.getState().view;
+}
+
+export function useCaptureMode(): CaptureMode {
+  const deviceOnly = useCaptureSettings((s) => s.deviceOnly);
+  const view = useEditor((s) => s.view);
+  return deviceOnly ? "device" : view;
+}
+
+/** Picks a capture area; Canvas and Scene switch the view so you see what gets recorded. */
+export function selectCaptureMode(mode: CaptureMode) {
+  useCaptureSettings.getState().setDeviceOnly(mode === "device");
+  if (mode !== "device") useEditor.getState().setView(mode);
+}
