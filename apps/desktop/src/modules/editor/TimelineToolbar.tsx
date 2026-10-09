@@ -1,6 +1,10 @@
 import type { ShapeKind } from "@goscreen/render-engine";
 import {
   Copy01Icon,
+  Cursor01Icon,
+  HandGrabIcon,
+  Knife01Icon,
+  MagnetIcon,
   Delete02Icon,
   FitToScreenIcon,
   Image01Icon,
@@ -23,8 +27,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { editActions, TEXT_PRESETS } from "./actions";
-import { usePlayback } from "./store";
+import { type Tool, usePlayback } from "./store";
+
+const TOOLS: { id: Tool; label: string; key: string; icon: typeof Cursor01Icon }[] = [
+  { id: "select", label: "Selection", key: "V", icon: Cursor01Icon },
+  { id: "blade", label: "Blade: click a clip to cut it", key: "C", icon: Knife01Icon },
+  { id: "hand", label: "Hand: drag to scroll", key: "H", icon: HandGrabIcon },
+];
 
 export const SHAPES: { id: ShapeKind; label: string }[] = [
   { id: "arrow", label: "Arrow" },
@@ -37,6 +48,8 @@ export const SHAPES: { id: ShapeKind; label: string }[] = [
 export function TimelineToolbar() {
   const selection = usePlayback((s) => s.selection);
   const scale = usePlayback((s) => s.scale);
+  const tool = usePlayback((s) => s.tool);
+  const snapping = usePlayback((s) => s.snapping);
 
   const zoomBy = (factor: number) => {
     const el = document.querySelector<HTMLElement>("[data-timeline-pps]");
@@ -46,7 +59,27 @@ export function TimelineToolbar() {
   };
 
   return (
-    <div className="flex h-11 items-center gap-1 px-4">
+    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-white/5 px-3">
+      <div className="mr-1 flex items-center rounded-lg bg-white/[0.04] p-0.5">
+        {TOOLS.map((t) => (
+          <IconTool
+            key={t.id}
+            icon={t.icon}
+            label={t.label}
+            shortcut={t.key}
+            active={tool === t.id}
+            onClick={() => usePlayback.getState().setTool(t.id)}
+          />
+        ))}
+        <IconTool
+          icon={MagnetIcon}
+          label={snapping ? "Snapping on" : "Snapping off"}
+          shortcut="N"
+          active={snapping}
+          onClick={() => usePlayback.getState().setSnapping(!snapping)}
+        />
+      </div>
+      <div className="mx-1 h-5 w-px bg-white/10" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <ToolButton icon={TextIcon} label="Text" />
@@ -121,18 +154,28 @@ function IconTool({
   label,
   shortcut,
   disabled,
+  active,
   onClick,
 }: {
   icon: typeof TextIcon;
   label: string;
   shortcut?: string;
   disabled?: boolean;
+  active?: boolean;
   onClick: () => void;
 }): ReactNode {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" aria-label={label} disabled={disabled} onClick={onClick}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("size-8 text-muted-foreground", active && "bg-violet-500/20 text-violet-200 hover:bg-violet-500/25")}
+          aria-label={label}
+          aria-pressed={active}
+          disabled={disabled}
+          onClick={onClick}
+        >
           <HugeiconsIcon icon={icon} size={16} strokeWidth={1.75} />
         </Button>
       </TooltipTrigger>

@@ -24,6 +24,7 @@ const slide = (id: string, duration: number): SlideClip => ({
   id,
   kind: "slide",
   duration,
+  transition: null,
   background: DEFAULT_EDIT.background,
   title: "Hello",
   subtitle: "",

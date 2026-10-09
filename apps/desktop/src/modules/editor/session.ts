@@ -126,7 +126,7 @@ function syncMedia(t: number, playing: boolean) {
   if (video) follow(video, source, playing, rate);
   if (camera) follow(camera, source === null ? null : source - mediaOffset, playing, rate);
   if (mic) {
-    mic.muted = rec?.muted ?? true;
+    mic.muted = (rec?.muted ?? true) || edit.tracks.micMuted;
     follow(mic, source === null ? null : source - mediaOffset, playing, rate);
   }
   for (const [id, { el }] of pooledEntries()) {
@@ -136,6 +136,8 @@ function syncMedia(t: number, playing: boolean) {
     if (!item) continue;
     const local = t >= item.start && t <= item.start + item.duration ? t - item.start + item.in : null;
     el.volume = Math.min(1, item.volume);
+    // A muted music lane is silent (video overlays are muted by the painter).
+    if (a) el.muted = edit.tracks.muted.includes(a.lane);
     follow(el, local, playing);
   }
 }

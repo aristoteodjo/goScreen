@@ -14,14 +14,16 @@ import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { cn } from "@/lib/utils";
 import { overlayBox } from "./drawOverlays";
 import { imageFor, pooled, prunePool } from "./media";
+import { previewStill } from "./stills";
 import { drawAt, type TimelineSources } from "./render";
 import { assetUrl, currentTimeline, requestPaint, setPainter, useSession } from "./session";
 import { useEdit, usePlayback } from "./store";
 
 /** Live media for overlays, from the preview pools. */
-function previewSources(edit: EditState): TimelineSources {
+function previewSources(edit: EditState, output: Size, pixelScale: number): TimelineSources {
   const { video, camera } = useSession.getState();
   return {
+    stillOf: (p) => previewStill(p, edit, output, pixelScale),
     video: video && video.readyState >= 2 ? video : null,
     camera,
     mediaOf: (o) => {
@@ -74,6 +76,9 @@ export function Preview() {
   const source = useSession((s) => s.source);
   const aspect = useEdit((s) => s.edit.aspect);
   const quality = usePlayback((s) => s.quality);
+  const viewZoom = usePlayback((s) => s.viewZoom);
+  const tool = usePlayback((s) => s.tool);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const selectedZoom = usePlayback((s) => s.selectedZoom);
   const selectedLayer = usePlayback((s) => s.selectedLayer);
   const hasLayers = useEdit((s) => s.edit.layers !== null);
@@ -89,12 +94,54 @@ export function Preview() {
   }, []);
 
   const output = useMemo(() => (source ? outputSize(aspect, source) : null), [aspect, source]);
-  const css = output
+  const fit = output
     ? fitInto({ width: Math.max(0, box.width - MARGIN * 2), height: Math.max(0, box.height - MARGIN * 2) }, output)
     : null;
+  const css =
+    output && fit && viewZoom !== null ? { width: output.width * viewZoom, height: output.height * viewZoom } : fit;
   const dpr = window.devicePixelRatio || 1;
-  const backingW = css ? Math.max(2, Math.round(css.width * dpr * quality)) : 0;
-  const backingH = css ? Math.max(2, Math.round(css.height * dpr * quality)) : 0;
+  // Never more backing pixels than the output has: zooming in shows real pixels, not a huge canvas.
+  const density = css && output ? Math.min(dpr, output.width / css.width) : dpr;
+  const backingW = css ? Math.max(2, Math.round(css.width * density * quality)) : 0;
+  const backingH = css ? Math.max(2, Math.round(css.height * density * quality)) : 0;
+
+  // Cmd + wheel (or a trackpad pinch) zooms the preview around the pointer.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || !output || !fit) return;
+      e.preventDefault();
+      const { viewZoom: current, setViewZoom } = usePlayback.getState();
+      const fitZoom = fit.width / output.width;
+      const from = current ?? fitZoom;
+      const next = Math.max(0.1, Math.min(4, from * Math.exp(-Math.max(-60, Math.min(60, e.deltaY)) * 0.01)));
+      setViewZoom(next <= fitZoom * 1.001 && from > next ? null : next);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [output, fit]);
+
+  // Hand tool or Space held: drag scrolls the preview.
+  const pan = (e: PointerEvent<HTMLElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const start = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+    const onMove = (ev: globalThis.PointerEvent) => {
+      el.scrollLeft = start.left - (ev.clientX - start.x);
+      el.scrollTop = start.top - (ev.clientY - start.y);
+    };
+    const onUp = () => {
+      target.removeEventListener("pointermove", onMove);
+      target.removeEventListener("pointerup", onUp);
+    };
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+  };
 
   // Paints straight from the stores: playback never re-renders React.
   useEffect(() => {
@@ -107,7 +154,7 @@ export function Preview() {
       if (!timeline) return;
       const { edit } = useEdit.getState();
       const t = usePlayback.getState().time;
-      drawAt(ctx, previewSources(edit), edit, timeline, output, t, canvas.width / output.width);
+      drawAt(ctx, previewSources(edit, output, canvas.width / output.width), edit, timeline, output, t, canvas.width / output.width);
     });
     requestPaint();
     return () => setPainter(null);
@@ -166,6 +213,10 @@ export function Preview() {
   };
 
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (e.button === 1 || (e.button === 0 && usePlayback.getState().tool === "hand")) {
+      pan(e);
+      return;
+    }
     if (e.button !== 0 || !output) return;
     const { change } = useEdit.getState();
 
@@ -262,21 +313,37 @@ export function Preview() {
   };
 
   return (
-    <div ref={hostRef} className="relative flex min-h-0 flex-1 items-center justify-center">
-      {css ? (
-        <canvas
-          ref={canvasRef}
-          width={backingW}
-          height={backingH}
-          onPointerDown={onPointerDown}
-          className={cn(
-            "rounded-sm shadow-2xl",
-            selectedZoom ? "cursor-crosshair" : layered && "cursor-grab active:cursor-grabbing",
-          )}
-          style={{ width: css.width, height: css.height }}
-        />
-      ) : null}
-      {css && output ? <SelectionBox css={css} output={output} onResize={dragOverlay} toScreen={toScreen} /> : null}
+    <div ref={hostRef} className="relative min-h-0 flex-1">
+      <div
+        ref={scrollRef}
+        className={cn("absolute inset-0 flex overflow-auto", tool === "hand" && "cursor-grab active:cursor-grabbing")}
+        onPointerDown={(e) => {
+          if (e.target === e.currentTarget && (e.button === 1 || tool === "hand")) pan(e);
+        }}
+      >
+        {css ? (
+          <div className="relative m-auto shrink-0" style={{ width: css.width, height: css.height, margin: viewZoom === null ? "auto" : MARGIN }}>
+            <canvas
+              ref={canvasRef}
+              data-preview-canvas
+              data-output-width={output?.width}
+              width={backingW}
+              height={backingH}
+              onPointerDown={onPointerDown}
+              className={cn(
+                "block rounded-sm shadow-2xl",
+                tool === "hand"
+                  ? "cursor-grab active:cursor-grabbing"
+                  : selectedZoom
+                    ? "cursor-crosshair"
+                    : layered && "cursor-grab active:cursor-grabbing",
+              )}
+              style={{ width: css.width, height: css.height }}
+            />
+            {output ? <SelectionBox css={css} output={output} onResize={dragOverlay} toScreen={toScreen} /> : null}
+          </div>
+        ) : null}
+      </div>
       {selectedZoom ? (
         <Hint>Click where the zoom should look</Hint>
       ) : layered && !selectedLayer ? (
@@ -305,8 +372,8 @@ function SelectionBox({
   const r = overlayBox(overlay, output);
   const k = css.width / output.width;
   return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="relative" style={{ width: css.width, height: css.height }}>
+    <div className="pointer-events-none absolute inset-0">
+      <div className="relative size-full">
         <div
           className="absolute border border-violet-400"
           style={{

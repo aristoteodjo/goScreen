@@ -121,7 +121,7 @@ const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 /** The whole recording as one clip: what a fresh edit starts from. */
 export function fullClip(id = "clip-1", start = 0, end = SOURCE_END): RecordingClip {
-  return { id, kind: "recording", in: start, out: end, speed: 1, muted: false, cameraHidden: false };
+  return { id, kind: "recording", in: start, out: end, speed: 1, muted: false, cameraHidden: false, transition: null };
 }
 
 export const DEFAULT_EDIT: EditState = {
@@ -141,6 +141,7 @@ export const DEFAULT_EDIT: EditState = {
   layers: null,
   camera: { visible: true, layout: "overlay", corner: 8, size: 0.22, shape: "rounded", mirror: true },
   mic: { volume: 1 },
+  tracks: { hidden: [], muted: [], micMuted: false },
 };
 
 /** An array where each bad item is dropped alone instead of failing the whole list. */
@@ -166,9 +167,18 @@ const animation = z.enum(["none", "fade", "slide-up", "slide-left", "pop", "type
 const id = z.string().min(1);
 const unit = z.number().min(0).max(1);
 
+const transitionSchema = z
+  .object({
+    kind: z.enum(["fade", "dip", "slide-left", "slide-up", "zoom", "wipe"]),
+    duration: z.number().min(0.1).max(5),
+  })
+  .nullable()
+  .catch(null);
+
 const recordingClipSchema = z.object({
   id,
   kind: z.literal("recording"),
+  transition: transitionSchema,
   in: z.number().min(0),
   out: z.number().positive(),
   speed: z.number().min(0.1).max(16),
@@ -179,6 +189,7 @@ const recordingClipSchema = z.object({
 const slideClipSchema = z.object({
   id,
   kind: z.literal("slide"),
+  transition: transitionSchema,
   duration: z.number().positive(),
   background: backgroundSchema.catch(DEFAULT_EDIT.background),
   title: z.string().catch(""),
@@ -302,6 +313,13 @@ const editSchema = z.object({
     .catch(null),
   camera: cameraSchema.catch(DEFAULT_EDIT.camera),
   mic: z.object({ volume: z.number().min(0).max(2) }).catch(DEFAULT_EDIT.mic),
+  tracks: z
+    .object({
+      hidden: z.array(z.number().int().min(0)).catch([]),
+      muted: z.array(z.number().int().min(0)).catch([]),
+      micMuted: z.boolean().catch(false),
+    })
+    .catch(DEFAULT_EDIT.tracks),
 });
 
 /** Saved edits, field by field: one bad field falls back alone. v1 files are upgraded. */

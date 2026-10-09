@@ -70,11 +70,11 @@ export function splitAt(clips: MainClip[], t: number, newId: string): MainClip[]
     c.kind === "recording"
       ? [
           { ...c, out: c.in + local * c.speed },
-          { ...c, id: newId, in: c.in + local * c.speed },
+          { ...c, id: newId, in: c.in + local * c.speed, transition: null },
         ]
       : [
           { ...c, duration: local },
-          { ...c, id: newId, duration: c.duration - local },
+          { ...c, id: newId, duration: c.duration - local, transition: null },
         ];
   return [...clips.slice(0, p.index), left, right, ...clips.slice(p.index + 1)];
 }

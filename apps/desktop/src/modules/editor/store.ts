@@ -57,6 +57,8 @@ export const useEdit = create<EditStore>((set, get) => ({
 
 export type Panel = "devices" | "background" | "touch" | "zoom" | "camera" | "audio" | "clip" | "overlay" | "music";
 export type Quality = 1 | 0.5 | 0.25;
+/** Timeline tool, as in Premiere: select (V), blade (C), hand (H). */
+export type Tool = "select" | "blade" | "hand";
 
 /** A selected timeline item other than a zoom. */
 export type Selection = { kind: "clip" | "overlay" | "audio"; id: string };
@@ -77,6 +79,11 @@ type PlaybackStore = {
   // Pixels per timeline second; null fits the whole sequence.
   scale: number | null;
   paletteOpen: boolean;
+  tool: Tool;
+  // Timeline items snap to the playhead, cuts and other items.
+  snapping: boolean;
+  // Preview zoom: null fits the panel, 1 shows output pixels 1:1 (CSS px).
+  viewZoom: number | null;
   setTime: (time: number) => void;
   setDuration: (duration: number) => void;
   setPlaying: (playing: boolean) => void;
@@ -87,6 +94,9 @@ type PlaybackStore = {
   select: (selection: Selection | null) => void;
   setScale: (scale: number | null) => void;
   setPaletteOpen: (open: boolean) => void;
+  setTool: (tool: Tool) => void;
+  setSnapping: (snapping: boolean) => void;
+  setViewZoom: (viewZoom: number | null) => void;
   reset: () => void;
 };
 
@@ -101,6 +111,9 @@ export const usePlayback = create<PlaybackStore>((set) => ({
   selection: null,
   scale: null,
   paletteOpen: false,
+  tool: "select",
+  snapping: true,
+  viewZoom: null,
   setTime: (time) => set({ time }),
   setDuration: (duration) => set({ duration }),
   setPlaying: (playing) => set({ playing }),
@@ -118,6 +131,9 @@ export const usePlayback = create<PlaybackStore>((set) => ({
     ),
   setScale: (scale) => set({ scale }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setTool: (tool) => set({ tool }),
+  setSnapping: (snapping) => set({ snapping }),
+  setViewZoom: (viewZoom) => set({ viewZoom }),
   reset: () =>
     set({ time: 0, duration: 0, playing: false, selectedZoom: null, selectedLayer: null, selection: null, scale: null }),
 }));

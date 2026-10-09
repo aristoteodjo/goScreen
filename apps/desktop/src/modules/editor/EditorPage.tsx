@@ -30,7 +30,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useDefaultLayout } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +43,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ipc } from "@/lib/ipc";
+import { VIEW_ZOOMS } from "./commands";
 import { EditorPalette } from "./EditorPalette";
 import { initialLayers } from "./devices";
 import { ExportDialog } from "./ExportDialog";
@@ -195,16 +198,7 @@ export function EditorPage({ video }: { video: string }) {
               <track kind="captions" />
             </audio>
           ) : null}
-          <div className="flex min-h-0 flex-1 gap-3 px-4 pt-2">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <PreviewHeader />
-              <Preview />
-            </div>
-            <PanelRail />
-            <PanelContent />
-          </div>
-          <Transport />
-          <Timeline />
+          <EditorLayout />
         </>
       )}
       <ExportDialog open={exporting} onOpenChange={setExporting} />
@@ -212,6 +206,54 @@ export function EditorPage({ video }: { video: string }) {
     </div>
   );
 }
+
+// Panel sizes survive reloads; numbers are px, strings are %.
+function EditorLayout() {
+  const rows = useDefaultLayout({ id: "editor-rows", storage: safeStorage });
+  const cols = useDefaultLayout({ id: "editor-cols", storage: safeStorage });
+  return (
+    <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1" {...rows}>
+      <ResizablePanel id="top" minSize={220}>
+        <ResizablePanelGroup orientation="horizontal" {...cols}>
+          <ResizablePanel id="preview" minSize="35">
+            <div className="flex h-full min-w-0 flex-col px-4 pt-2">
+              <PreviewHeader />
+              <Preview />
+              <Transport />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel id="inspector" defaultSize={380} minSize={300} maxSize={640}>
+            <div className="flex h-full gap-1 py-2 pr-3">
+              <PanelRail />
+              <PanelContent />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel id="timeline" defaultSize={300} minSize={150}>
+        <Timeline />
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
+// localStorage can throw (private mode); layouts are a convenience.
+const safeStorage = {
+  getItem: (key: string) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  },
+};
 
 function useAutosave(videoPath: string | null) {
   useEffect(() => {
@@ -320,6 +362,8 @@ function PreviewHeader() {
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      <div className="flex items-center gap-1">
+      <ViewZoomMenu />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" className="gap-1.5 text-[13px]">
@@ -339,7 +383,40 @@ function PreviewHeader() {
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </div>
+  );
+}
+
+function ViewZoomMenu() {
+  const viewZoom = usePlayback((s) => s.viewZoom);
+  const setViewZoom = usePlayback((s) => s.setViewZoom);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="w-20 justify-between gap-1 font-mono text-[12px] tabular-nums">
+          {viewZoom === null ? "Fit" : `${Math.round(viewZoom * 100)}%`}
+          <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={1.75} className="opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuRadioGroup
+          value={viewZoom === null ? "fit" : String(viewZoom)}
+          onValueChange={(v) => setViewZoom(v === "fit" ? null : Number(v))}
+        >
+          <DropdownMenuRadioItem value="fit">
+            Fit
+            <span className="ml-auto text-muted-foreground">⇧1</span>
+          </DropdownMenuRadioItem>
+          {VIEW_ZOOMS.map((z) => (
+            <DropdownMenuRadioItem key={z} value={String(z)}>
+              {Math.round(z * 100)}%
+              {z === 1 ? <span className="ml-auto text-muted-foreground">⌘0</span> : null}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

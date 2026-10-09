@@ -2,6 +2,7 @@ import {
   type AudioClip,
   clipDuration,
   constrainSegment,
+  DEFAULT_TRANSITION,
   dropIndex,
   formatTime,
   type MainClip,
@@ -12,21 +13,45 @@ import {
   type RecordingClip,
   rulerStep,
   sourceTimeAt,
+  TRANSITION_KINDS,
+  transitionLength,
   trimClip,
   type ZoomSegment,
 } from "@goscreen/render-engine";
-import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import {
+  Add01Icon,
+  Search01Icon,
+  ViewIcon,
+  ViewOffSlashIcon,
+  VolumeHighIcon,
+  VolumeMute01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type ComponentProps, type PointerEvent, type ReactNode, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from "react";
+import {
+  type ComponentProps,
+  type PointerEvent,
+  type ReactNode,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type WheelEvent,
+} from "react";
 import { cn } from "@/lib/utils";
-import { player, useSession } from "./session";
+import { editActions } from "./actions";
+import { assetUrl, player, useSession } from "./session";
 import { newId, type Selection, timelineEnd, useEdit, usePlayback } from "./store";
 import { TimelineItemMenu } from "./TimelineMenus";
 import { TimelineToolbar } from "./TimelineToolbar";
+import { Waveform } from "./Waveform";
 
 const LANE = 30;
+const MAIN = 52;
+const MIC = 40;
+const ZOOM = 34;
 const MIN_ITEM = 0.2;
-const GUTTER = 24;
+const GUTTER = 16;
+const HEADER = 92;
 
 type Move = (dx: number, dy: number, e: globalThis.PointerEvent) => void;
 
@@ -56,10 +81,16 @@ function startDrag(e: PointerEvent<HTMLElement>, onMove: Move, onEnd?: () => voi
  * `candidates` are timeline times, `threshold` is in seconds.
  */
 export function snapTime(t: number, candidates: number[], threshold: number): number {
-  // TODO(you): return the closest candidate within `threshold`, else t.
-  void candidates;
-  void threshold;
-  return t;
+  let best = t;
+  let gap = threshold;
+  for (const c of candidates) {
+    const d = Math.abs(c - t);
+    if (d <= gap) {
+      best = c;
+      gap = d;
+    }
+  }
+  return best;
 }
 
 export function Timeline() {
@@ -69,6 +100,7 @@ export function Timeline() {
   const sourceDuration = usePlayback((s) => s.duration);
   const scale = usePlayback((s) => s.scale);
   const setScale = usePlayback((s) => s.setScale);
+  const tool = usePlayback((s) => s.tool);
   const edit = useEdit((s) => s.edit);
   const change = useEdit((s) => s.change);
   const selection = usePlayback((s) => s.selection);
@@ -76,7 +108,11 @@ export function Timeline() {
   const select = usePlayback((s) => s.select);
   const selectZoom = usePlayback((s) => s.selectZoom);
   const pointers = useSession((s) => s.pointers);
+  const micUrl = useSession((s) => s.micUrl);
+  const mediaOffset = useSession((s) => s.mediaOffset);
   const [hover, setHover] = useState<number | null>(null);
+  // Where the blade would cut, while the pointer is over the tracks.
+  const [blade, setBlade] = useState<number | null>(null);
   // Main clip being reordered: its id and how far it has moved, in px.
   const [moving, setMoving] = useState<{ id: string; dx: number } | null>(null);
 
@@ -89,7 +125,7 @@ export function Timeline() {
   }, []);
 
   const end = timelineEnd(edit);
-  const fit = end > 0 ? Math.max(1, width - GUTTER * 2) / end : 0;
+  const fit = end > 0 ? Math.max(1, width - HEADER - GUTTER * 2) / end : 0;
   const pps = scale ?? fit;
   const x = (t: number) => t * pps;
   const toTime = (clientX: number) => {
@@ -110,7 +146,8 @@ export function Timeline() {
     }
     return pts;
   };
-  const snap = (t: number, exclude: string) => snapTime(t, snapPoints(exclude), 8 / Math.max(pps, 1e-6));
+  const snap = (t: number, exclude: string) =>
+    usePlayback.getState().snapping ? snapTime(t, snapPoints(exclude), 8 / Math.max(pps, 1e-6)) : t;
 
   const step = pps > 0 ? rulerStep(pps) : 1;
   const ticks = useMemo(() => {
@@ -144,10 +181,9 @@ export function Timeline() {
   );
 
   const seekDrag = (e: PointerEvent<HTMLElement>) => {
-    const r = contentRef.current?.getBoundingClientRect();
     const t0 = toTime(e.clientX);
     player.seek(t0);
-    startDrag(e, (dx) => r && player.seek(Math.max(0, Math.min(end, t0 + dx / pps))));
+    startDrag(e, (dx) => player.seek(Math.max(0, Math.min(end, t0 + dx / pps))));
   };
 
   const onWheel = (e: WheelEvent<HTMLDivElement>) => {
@@ -157,9 +193,51 @@ export function Timeline() {
     setScale(next <= fit * 1.001 ? null : next);
   };
 
+  // Hand tool (or middle button): drag scrolls the timeline.
+  const panDrag = (e: PointerEvent<HTMLElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const from = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+    const move = (ev: globalThis.PointerEvent) => {
+      el.scrollLeft = from.left - (ev.clientX - from.x);
+      el.scrollTop = from.top - (ev.clientY - from.y);
+    };
+    const stop = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", stop);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", stop);
+  };
+
+  /**
+   * Tools that act on any item before its own handler: the hand pans, the
+   * blade cuts the item under the pointer. Returns true when it took the press.
+   */
+  const toolPress = (e: PointerEvent<HTMLElement>, target: Selection | null) => {
+    if (e.button === 1 || (e.button === 0 && tool === "hand")) {
+      panDrag(e);
+      return true;
+    }
+    if (e.button === 0 && tool === "blade") {
+      e.stopPropagation();
+      const raw = toTime(e.clientX);
+      const t = usePlayback.getState().snapping ? snapTime(raw, [usePlayback.getState().time], 6 / Math.max(pps, 1e-6)) : raw;
+      if (target && target.kind !== "clip") usePlayback.getState().select(target);
+      editActions.splitAt(t, target && target.kind !== "clip" ? target : null);
+      return true;
+    }
+    return false;
+  };
+
   // --- Main track -------------------------------------------------------
 
   const dragClip = (p: Placed) => (e: PointerEvent<HTMLElement>) => {
+    if (toolPress(e, { kind: "clip", id: p.clip.id })) return;
     select({ kind: "clip", id: p.clip.id });
     const center = (p.start + p.end) / 2;
     let last = 0;
@@ -187,6 +265,7 @@ export function Timeline() {
   };
 
   const trimMain = (p: Placed, edge: "start" | "end") => (e: PointerEvent<HTMLElement>) => {
+    if (tool !== "select") return;
     select({ kind: "clip", id: p.clip.id });
     const orig = useEdit.getState().edit.clips;
     const key = `clip-${edge}-${p.clip.id}-${Date.now()}`;
@@ -200,8 +279,10 @@ export function Timeline() {
 
   type Free = Overlay | AudioClip;
 
-  const dragFree = (kind: "overlay" | "audio", item: Free, mode: "move" | "start" | "end", lanes: number) =>
+  const dragFree =
+    (kind: "overlay" | "audio", item: Free, mode: "move" | "start" | "end", lanes: number) =>
     (e: PointerEvent<HTMLElement>) => {
+      if (toolPress(e, { kind, id: item.id })) return;
       select({ kind, id: item.id });
       const key = `${kind}-${mode}-${item.id}-${Date.now()}`;
       const field = kind === "overlay" ? "overlays" : "audio";
@@ -243,8 +324,9 @@ export function Timeline() {
 
   // --- Zooms (source time) ---------------------------------------------
 
-  const dragZoom = (z: ZoomSegment, span: Placed<RecordingClip>, mode: "move" | "start" | "end") =>
-    (e: PointerEvent<HTMLElement>) => {
+  const dragZoom =
+    (z: ZoomSegment, span: Placed<RecordingClip>, mode: "move" | "start" | "end") => (e: PointerEvent<HTMLElement>) => {
+      if (toolPress(e, null)) return;
       selectZoom(z.id);
       const key = `zoom-${mode}-${z.id}-${Date.now()}`;
       startDrag(e, (dx) => {
@@ -276,27 +358,50 @@ export function Timeline() {
     return s !== null && placeZoom(edit.zooms, s, sourceDuration) !== null;
   };
 
+  // --- Track switches --------------------------------------------------
+
+  const toggleLane = (field: "hidden" | "muted", lane: number) =>
+    change((ed) => {
+      const list = ed.tracks[field];
+      const next = list.includes(lane) ? list.filter((l) => l !== lane) : [...list, lane];
+      return { ...ed, tracks: { ...ed.tracks, [field]: next } };
+    });
+
   const overlayLanes = edit.overlays.length ? Math.max(...edit.overlays.map((o) => o.lane)) + 1 : 0;
   const audioLanes = edit.audio.length ? Math.max(...edit.audio.map((a) => a.lane)) + 1 : 0;
   const isSel = (kind: Selection["kind"], id: string) => selection?.kind === kind && selection.id === id;
   const assetName = (id: string) => edit.assets.find((a) => a.id === id)?.name ?? "Media";
+  const trackWidth = x(end);
+
+  const toolCursor = tool === "blade" ? "cursor-crosshair" : tool === "hand" ? "cursor-grab active:cursor-grabbing" : "";
 
   return (
-    <div className="flex shrink-0 select-none flex-col border-t border-white/5">
+    <div className="flex h-full min-h-0 select-none flex-col">
       <TimelineToolbar />
       <div
         ref={scrollRef}
-        className="max-h-[42vh] overflow-auto pb-3"
+        className={cn("relative min-h-0 flex-1 overflow-auto pb-3", toolCursor)}
         data-timeline-pps={pps}
         onWheel={onWheel}
+        onPointerMove={(e) => setBlade(tool === "blade" ? toTime(e.clientX) : null)}
+        onPointerLeave={() => setBlade(null)}
         onPointerDown={(e) => {
+          if (e.button === 1 || (e.button === 0 && tool === "hand")) {
+            panDrag(e);
+            return;
+          }
           if (e.target === e.currentTarget) select(null);
         }}
       >
-        <div className="relative" style={{ width: x(end) + GUTTER * 2, paddingLeft: GUTTER, paddingRight: GUTTER }}>
-          <div ref={contentRef} className="relative" style={{ width: x(end) }}>
-            {/* Ruler */}
-            <div className="sticky top-0 z-20 h-7 cursor-pointer bg-background" onPointerDown={seekDrag}>
+        <div className="relative" style={{ width: HEADER + trackWidth + GUTTER * 2 }}>
+          {/* Ruler */}
+          <Row header={<Timecode />} sticky height={28}>
+            <div
+              ref={contentRef}
+              className="absolute inset-y-0 cursor-pointer"
+              style={{ left: GUTTER, width: trackWidth }}
+              onPointerDown={seekDrag}
+            >
               {ticks.map((t) => {
                 const major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
                 return (
@@ -310,38 +415,63 @@ export function Timeline() {
                   </div>
                 );
               })}
+              <PlayheadKnob x={x} />
             </div>
+          </Row>
 
-            {/* Overlay lanes, highest on top */}
-            {Array.from({ length: overlayLanes }, (_, i) => overlayLanes - 1 - i).map((lane) => (
-              <Lane key={`o${lane}`}>
-                {edit.overlays
-                  .filter((o) => o.lane === lane)
-                  .map((o) => (
-                    <TimelineItemMenu key={o.id} selection={{ kind: "overlay", id: o.id }}>
-                      <Block
-                        left={x(o.start)}
-                        width={x(o.duration)}
-                        selected={isSel("overlay", o.id)}
-                        className={OVERLAY_COLOR[o.kind]}
-                        onPointerDown={dragFree("overlay", o, "move", overlayLanes)}
-                        onStart={dragFree("overlay", o, "start", overlayLanes)}
-                        onEnd={dragFree("overlay", o, "end", overlayLanes)}
-                      >
-                        {o.kind === "text" ? o.text : o.kind === "shape" ? o.shape : assetName(o.asset)}
-                      </Block>
-                    </TimelineItemMenu>
-                  ))}
-              </Lane>
-            ))}
+          {/* Overlay lanes, highest on top */}
+          {Array.from({ length: overlayLanes }, (_, i) => overlayLanes - 1 - i).map((lane) => {
+            const hidden = edit.tracks.hidden.includes(lane);
+            return (
+              <Row
+                key={`o${lane}`}
+                height={LANE}
+                header={
+                  <TrackHeader
+                    name={`T${lane + 1}`}
+                    hint="Overlays"
+                    color="bg-sky-500"
+                    toggle={{
+                      on: !hidden,
+                      label: hidden ? "Show track" : "Hide track",
+                      icon: hidden ? ViewOffSlashIcon : ViewIcon,
+                      onClick: () => toggleLane("hidden", lane),
+                    }}
+                  />
+                }
+              >
+                <Track width={trackWidth} dim={hidden}>
+                  {edit.overlays
+                    .filter((o) => o.lane === lane)
+                    .map((o) => (
+                      <TimelineItemMenu key={o.id} selection={{ kind: "overlay", id: o.id }}>
+                        <Block
+                          left={x(o.start)}
+                          width={x(o.duration)}
+                          selected={isSel("overlay", o.id)}
+                          className={OVERLAY_COLOR[o.kind]}
+                          onPointerDown={dragFree("overlay", o, "move", overlayLanes)}
+                          onStart={dragFree("overlay", o, "start", overlayLanes)}
+                          onEnd={dragFree("overlay", o, "end", overlayLanes)}
+                        >
+                          {o.kind === "text" ? o.text : o.kind === "shape" ? o.shape : assetName(o.asset)}
+                        </Block>
+                      </TimelineItemMenu>
+                    ))}
+                </Track>
+              </Row>
+            );
+          })}
 
-            {/* Main track */}
-            <div className="relative mt-1 h-12 rounded-lg bg-white/[0.03]">
+          {/* Main track */}
+          <Row height={MAIN} header={<TrackHeader name="V1" hint="Video" color="bg-amber-500" />}>
+            <Track width={trackWidth}>
               {placed.map((p) => (
                 <TimelineItemMenu key={p.clip.id} selection={{ kind: "clip", id: p.clip.id }}>
                   <div
                     className={cn(
-                      "absolute inset-y-0 flex cursor-grab flex-col items-center justify-center overflow-hidden rounded-lg border border-black/20 shadow-inner active:cursor-grabbing",
+                      "absolute inset-y-0 flex flex-col items-center justify-center overflow-hidden rounded-lg border border-black/20 shadow-inner",
+                      tool === "select" && "cursor-grab active:cursor-grabbing",
                       p.clip.kind === "recording"
                         ? "bg-gradient-to-b from-amber-500 to-amber-600 text-amber-950"
                         : "bg-gradient-to-b from-indigo-500 to-indigo-700 text-white",
@@ -361,6 +491,15 @@ export function Timeline() {
                   </div>
                 </TimelineItemMenu>
               ))}
+              {placed.slice(1).map((p, i) => (
+                <TransitionMark
+                  key={`tr-${p.clip.id}`}
+                  left={x(p.start)}
+                  width={x(transitionLength(placed[i].clip, p.clip))}
+                  clip={p.clip}
+                  onSelect={() => select({ kind: "clip", id: p.clip.id })}
+                />
+              ))}
               {taps.map((t, i) => (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: derived positions, no identity
@@ -369,79 +508,165 @@ export function Timeline() {
                   style={{ left: x(t) }}
                 />
               ))}
-            </div>
+            </Track>
+          </Row>
 
-            {/* Zoom track */}
-            <div
-              className="group/zooms relative mt-1 h-9 cursor-copy rounded-lg bg-white/[0.03]"
-              onPointerMove={(e) => setHover(toTime(e.clientX))}
-              onPointerLeave={() => setHover(null)}
-              onPointerDown={(e) => {
-                if (e.button !== 0) return;
-                selectZoom(null);
-                addZoomAt(toTime(e.clientX));
-              }}
+          {/* Zoom track */}
+          <Row height={ZOOM} header={<TrackHeader name="Zoom" color="bg-violet-500" />}>
+            <Track width={trackWidth}>
+              <div
+                className={cn("group/zooms absolute inset-0 rounded-lg", tool === "select" && "cursor-copy")}
+                onPointerMove={(e) => setHover(toTime(e.clientX))}
+                onPointerLeave={() => setHover(null)}
+                onPointerDown={(e) => {
+                  if (toolPress(e, null) || e.button !== 0) return;
+                  selectZoom(null);
+                  addZoomAt(toTime(e.clientX));
+                }}
+              >
+                {edit.zooms.length === 0 && hover === null ? (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
+                    Click to add a zoom
+                  </span>
+                ) : null}
+                {tool === "select" && hover !== null && canZoomAt(hover) ? (
+                  <div
+                    className="pointer-events-none absolute inset-y-1 flex w-6 -translate-x-1/2 items-center justify-center rounded-md bg-violet-500/30 text-violet-200"
+                    style={{ left: x(hover) }}
+                  >
+                    <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2} />
+                  </div>
+                ) : null}
+                {zoomBlocks.map(({ zoom: z, span, start, end: zEnd }) => (
+                  <div
+                    key={`${z.id}-${span.clip.id}`}
+                    className={cn(
+                      "absolute inset-y-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-b from-violet-500 to-violet-700 text-[12px] text-white",
+                      tool === "select" && "cursor-grab active:cursor-grabbing",
+                      selectedZoom === z.id && "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
+                    )}
+                    style={{ left: x(start), width: Math.max(4, x(zEnd - start)) }}
+                    onPointerDown={dragZoom(z, span, "move")}
+                    onPointerMove={(e) => e.stopPropagation()}
+                    onPointerEnter={() => setHover(null)}
+                  >
+                    <HugeiconsIcon icon={Search01Icon} size={12} strokeWidth={2} />
+                    <span className="font-mono tabular-nums">{z.scale.toFixed(1)}×</span>
+                    <span className="opacity-70">{z.focus ? "Manual" : "Auto"}</span>
+                    <EdgeHandle side="start" onPointerDown={dragZoom(z, span, "start")} />
+                    <EdgeHandle side="end" onPointerDown={dragZoom(z, span, "end")} />
+                  </div>
+                ))}
+              </div>
+            </Track>
+          </Row>
+
+          {/* Mic, under each recording clip */}
+          {micUrl ? (
+            <Row
+              height={MIC}
+              header={
+                <TrackHeader
+                  name="A1"
+                  hint="Mic"
+                  color="bg-emerald-500"
+                  toggle={{
+                    on: !edit.tracks.micMuted,
+                    label: edit.tracks.micMuted ? "Unmute mic" : "Mute mic",
+                    icon: edit.tracks.micMuted ? VolumeMute01Icon : VolumeHighIcon,
+                    onClick: () => change((ed) => ({ ...ed, tracks: { ...ed.tracks, micMuted: !ed.tracks.micMuted } })),
+                  }}
+                />
+              }
             >
-              {edit.zooms.length === 0 && hover === null ? (
-                <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
-                  Click to add a zoom
-                </span>
-              ) : null}
-              {hover !== null && canZoomAt(hover) ? (
-                <div
-                  className="pointer-events-none absolute inset-y-1 flex w-6 -translate-x-1/2 items-center justify-center rounded-md bg-violet-500/30 text-violet-200"
-                  style={{ left: x(hover) }}
-                >
-                  <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2} />
-                </div>
-              ) : null}
-              {zoomBlocks.map(({ zoom: z, span, start, end: zEnd }) => (
-                <div
-                  key={`${z.id}-${span.clip.id}`}
-                  className={cn(
-                    "absolute inset-y-0 flex cursor-grab items-center justify-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-b from-violet-500 to-violet-700 text-[12px] text-white active:cursor-grabbing",
-                    selectedZoom === z.id && "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
-                  )}
-                  style={{ left: x(start), width: Math.max(4, x(zEnd - start)) }}
-                  onPointerDown={dragZoom(z, span, "move")}
-                  onPointerMove={(e) => e.stopPropagation()}
-                  onPointerEnter={() => setHover(null)}
-                >
-                  <HugeiconsIcon icon={Search01Icon} size={12} strokeWidth={2} />
-                  <span className="font-mono tabular-nums">{z.scale.toFixed(1)}×</span>
-                  <span className="opacity-70">{z.focus ? "Manual" : "Auto"}</span>
-                  <EdgeHandle side="start" onPointerDown={dragZoom(z, span, "start")} />
-                  <EdgeHandle side="end" onPointerDown={dragZoom(z, span, "end")} />
-                </div>
-              ))}
-            </div>
+              <Track width={trackWidth} dim={edit.tracks.micMuted}>
+                {spans.map((p) => (
+                  <div
+                    key={`mic-${p.clip.id}`}
+                    className={cn(
+                      "absolute inset-y-0 overflow-hidden rounded-md bg-emerald-900/60 ring-1 ring-emerald-500/30",
+                      p.clip.muted && "opacity-30",
+                    )}
+                    style={{ left: x(p.start), width: Math.max(2, x(p.end - p.start)) }}
+                    onPointerDown={(e) => toolPress(e, { kind: "clip", id: p.clip.id }) || seekDrag(e)}
+                  >
+                    <Waveform
+                      url={micUrl}
+                      from={p.clip.in - mediaOffset}
+                      duration={p.end - p.start}
+                      speed={p.clip.speed}
+                      width={Math.max(2, x(p.end - p.start))}
+                      height={MIC - 4}
+                      color="rgba(110, 231, 183, 0.85)"
+                    />
+                  </div>
+                ))}
+              </Track>
+            </Row>
+          ) : null}
 
-            {/* Audio lanes */}
-            {Array.from({ length: audioLanes }, (_, lane) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: the lane number is its identity
-              <Lane key={`a${lane}`}>
-                {edit.audio
-                  .filter((a) => a.lane === lane)
-                  .map((a) => (
-                    <TimelineItemMenu key={a.id} selection={{ kind: "audio", id: a.id }}>
-                      <Block
-                        left={x(a.start)}
-                        width={x(a.duration)}
-                        selected={isSel("audio", a.id)}
-                        className="bg-gradient-to-b from-teal-500 to-teal-700 text-white"
-                        onPointerDown={dragFree("audio", a, "move", audioLanes)}
-                        onStart={dragFree("audio", a, "start", audioLanes)}
-                        onEnd={dragFree("audio", a, "end", audioLanes)}
-                      >
-                        ♪ {assetName(a.asset)}
-                      </Block>
-                    </TimelineItemMenu>
-                  ))}
-              </Lane>
-            ))}
+          {/* Music lanes */}
+          {Array.from({ length: audioLanes }, (_, lane) => {
+            const muted = edit.tracks.muted.includes(lane);
+            return (
+              <Row
+                // biome-ignore lint/suspicious/noArrayIndexKey: the lane number is its identity
+                key={`a${lane}`}
+                height={LANE + 6}
+                header={
+                  <TrackHeader
+                    name={`A${lane + (micUrl ? 2 : 1)}`}
+                    hint="Music"
+                    color="bg-teal-500"
+                    toggle={{
+                      on: !muted,
+                      label: muted ? "Unmute track" : "Mute track",
+                      icon: muted ? VolumeMute01Icon : VolumeHighIcon,
+                      onClick: () => toggleLane("muted", lane),
+                    }}
+                  />
+                }
+              >
+                <Track width={trackWidth} dim={muted}>
+                  {edit.audio
+                    .filter((a) => a.lane === lane)
+                    .map((a) => (
+                      <TimelineItemMenu key={a.id} selection={{ kind: "audio", id: a.id }}>
+                        <Block
+                          left={x(a.start)}
+                          width={x(a.duration)}
+                          selected={isSel("audio", a.id)}
+                          className="bg-teal-800/80 text-white ring-1 ring-teal-400/40"
+                          onPointerDown={dragFree("audio", a, "move", audioLanes)}
+                          onStart={dragFree("audio", a, "start", audioLanes)}
+                          onEnd={dragFree("audio", a, "end", audioLanes)}
+                          background={
+                            <Waveform
+                              url={assetUrl(edit, a.asset)}
+                              from={a.in}
+                              duration={a.duration}
+                              width={Math.max(6, x(a.duration))}
+                              height={LANE + 2}
+                              color="rgba(94, 234, 212, 0.75)"
+                            />
+                          }
+                        >
+                          ♪ {assetName(a.asset)}
+                        </Block>
+                      </TimelineItemMenu>
+                    ))}
+                </Track>
+              </Row>
+            );
+          })}
 
-            <Playhead x={x} />
-          </div>
+          <Playhead x={(t) => HEADER + GUTTER + x(t)} />
+          {blade !== null ? (
+            <div
+              className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-rose-400/80"
+              style={{ left: HEADER + GUTTER + x(blade) }}
+            />
+          ) : null}
         </div>
       </div>
     </div>
@@ -454,6 +679,121 @@ const OVERLAY_COLOR: Record<Overlay["kind"], string> = {
   video: "bg-gradient-to-b from-emerald-600 to-emerald-800 text-white",
   shape: "bg-gradient-to-b from-rose-500 to-rose-700 text-white",
 };
+
+/** A track row: a header pinned on the left, then the track itself. */
+function Row({
+  header,
+  height,
+  sticky,
+  children,
+}: {
+  header: ReactNode;
+  height: number;
+  sticky?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("flex", sticky ? "sticky top-0 z-30 bg-background" : "mt-1")} style={{ height }}>
+      <div
+        className="sticky left-0 z-20 flex shrink-0 items-center border-r border-white/5 bg-background pl-3"
+        style={{ width: HEADER }}
+      >
+        {header}
+      </div>
+      <div className="relative flex-1">{children}</div>
+    </div>
+  );
+}
+
+function Track({ width, dim, children }: { width: number; dim?: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={cn("absolute inset-y-0 rounded-md bg-white/[0.025]", dim && "opacity-35")}
+      style={{ left: GUTTER, width }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TrackHeader({
+  name,
+  hint,
+  color,
+  toggle,
+}: {
+  name: string;
+  hint?: string;
+  color: string;
+  toggle?: { on: boolean; label: string; icon: typeof ViewIcon; onClick: () => void };
+}) {
+  return (
+    <div className="flex w-full items-center gap-1.5 pr-1.5">
+      <span className={cn("h-4 w-1 rounded-full", color)} />
+      <span className="text-[11px] font-semibold">{name}</span>
+      {hint ? <span className="truncate text-[10px] text-muted-foreground">{hint}</span> : null}
+      {toggle ? (
+        <button
+          type="button"
+          aria-label={toggle.label}
+          title={toggle.label}
+          onClick={toggle.onClick}
+          className={cn(
+            "ml-auto flex size-6 items-center justify-center rounded-md hover:bg-white/10",
+            toggle.on ? "text-muted-foreground" : "text-rose-300",
+          )}
+        >
+          <HugeiconsIcon icon={toggle.icon} size={13} strokeWidth={1.75} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The cut between two clips: a transition block, or a "+" to add one. */
+function TransitionMark({
+  left,
+  width,
+  clip,
+  onSelect,
+}: {
+  left: number;
+  width: number;
+  clip: MainClip;
+  onSelect: () => void;
+}) {
+  const label = TRANSITION_KINDS.find((k) => k.id === clip.transition?.kind)?.label;
+  if (clip.transition && width > 0) {
+    return (
+      <button
+        type="button"
+        title={`${label} · ${clip.transition.duration.toFixed(1)}s`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onSelect}
+        className="absolute top-1 bottom-1 z-10 overflow-hidden rounded-md border border-white/60 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.35)_0_4px,rgba(255,255,255,0.1)_4px_8px)] text-[9px] font-semibold text-white"
+        style={{ left, width: Math.max(10, width) }}
+      >
+        <span className="truncate px-1">{width > 40 ? label : ""}</span>
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-label="Add a transition"
+      title="Add a transition"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => {
+        editActions.setTransition(clip.id, DEFAULT_TRANSITION);
+        onSelect();
+      }}
+      className="absolute top-1/2 z-10 flex size-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-background text-muted-foreground opacity-0 ring-1 ring-white/30 transition-opacity hover:text-foreground hover:opacity-100 focus-visible:opacity-100"
+      style={{ left }}
+    >
+      <HugeiconsIcon icon={Add01Icon} size={10} strokeWidth={2.5} />
+    </button>
+  );
+}
 
 function ClipLabel({ clip }: { clip: MainClip }) {
   const seconds = clipDuration(clip).toFixed(1);
@@ -476,30 +816,24 @@ function ClipLabel({ clip }: { clip: MainClip }) {
   );
 }
 
-function Lane({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative mt-1 rounded-md bg-white/[0.02]" style={{ height: LANE - 4 }}>
-      {children}
-    </div>
-  );
-}
-
 function Block({
   left,
   width,
   selected,
   className,
   children,
+  background,
   onPointerDown,
   onStart,
   onEnd,
   ...rest
-}: ComponentProps<"div"> & {
+}: Omit<ComponentProps<"div">, "onPointerDown"> & {
   left: number;
   width: number;
   selected: boolean;
   className: string;
   children: ReactNode;
+  background?: ReactNode;
   onPointerDown: (e: PointerEvent<HTMLElement>) => void;
   onStart: (e: PointerEvent<HTMLElement>) => void;
   onEnd: (e: PointerEvent<HTMLElement>) => void;
@@ -509,14 +843,15 @@ function Block({
     <div
       {...rest}
       className={cn(
-        "absolute inset-y-0 flex cursor-grab items-center overflow-hidden rounded-md px-2.5 text-[11px] font-medium active:cursor-grabbing",
+        "absolute inset-y-0 flex items-center overflow-hidden rounded-md px-2.5 text-[11px] font-medium",
         className,
         selected && "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
       )}
       style={{ left, width: Math.max(6, width) }}
       onPointerDown={onPointerDown}
     >
-      <span className="truncate">{children}</span>
+      {background}
+      <span className="relative truncate drop-shadow">{children}</span>
       <EdgeHandle side="start" onPointerDown={onStart} />
       <EdgeHandle side="end" onPointerDown={onEnd} />
     </div>
@@ -548,12 +883,23 @@ function EdgeHandle({ side, onPointerDown }: { side: "start" | "end"; onPointerD
   );
 }
 
-// Subscribes to time on its own so playback only re-renders this line.
+// Playhead parts subscribe to time on their own: playback only re-renders them.
+// The line runs above clips but under the pinned headers and ruler.
 function Playhead({ x }: { x: (t: number) => number }) {
   const time = usePlayback((s) => s.time);
+  return <div className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-violet-400" style={{ left: x(time) }} />;
+}
+
+function PlayheadKnob({ x }: { x: (t: number) => number }) {
+  const time = usePlayback((s) => s.time);
   return (
-    <div className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-violet-400" style={{ left: x(time) }}>
-      <div className="absolute top-0 left-1/2 size-2.5 -translate-x-1/2 rounded-full bg-violet-400" />
+    <div className="pointer-events-none absolute inset-y-0 w-px bg-violet-400" style={{ left: x(time) }}>
+      <div className="absolute bottom-0 left-1/2 h-3 w-2.5 -translate-x-1/2 rounded-b-sm bg-violet-400 [clip-path:polygon(0_0,100%_0,100%_60%,50%_100%,0_60%)]" />
     </div>
   );
+}
+
+function Timecode() {
+  const time = usePlayback((s) => s.time);
+  return <span className="font-mono text-[11px] font-semibold text-violet-300 tabular-nums">{formatTime(time, true)}</span>;
 }

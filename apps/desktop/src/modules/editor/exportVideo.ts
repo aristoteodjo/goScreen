@@ -2,6 +2,9 @@ import {
   audioPieces,
   type EditState,
   outputSize,
+  type Placed,
+  placeClips,
+  type RecordingClip,
   sequenceDuration,
   sourceTimeAt,
   tapTimes,
@@ -9,7 +12,7 @@ import {
 } from "@goscreen/render-engine";
 import { ipc } from "@/lib/ipc";
 import { loadImage } from "./media";
-import { drawAt, type TimelineSources } from "./render";
+import { drawAt, drawStill, stillTime, type TimelineSources } from "./render";
 
 export type ExportOptions = {
   edit: EditState;
@@ -110,10 +113,30 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
   const end = sequenceDuration(o.edit.clips);
   const frames = Math.max(1, Math.round(end * o.fps));
   const timeline = { ...o.timeline, source };
+  // Outgoing frames of transitions, rendered once before the frame loop.
+  const stills = new Map<string, HTMLCanvasElement>();
+  const placed = placeClips(o.edit.clips);
+  for (let i = 1; i < placed.length; i += 1) {
+    const prev = placed[i - 1];
+    if (!placed[i].clip.transition || prev.clip.kind !== "recording") continue;
+    const p = prev as Placed<RecordingClip>;
+    await seek(video, stillTime(p));
+    if (camera) {
+      const local = stillTime(p) - o.mediaOffset;
+      if (local >= 0 && local <= camera.duration) await seek(camera, local);
+    }
+    const still = document.createElement("canvas");
+    still.width = output.width;
+    still.height = output.height;
+    drawStill(still, { video, camera }, o.edit, timeline, output, p, 1);
+    stills.set(p.clip.id, still);
+  }
+
   const sources: TimelineSources = {
     video,
     camera,
     mediaOf: (ov) => overlayMedia.get(ov.id) ?? null,
+    stillOf: (p) => stills.get(p.clip.id) ?? null,
   };
 
   await ipc.exportBegin(o.name, o.fps);

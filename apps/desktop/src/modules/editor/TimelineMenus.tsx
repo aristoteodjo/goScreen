@@ -1,4 +1,4 @@
-import { SPEEDS } from "@goscreen/render-engine";
+import { DEFAULT_TRANSITION, SPEEDS, TRANSITION_KINDS, type TransitionKind } from "@goscreen/render-engine";
 import type { ReactElement } from "react";
 import {
   ContextMenu,
@@ -44,6 +44,35 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
         {item ? <ContextMenuItem onClick={() => player.seek(item.start)}>Go to start</ContextMenuItem> : null}
+
+        {clip ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>Transition in</ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                <ContextMenuRadioGroup
+                  value={clip.transition?.kind ?? "none"}
+                  onValueChange={(v) =>
+                    editActions.setTransition(
+                      clip.id,
+                      v === "none"
+                        ? null
+                        : { kind: v as TransitionKind, duration: clip.transition?.duration ?? DEFAULT_TRANSITION.duration },
+                    )
+                  }
+                >
+                  <ContextMenuRadioItem value="none">Cut (none)</ContextMenuRadioItem>
+                  {TRANSITION_KINDS.map((k) => (
+                    <ContextMenuRadioItem key={k.id} value={k.id}>
+                      {k.label}
+                    </ContextMenuRadioItem>
+                  ))}
+                </ContextMenuRadioGroup>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          </>
+        ) : null}
 
         {clip?.kind === "recording" ? (
           <>

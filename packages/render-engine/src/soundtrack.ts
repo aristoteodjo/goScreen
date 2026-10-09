@@ -19,7 +19,8 @@ export type AudioPiece = {
 /** Every sound of the edit: the mic under each recording clip, music, and video overlays. */
 export function audioPieces(edit: EditState, hasMic: boolean): AudioPiece[] {
   const out: AudioPiece[] = [];
-  if (hasMic && edit.mic.volume > 0) {
+  const { muted, micMuted } = edit.tracks;
+  if (hasMic && edit.mic.volume > 0 && !micMuted) {
     for (const { clip, start } of recordingSpans(edit.clips)) {
       if (clip.muted) continue;
       out.push({
@@ -37,7 +38,7 @@ export function audioPieces(edit: EditState, hasMic: boolean): AudioPiece[] {
   const fileOf = (id: string) => edit.assets.find((a) => a.id === id)?.file;
   for (const a of edit.audio) {
     const file = fileOf(a.asset);
-    if (!file || a.volume <= 0) continue;
+    if (!file || a.volume <= 0 || muted.includes(a.lane)) continue;
     out.push({
       source: { kind: "asset", file },
       from: a.in,
@@ -50,7 +51,7 @@ export function audioPieces(edit: EditState, hasMic: boolean): AudioPiece[] {
     });
   }
   for (const o of edit.overlays) {
-    if (o.kind !== "video" || o.volume <= 0) continue;
+    if (o.kind !== "video" || o.volume <= 0 || edit.tracks.hidden.includes(o.lane)) continue;
     const file = fileOf(o.asset);
     if (!file) continue;
     out.push({

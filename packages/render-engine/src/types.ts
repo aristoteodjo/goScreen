@@ -85,6 +85,13 @@ export type CameraEdit = {
   mirror: boolean;
 };
 
+export type TransitionKind = "fade" | "dip" | "slide-left" | "slide-up" | "zoom" | "wipe";
+
+// How a clip comes in over the end of the one before it. It overlaps the
+// start of the clip (the sequence keeps its length); the outgoing side is
+// the last frame of the previous clip.
+export type Transition = { kind: TransitionKind; duration: number };
+
 // A stretch of the screen recording on the main track, in source seconds.
 // Camera, mic, zooms and touches follow it: they live in source time.
 export type RecordingClip = {
@@ -95,6 +102,7 @@ export type RecordingClip = {
   speed: number;
   muted: boolean;
   cameraHidden: boolean;
+  transition: Transition | null;
 };
 
 /** Enter / exit motion of a text, an overlay or a slide. */
@@ -111,6 +119,7 @@ export type SlideClip = {
   color: string;
   font: string;
   animation: Animation;
+  transition: Transition | null;
 };
 
 export type MainClip = RecordingClip | SlideClip;
@@ -190,6 +199,8 @@ export type EditState = {
   layers: LayerEdit[] | null;
   camera: CameraEdit;
   mic: { volume: number };
+  // Track switches, as in an NLE: hidden overlay lanes, muted music lanes, muted mic.
+  tracks: { hidden: number[]; muted: number[]; micMuted: boolean };
 };
 
 export type Camera = { scale: number; center: Point };

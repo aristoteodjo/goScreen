@@ -6,8 +6,11 @@ import {
   type Overlay,
   type RecordingClip,
   type SlideClip,
+  DEFAULT_TRANSITION,
   SPEEDS,
   type TextOverlay,
+  TRANSITION_KINDS,
+  type TransitionKind,
 } from "@goscreen/render-engine";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,7 +90,56 @@ export function ClipPanel() {
   const selection = usePlayback((s) => s.selection);
   const clip = useEdit((s) => (selection?.kind === "clip" ? s.edit.clips.find((c) => c.id === selection.id) : undefined));
   if (!clip) return <Empty what="Clip" />;
-  return clip.kind === "recording" ? <RecordingClipPanel clip={clip} /> : <SlidePanel clip={clip} />;
+  return (
+    <>
+      {clip.kind === "recording" ? <RecordingClipPanel clip={clip} /> : <SlidePanel clip={clip} />}
+      <TransitionSection clip={clip} />
+    </>
+  );
+}
+
+/** How the clip comes in over the previous one. The first clip has none. */
+function TransitionSection({ clip }: { clip: MainClip }) {
+  const first = useEdit((s) => s.edit.clips[0]?.id === clip.id);
+  if (first) return <Section title="Transition in" hint="The first clip starts the video: no transition." />;
+  const t = clip.transition;
+  return (
+    <Section title="Transition in" hint="Plays over the start of this clip, from the last frame of the one before.">
+      <Select
+        value={t?.kind ?? "none"}
+        onValueChange={(v) =>
+          editActions.setTransition(
+            clip.id,
+            v === "none" ? null : { kind: v as TransitionKind, duration: t?.duration ?? DEFAULT_TRANSITION.duration },
+          )
+        }
+      >
+        <SelectTrigger className="h-8 w-full text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none" className="text-xs">
+            Cut (none)
+          </SelectItem>
+          {TRANSITION_KINDS.map((k) => (
+            <SelectItem key={k.id} value={k.id} className="text-xs">
+              {k.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {t ? (
+        <SliderRow
+          value={t.duration}
+          min={0.1}
+          max={3}
+          step={0.05}
+          format={secs}
+          onChange={(duration) => editActions.setTransition(clip.id, { ...t, duration })}
+        />
+      ) : null}
+    </Section>
+  );
 }
 
 function useClipPatch(id: string) {

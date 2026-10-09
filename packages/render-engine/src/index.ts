@@ -37,6 +37,15 @@ export {
   trimClip,
 } from "./sequence";
 export { constrainSegment, formatTime, freeGap, MIN_SEGMENT, placeZoom, rulerStep } from "./timeline";
+export {
+  type ActiveTransition,
+  DEFAULT_TRANSITION,
+  TRANSITION_KINDS,
+  type TransitionMix,
+  transitionAt,
+  transitionLength,
+  transitionMix,
+} from "./transitions";
 export { type AudioPiece, type AudioSource, audioPieces } from "./soundtrack";
 export { type Press, presses, RELEASE, tapTimes, touchesAt } from "./touches";
 export type * from "./types";

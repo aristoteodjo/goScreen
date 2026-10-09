@@ -4,10 +4,26 @@ import { player } from "./session";
 import { useEdit, usePlayback } from "./store";
 
 const FRAME = 1 / 30;
+export const VIEW_ZOOMS = [0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+
+/** Steps the preview zoom from where it is (fit counts as its real scale). */
+export function stepViewZoom(direction: 1 | -1) {
+  const { viewZoom, setViewZoom } = usePlayback.getState();
+  const canvas = document.querySelector<HTMLCanvasElement>("[data-preview-canvas]");
+  const out = canvas ? Number(canvas.dataset.outputWidth) : 0;
+  const current = viewZoom ?? (canvas && out ? canvas.getBoundingClientRect().width / out : 1);
+  const next =
+    direction === 1
+      ? (VIEW_ZOOMS.find((z) => z > current + 1e-6) ?? 4)
+      : ([...VIEW_ZOOMS].reverse().find((z) => z < current - 1e-6) ?? 0.1);
+  setViewZoom(next);
+}
+
+const tool = (t: "select" | "blade" | "hand") => () => usePlayback.getState().setTool(t);
 
 export type EditorCommand = {
   id: string;
-  group: "Playback" | "Edit" | "Add" | "Zoom";
+  group: "Playback" | "Edit" | "Tools" | "View" | "Add" | "Zoom";
   label: string;
   shortcut?: string;
   run: () => void;
@@ -51,6 +67,27 @@ export function editorCommands(openExport: () => void): EditorCommand[] {
     { id: "add-slide", group: "Add", label: "Add slide at playhead", run: editActions.addSlide },
     { id: "add-media", group: "Add", label: "Add image or video…", run: () => void editActions.importMedia(["image", "video"]) },
     { id: "add-music", group: "Add", label: "Add music…", run: () => void editActions.importMedia(["audio"]) },
+    { id: "tool-select", group: "Tools", label: "Selection tool", shortcut: "V", run: tool("select") },
+    { id: "tool-blade", group: "Tools", label: "Blade tool (cut where you click)", shortcut: "C", run: tool("blade") },
+    { id: "tool-hand", group: "Tools", label: "Hand tool (pan)", shortcut: "H", run: tool("hand") },
+    {
+      id: "snapping",
+      group: "Tools",
+      label: "Toggle snapping",
+      shortcut: "N",
+      run: () => usePlayback.getState().setSnapping(!usePlayback.getState().snapping),
+    },
+    { id: "view-fit", group: "View", label: "Fit preview", shortcut: "⇧ 1", run: () => usePlayback.getState().setViewZoom(null) },
+    { id: "view-100", group: "View", label: "Preview at 100%", shortcut: "⌘ 0", run: () => usePlayback.getState().setViewZoom(1) },
+    { id: "view-in", group: "View", label: "Zoom preview in", shortcut: "⌘ +", run: () => stepViewZoom(1) },
+    { id: "view-out", group: "View", label: "Zoom preview out", shortcut: "⌘ −", run: () => stepViewZoom(-1) },
+    {
+      id: "timeline-fit",
+      group: "View",
+      label: "Fit timeline",
+      shortcut: "⇧ Z",
+      run: () => usePlayback.getState().setScale(null),
+    },
     { id: "export", group: "Edit", label: "Export MP4", shortcut: "⌘ E", run: openExport },
     { id: "zoom-add", group: "Zoom", label: "Add zoom at playhead", shortcut: "Z", run: addZoomAtPlayhead },
     {
@@ -74,10 +111,19 @@ export function commandForKey(e: KeyboardEvent): string | null {
   if (mod && key === "z") return e.shiftKey ? "redo" : "undo";
   if (mod && key === "e") return "export";
   if (mod && key === "d") return "duplicate";
+  if (mod && key === "0") return "view-100";
+  if (mod && (key === "=" || key === "+")) return "view-in";
+  if (mod && key === "-") return "view-out";
   if (mod && key === "arrowleft") return "first";
   if (mod && key === "arrowright") return "last";
   if (mod) return null;
   if (key === " ") return "play";
+  if (e.shiftKey && e.code === "Digit1") return "view-fit";
+  if (e.shiftKey && key === "z") return "timeline-fit";
+  if (key === "v") return "tool-select";
+  if (key === "c") return "tool-blade";
+  if (key === "h") return "tool-hand";
+  if (key === "n") return "snapping";
   if (key === "arrowleft") return e.shiftKey ? "back-fast" : "back";
   if (key === "arrowright") return e.shiftKey ? "fwd-fast" : "fwd";
   if (key === "z") return "zoom-add";

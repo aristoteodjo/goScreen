@@ -69,7 +69,7 @@ export function PanelRail() {
 export function PanelContent() {
   const panel = usePlayback((s) => s.panel);
   return (
-    <aside className="flex w-80 shrink-0 flex-col overflow-y-auto rounded-xl border bg-card/60 p-5">
+    <aside className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border bg-card/60 p-5">
       {panel === "devices" ? <DevicesPanel /> : null}
       {panel === "camera" ? <CameraPanel /> : null}
       {panel === "background" ? <BackgroundPanel /> : null}

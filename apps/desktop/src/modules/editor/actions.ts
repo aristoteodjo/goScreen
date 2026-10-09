@@ -14,6 +14,7 @@ import {
   type SlideClip,
   splitAt,
   type TextOverlay,
+  type Transition,
 } from "@goscreen/render-engine";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
@@ -117,6 +118,7 @@ export const editActions = {
       color: "#ffffff",
       font: "Inter",
       animation: "words",
+      transition: { kind: "fade", duration: 0.6 },
     };
     const t = now();
     const at = clipAt(edit.clips, t);
@@ -129,15 +131,21 @@ export const editActions = {
     } else if (at && t <= at.start + 0.05) {
       index = at.index;
     }
-    const next = [...clips.slice(0, index), slide, ...clips.slice(index)];
+    // The clip after the slide fades back in: the slide reads as a transition.
+    const after = clips[index];
+    const rest = after && !after.transition ? [{ ...after, transition: { kind: "fade" as const, duration: 0.6 } }, ...clips.slice(index + 1)] : clips.slice(index);
+    const next = [...clips.slice(0, index), slide, ...rest];
     change((ed) => ({ ...ed, clips: next }));
     usePlayback.getState().select({ kind: "clip", id: slide.id });
   },
 
   splitAtPlayhead() {
-    const t = now();
+    editActions.splitAt(now(), selection());
+  },
+
+  /** Cuts at timeline time t: the given overlay or audio clip, else the main track. */
+  splitAt(t: number, sel: Selection | null) {
     const edit = useEdit.getState().edit;
-    const sel = selection();
     // A selected overlay or audio clip splits itself; otherwise the main track.
     if (sel?.kind === "overlay" || sel?.kind === "audio") {
       const list = sel.kind === "overlay" ? edit.overlays : edit.audio;
@@ -196,6 +204,11 @@ export const editActions = {
     const copy = { ...item, id: newId("dup"), start, lane: freeLane(list, start, item.duration) };
     if (sel.kind === "overlay") change((ed) => ({ ...ed, overlays: [...ed.overlays, copy as Overlay] }));
     else change((ed) => ({ ...ed, audio: [...ed.audio, copy as AudioClip] }));
+  },
+
+  /** Sets (or clears, with null) how a clip comes in over the one before it. */
+  setTransition(id: string, transition: Transition | null) {
+    change((ed) => ({ ...ed, clips: ed.clips.map((c) => (c.id === id ? { ...c, transition } : c)) }));
   },
 
   setClipSpeed(id: string, speed: number) {

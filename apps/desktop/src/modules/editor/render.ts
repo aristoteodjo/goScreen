@@ -3,10 +3,15 @@ import {
   composeFrame,
   type EditState,
   type Frame,
+  type Placed,
+  type RecordingClip,
   type Rect,
   type Size,
   sourceTimeAt,
   type Timeline,
+  type TransitionMix,
+  transitionAt,
+  transitionMix,
 } from "@goscreen/render-engine";
 import { drawDevice } from "./devices";
 import { drawOverlays, drawSlide, fillBackground, type MediaOf } from "./drawOverlays";
@@ -16,15 +21,60 @@ export type Sources = {
   camera: HTMLVideoElement | null;
 };
 
-export type TimelineSources = Sources & { mediaOf: MediaOf };
+export type TimelineSources = Sources & {
+  mediaOf: MediaOf;
+  // Last frame of a recording clip, for the outgoing side of a transition.
+  stillOf?: (p: Placed<RecordingClip>) => CanvasImageSource | null;
+};
 
 /**
- * Draws timeline time t: the clip playing (recording or slide), then the
- * overlays above it. Preview and export both go through here.
+ * Draws timeline time t: the clip playing (recording or slide), mixed with
+ * the end of the previous clip during a transition, then the overlays.
+ * Preview and export both go through here.
  */
 export function drawAt(
   ctx: CanvasRenderingContext2D,
   sources: TimelineSources,
+  edit: EditState,
+  timeline: Timeline,
+  output: Size,
+  t: number,
+  pixelScale: number,
+) {
+  const tr = transitionAt(edit.clips, t);
+  if (!tr) {
+    drawClip(ctx, sources, edit, timeline, output, t, pixelScale);
+  } else {
+    const { width, height } = ctx.canvas;
+    const to = scratch(0, width, height);
+    drawClip(to.getContext("2d") as CanvasRenderingContext2D, sources, edit, timeline, output, t, pixelScale);
+    let from: CanvasImageSource | null = null;
+    if (tr.prev.clip.kind === "slide") {
+      const c = scratch(1, width, height);
+      const fctx = c.getContext("2d") as CanvasRenderingContext2D;
+      drawClip(fctx, sources, edit, timeline, output, tr.prev.end - 1e-3, pixelScale);
+      from = c;
+    } else {
+      from = sources.stillOf?.(tr.prev as Placed<RecordingClip>) ?? null;
+    }
+    mixTransition(ctx, transitionMix(tr.kind, tr.progress), from, to);
+  }
+
+  const hidden = edit.tracks.hidden;
+  const overlays = hidden.length ? edit.overlays.filter((o) => !hidden.includes(o.lane)) : edit.overlays;
+  if (overlays.length === 0) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingQuality = "high";
+  ctx.scale(pixelScale, pixelScale);
+  drawOverlays(ctx, overlays, t, output, sources.mediaOf);
+  ctx.restore();
+}
+
+/** One clip of the main track at timeline time t, without overlays. */
+function drawClip(
+  ctx: CanvasRenderingContext2D,
+  sources: Sources,
   edit: EditState,
   timeline: Timeline,
   output: Size,
@@ -39,18 +89,89 @@ export function drawAt(
     ctx.scale(pixelScale, pixelScale);
     drawSlide(ctx, p.clip, t - p.start, output);
     ctx.restore();
-  } else {
-    const hidden = p?.clip.kind === "recording" && p.clip.cameraHidden;
-    const e = hidden ? { ...edit, camera: { ...edit.camera, visible: false } } : edit;
-    const s = sourceTimeAt(edit.clips, t) ?? 0;
-    drawFrame(ctx, sources, composeFrame(e, timeline, output, s), e, pixelScale, timeline);
+    return;
   }
-  if (edit.overlays.length === 0) return;
+  const hidden = p?.clip.kind === "recording" && p.clip.cameraHidden;
+  const e = hidden ? { ...edit, camera: { ...edit.camera, visible: false } } : edit;
+  const s = sourceTimeAt(edit.clips, t) ?? 0;
+  drawFrame(ctx, sources, composeFrame(e, timeline, output, s), e, pixelScale, timeline);
+}
+
+/** Source time of the frame a recording clip ends on. */
+export function stillTime(p: Placed<RecordingClip>): number {
+  return Math.max(p.clip.in, p.clip.out - 1 / 60);
+}
+
+/**
+ * Paints the last frame of a recording clip into `canvas`. The caller has
+ * already put `sources.video` (and camera) on `stillTime(p)`.
+ */
+export function drawStill(
+  canvas: HTMLCanvasElement,
+  sources: Sources,
+  edit: EditState,
+  timeline: Timeline,
+  output: Size,
+  p: Placed<RecordingClip>,
+  pixelScale: number,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const e = p.clip.cameraHidden ? { ...edit, camera: { ...edit.camera, visible: false } } : edit;
+  drawFrame(ctx, sources, composeFrame(e, timeline, output, stillTime(p)), e, pixelScale, timeline);
+}
+
+const scratches: HTMLCanvasElement[] = [];
+
+/** Reused offscreen canvases, so a transition does not allocate per frame. */
+function scratch(i: number, width: number, height: number): HTMLCanvasElement {
+  let c = scratches[i];
+  if (!c) {
+    c = document.createElement("canvas");
+    scratches[i] = c;
+  }
+  if (c.width !== width) c.width = width;
+  if (c.height !== height) c.height = height;
+  return c;
+}
+
+function mixTransition(
+  ctx: CanvasRenderingContext2D,
+  mix: TransitionMix,
+  from: CanvasImageSource | null,
+  to: CanvasImageSource,
+) {
+  const { width: w, height: h } = ctx.canvas;
+  const layer = (img: CanvasImageSource | null, side: TransitionMix["from"], reveal = 1) => {
+    if (!img || side.alpha <= 0) return;
+    ctx.save();
+    if (reveal < 1) {
+      ctx.beginPath();
+      ctx.rect(0, 0, w * reveal, h);
+      ctx.clip();
+    }
+    ctx.globalAlpha = side.alpha;
+    ctx.translate(w / 2 + side.dx * w, h / 2 + side.dy * h);
+    ctx.scale(side.scale, side.scale);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  };
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.imageSmoothingQuality = "high";
-  ctx.scale(pixelScale, pixelScale);
-  drawOverlays(ctx, edit.overlays, t, output, sources.mediaOf);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, w, h);
+  if (mix.fromOnTop) {
+    layer(to, mix.to);
+    layer(from, mix.from);
+  } else {
+    layer(from, mix.from);
+    layer(to, mix.to, mix.reveal);
+  }
+  if (mix.dip > 0) {
+    ctx.globalAlpha = Math.min(1, mix.dip);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+  }
   ctx.restore();
 }
 
