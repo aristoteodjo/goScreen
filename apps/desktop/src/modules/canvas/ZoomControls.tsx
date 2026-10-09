@@ -28,7 +28,7 @@ export function ZoomControls() {
         </Button>
       </Tip>
       <Tip label="Fit all devices (Shift 1)">
-        <Button variant="ghost" size="icon-sm" onClick={canvasCommands.fit} aria-label="Fit all devices">
+        <Button variant="ghost" size="icon-sm" onClick={() => canvasCommands.fit()} aria-label="Fit all devices">
           <HugeiconsIcon icon={CenterFocusIcon} strokeWidth={1.75} />
         </Button>
       </Tip>

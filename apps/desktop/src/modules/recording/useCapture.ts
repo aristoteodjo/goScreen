@@ -11,6 +11,7 @@ import { stageRegion } from "@/modules/studio/stageRef";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
 import { layerLog } from "./layerLog";
+import { splitParts, type TakeJournal } from "./split";
 import { captureMode, useCaptureSettings } from "./settings";
 import { screenRect } from "./stagePoint";
 import { interactionLog, useRecording } from "./store";
@@ -62,6 +63,18 @@ function boxOf(el: HTMLElement | null): CaptureRegion | null {
   return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
 }
 
+/**
+ * "Separately" on the canvas: devices are packed to fill the view before the
+ * take, so each one gets as many real pixels as the window allows.
+ */
+async function packDevicesForTake() {
+  if (useEditor.getState().view !== "canvas") return;
+  const { zoom, panX, panY } = useCanvasView.getState();
+  viewBeforeTake = { zoom, panX, panY };
+  canvasCommands.fit(16);
+  await wait(400);
+}
+
 /** The window area a mode records. Only device screens inside it matter. */
 function regionFor(mode: CaptureMode): CaptureRegion {
   if (mode === "scene") {
@@ -93,6 +106,9 @@ export function useCapture() {
       const mode = captureMode();
       interactionLog.reset();
       if (mode === "device") await frameDeviceForTake();
+      else if (useCaptureSettings.getState().separate && useProject.getState().devices.length > 1) {
+        await packDevicesForTake();
+      }
       // `active` flattens frames and hides UI chrome before FFmpeg starts.
       setActive(true);
       await nextFrame();
@@ -135,13 +151,13 @@ export function useCapture() {
   });
 
   const stop = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const { startedAt, mode, region } = useRecording.getState();
       const project = useProject.getState();
       const { events, pointers } = interactionLog.drain();
       const layers = layerLog.stop();
-      const { camera, bubble } = useCaptureSettings.getState();
-      return ipc.recordingStop({
+      const { camera, bubble, separate } = useCaptureSettings.getState();
+      const journal: TakeJournal = {
         version: 3,
         startedAt,
         mode: mode ?? "scene",
@@ -152,11 +168,27 @@ export function useCapture() {
         events,
         // The editor opens the webcam where the bubble sat in the studio.
         camera: camera === null ? null : { ...bubble, visible: true, layout: "overlay" },
-      });
+      };
+      const result = await ipc.recordingStop(journal);
+      const parts = separate && mode !== "device" ? splitParts(journal) : [];
+      if (parts.length === 0 || !result?.videoPath) return { result, split: [] as string[] };
+      try {
+        return { result, split: await ipc.recordingSplit(result.videoPath, parts) };
+      } catch (e) {
+        // The take itself is safe; only the per-device copies failed.
+        toast.error("Could not save one video per device", { description: errorMessage(e) });
+        return { result, split: [] as string[] };
+      }
     },
-    onSuccess: (result) => {
+    onSuccess: ({ result, split }) => {
       setActive(false);
       restoreCanvasView();
+      if (Array.isArray(split) && split.length > 0) {
+        toast.success(`${split.length} device videos saved`, {
+          description: "Each one opens on its own from Recordings, ready for a user test.",
+          action: { label: "Show", onClick: () => revealItemInDir(split[0]) },
+        });
+      }
       if (!result?.videoPath) {
         toast.error("Recording finished without a video file.");
         return;

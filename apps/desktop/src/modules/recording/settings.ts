@@ -8,12 +8,15 @@ import { useEditor } from "@/modules/studio/store/editor";
 // recording never jumps to a view the user did not pick.
 type CaptureSettings = {
   deviceOnly: boolean;
+  // Canvas/Scene takes also saved as one recording per device.
+  separate: boolean;
   // The live webcam bubble; the editor starts from this layout.
   bubble: CameraEdit;
   camera: number | null;
   microphone: number | null;
   barOpen: boolean;
   setDeviceOnly: (deviceOnly: boolean) => void;
+  setSeparate: (separate: boolean) => void;
   setCamera: (camera: number | null) => void;
   setMicrophone: (microphone: number | null) => void;
   setBarOpen: (open: boolean) => void;
@@ -24,11 +27,13 @@ export const useCaptureSettings = create<CaptureSettings>()(
   persist(
     (set) => ({
       deviceOnly: false,
+      separate: false,
       bubble: DEFAULT_EDIT.camera,
       camera: null,
       microphone: null,
       barOpen: false,
       setDeviceOnly: (deviceOnly) => set({ deviceOnly }),
+      setSeparate: (separate) => set({ separate }),
       setCamera: (camera) => set({ camera }),
       setMicrophone: (microphone) => set({ microphone }),
       setBarOpen: (barOpen) => set({ barOpen }),
@@ -38,7 +43,7 @@ export const useCaptureSettings = create<CaptureSettings>()(
       name: "goscreen.capture",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ deviceOnly: s.deviceOnly, bubble: s.bubble, camera: s.camera, microphone: s.microphone }),
+      partialize: (s) => ({ deviceOnly: s.deviceOnly, separate: s.separate, bubble: s.bubble, camera: s.camera, microphone: s.microphone }),
     },
   ),
 );

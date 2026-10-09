@@ -117,6 +117,15 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
   En dev, c'est **Portly.app**. Arrêt : `q`, puis SIGINT, puis kill. Les PID sont notés dans le cache : un FFmpeg orphelin
   (crash, rebuild) est tué au lancement suivant.
 
+### Devices séparément
+
+- Option « Separately » de la barre de capture (Canvas/Scène, 2 devices ou plus). Sur le canvas, les devices
+  sont d'abord serrés pour remplir la vue (plus de pixels par device), puis la vue est restaurée.
+- À l'arrêt, `splitParts` (pur, testé) dérive une partie par verre : rectangle (union de ses positions) et
+  journal où ce verre remplit tout le cadre, touches en `u, v`. `recording_split` (Rust, `recording/split.rs`)
+  recadre avec FFmpeg (x264 CRF 16) en `<stem>-devN-<modèle>.mp4` et écrit son journal, `media` (caméra, micro)
+  recopié. Chaque partie s'ouvre seule dans l'éditeur : cadre, touches et zooms fonctionnent.
+
 ### Site tour
 
 - « Site tour » (barre de capture) enregistre un site entier en une prise. Rust (`modules/site/`) trouve les

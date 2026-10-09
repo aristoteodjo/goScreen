@@ -18,6 +18,7 @@ pub fn run() {
             recording::commands::ffmpeg_status,
             recording::commands::recording_start,
             recording::commands::recording_stop,
+            recording::split::recording_split,
             recording::commands::screenshot_capture,
             recording::commands::capture_devices,
             recording::permissions::open_privacy_settings,

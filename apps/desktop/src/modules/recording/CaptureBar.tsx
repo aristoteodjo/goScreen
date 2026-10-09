@@ -52,6 +52,8 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
   const selectedId = useEditor((s) => s.selectedId);
   const selected = useProject((s) => s.devices.find((d) => d.id === selectedId));
   const hasDevices = useProject((s) => s.devices.length > 0);
+  const deviceCount = useProject((s) => s.devices.length);
+  const separate = useCaptureSettings((s) => s.separate);
   const devices = useQuery({ queryKey: ["capture-devices"], queryFn: ipc.captureDevices, enabled: open, staleTime: 15_000 });
 
   if (!open || active) return null;
@@ -87,6 +89,21 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
             {m.label}
           </button>
         ))}
+        {mode !== "device" && deviceCount > 1 ? (
+          <button
+            type="button"
+            aria-pressed={separate}
+            title="Also save one video per device, each at its own size: for user tests and close-ups"
+            onClick={() => useCaptureSettings.getState().setSeparate(!separate)}
+            className={cn(
+              "flex w-[78px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] text-white/70 transition-colors hover:bg-white/5 hover:text-white",
+              separate && "bg-violet-500/25 text-violet-100",
+            )}
+          >
+            <HugeiconsIcon icon={GridViewIcon} size={20} strokeWidth={1.6} />
+            Separately
+          </button>
+        ) : null}
         <Divider />
         <DeviceMenu
           label={cameraName ?? "No camera"}

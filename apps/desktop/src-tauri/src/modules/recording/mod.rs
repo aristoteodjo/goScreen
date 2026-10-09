@@ -3,6 +3,7 @@ mod companion;
 pub mod commands;
 pub(crate) mod ffmpeg;
 pub mod permissions;
+pub mod split;
 #[cfg(target_os = "macos")]
 mod sck;
 

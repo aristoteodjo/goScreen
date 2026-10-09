@@ -35,7 +35,8 @@ function center() {
 }
 
 export const canvasCommands = {
-  fit() {
+  /** Frames every device; a small padding packs them tight (for a take). */
+  fit(padding = 64) {
     const r = host?.getBoundingClientRect();
     const { devices, canvas } = useProject.getState();
     const rects = devices.flatMap((d) => {
@@ -47,7 +48,7 @@ export const canvasCommands = {
     });
     const bounds = boundsOf(rects);
     if (!r || !bounds) return;
-    animateTo(fitView(bounds, r, 64));
+    animateTo(fitView(bounds, r, padding));
   },
   zoomBy(direction: 1 | -1) {
     const v = useCanvasView.getState();

@@ -108,6 +108,11 @@ export const ipc = {
     recordingResultSchema.parse(
       await invoke("recording_stop", { interactions }),
     ),
+  /** Cuts a take into one recording per device (crop + journal); returns the new videos. */
+  recordingSplit: async (
+    videoPath: string,
+    parts: { suffix: string; rect: { x: number; y: number; width: number; height: number }; journal: unknown }[],
+  ) => z.array(z.string()).parse(await invoke("recording_split", { videoPath, parts })),
   screenshot: async (region: CaptureRegion) =>
     z.string().parse(await invoke("screenshot_capture", { region })),
   recordingOpen: async (videoPath: string) =>
