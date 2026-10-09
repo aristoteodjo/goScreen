@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSITION, SPEEDS, TRANSITION_KINDS, type TransitionKind } from "@goscreen/render-engine";
+import { DEFAULT_TRANSITION, MIC_ASSET, SPEEDS, TRANSITION_KINDS, type TransitionKind } from "@goscreen/render-engine";
 import type { ReactElement } from "react";
 import {
   ContextMenu,
@@ -15,7 +15,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { editActions } from "./actions";
-import { player } from "./session";
+import { player, useSession } from "./session";
 import { type Selection, useEdit, usePlayback } from "./store";
 
 /** Right-click on a timeline item: it is selected, then quick actions. */
@@ -95,6 +95,7 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
             <ContextMenuCheckboxItem checked={clip.muted} onCheckedChange={() => editActions.toggleClip(clip.id, "muted")}>
               Mute
             </ContextMenuCheckboxItem>
+            <VoiceItem />
             <ContextMenuCheckboxItem
               checked={clip.cameraHidden}
               onCheckedChange={() => editActions.toggleClip(clip.id, "cameraHidden")}
@@ -111,5 +112,40 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+  );
+}
+
+/** Right-click on a device track: solo it, hide it, or open its settings. */
+export function DeviceMenu({ instanceId, children }: { instanceId: string; children: ReactElement }) {
+  const layer = useEdit((s) => s.edit.layers?.find((l) => l.instanceId === instanceId));
+  if (!layer) return children;
+  return (
+    <ContextMenu onOpenChange={(open) => open && usePlayback.getState().selectLayer(instanceId)}>
+      <ContextMenuTrigger render={children} />
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onClick={() => editActions.soloLayer(instanceId)}>Show only this device</ContextMenuItem>
+        <ContextMenuItem onClick={() => editActions.showAllLayers()}>Show all devices</ContextMenuItem>
+        <ContextMenuCheckboxItem
+          checked={!layer.hidden}
+          onCheckedChange={() => editActions.setLayerHidden(instanceId, !layer.hidden)}
+        >
+          Visible
+        </ContextMenuCheckboxItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => usePlayback.getState().selectLayer(instanceId)}>Edit device…</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/** Detach the voice from the video (or put it back), from any recording clip. */
+function VoiceItem() {
+  const hasMic = useSession((s) => s.micUrl !== null);
+  const detached = useEdit((s) => s.edit.audio.some((a) => a.asset === MIC_ASSET));
+  if (!hasMic) return null;
+  return detached ? (
+    <ContextMenuItem onClick={() => editActions.reattachAudio()}>Reattach voice to video</ContextMenuItem>
+  ) : (
+    <ContextMenuItem onClick={() => editActions.detachAudio()}>Detach voice from video</ContextMenuItem>
   );
 }

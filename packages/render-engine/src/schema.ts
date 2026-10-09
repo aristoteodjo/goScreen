@@ -1,3 +1,4 @@
+import { MIC_ASSET } from "./soundtrack";
 import { z } from "zod";
 import { SOURCE_END } from "./sequence";
 import type { CameraEdit, CaptureMode, EditState, RecordingClip, RecordedLayer, RecordedPointer } from "./types";
@@ -314,6 +315,7 @@ const editSchema = z.object({
         y: z.number(),
         scale: z.number().positive().max(3),
         rotation: z.number().min(-180).max(180),
+        hidden: z.boolean().catch(false),
       }),
     )
     .nullable()
@@ -341,7 +343,7 @@ export function parseEditState(json: unknown): EditState | null {
     clips: clips && clips.length > 0 ? clips : [fullClip("clip-1", trim?.start ?? 0, trim?.end ?? SOURCE_END)],
     // Media whose file entry is gone cannot be drawn.
     overlays: (overlays ?? []).filter((o) => (o.kind === "image" || o.kind === "video" ? assetIds.has(o.asset) : true)),
-    audio: (audio ?? []).filter((a) => assetIds.has(a.asset)),
+    audio: (audio ?? []).filter((a) => a.asset === MIC_ASSET || assetIds.has(a.asset)),
     assets: assets ?? [],
   };
 }

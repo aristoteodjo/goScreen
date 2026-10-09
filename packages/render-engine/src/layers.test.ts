@@ -67,7 +67,7 @@ describe("layers", () => {
 describe("layered compose", () => {
   const edit: EditState = {
     ...DEFAULT_EDIT,
-    layers: [{ instanceId: "a", deviceId: "phone", colorId: "black", frame: true, x: 0.5, y: 0.5, scale: 0.84, rotation: 0 }],
+    layers: [{ instanceId: "a", deviceId: "phone", colorId: "black", frame: true, x: 0.5, y: 0.5, scale: 0.84, rotation: 0, hidden: false }],
   };
   const timeline = timelineOf(
     { width: 2000, height: 1000 },

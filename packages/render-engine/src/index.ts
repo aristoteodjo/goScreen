@@ -46,6 +46,6 @@ export {
   transitionLength,
   transitionMix,
 } from "./transitions";
-export { type AudioPiece, type AudioSource, audioPieces } from "./soundtrack";
+export { type AudioPiece, type AudioSource, audioPieces, MIC_ASSET } from "./soundtrack";
 export { type Press, presses, RELEASE, tapTimes, touchesAt } from "./touches";
 export type * from "./types";

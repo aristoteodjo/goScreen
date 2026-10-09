@@ -45,6 +45,7 @@ export function timelineOf(
 function placeLayers(edit: EditState, timeline: Timeline, area: Rect, t: number): PlacedLayer[] {
   const out: PlacedLayer[] = [];
   for (const le of edit.layers ?? []) {
+    if (le.hidden) continue;
     const recorded = timeline.layers.find((l) => l.instanceId === le.instanceId);
     if (!recorded) continue;
     const geometry = timeline.geometry(le, recorded);

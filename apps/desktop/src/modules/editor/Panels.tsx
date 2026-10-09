@@ -1,4 +1,4 @@
-import type { EditBackground, EditState, TouchStyle } from "@goscreen/render-engine";
+import { type EditBackground, type EditState, MIC_ASSET, type TouchStyle } from "@goscreen/render-engine";
 import {
   Delete02Icon,
   PaintBoardIcon,
@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { editActions } from "./actions";
 import { CameraPanel, DevicesPanel } from "./LayerPanels";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { ClipPanel, MusicPanel, OverlayPanel } from "./SelectionPanels";
@@ -363,7 +364,11 @@ function MicSection() {
   const change = useChange();
   if (!hasMic) return <Section title="Microphone" hint="No microphone was recorded. Pick one in the capture bar." />;
   return (
-    <Section title="Microphone" hint="Your voice, recorded as its own track.">
+    <Section
+      title="Microphone"
+      hint="Your voice, recorded as its own track."
+      aside={<VoiceToggle />}
+    >
       <SliderRow
         value={volume}
         min={0}
@@ -379,4 +384,18 @@ function MicSection() {
 
 function useSessionTaps() {
   return useSession((s) => s.pointers.filter((p) => p.kind === "down").length);
+}
+
+function VoiceToggle() {
+  const detached = useEdit((s) => s.edit.audio.some((a) => a.asset === MIC_ASSET));
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 text-[11px]"
+      onClick={() => (detached ? editActions.reattachAudio() : editActions.detachAudio())}
+    >
+      {detached ? "Reattach" : "Detach"}
+    </Button>
+  );
 }

@@ -69,6 +69,8 @@ export type LayerEdit = {
   // Frame height as a fraction of the stage area height.
   scale: number;
   rotation: number;
+  // Its track is switched off: not drawn, its touches neither.
+  hidden: boolean;
 };
 
 export type CameraLayout = "overlay" | "split";

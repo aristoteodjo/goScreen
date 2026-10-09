@@ -6,6 +6,7 @@ import {
   dropIndex,
   formatTime,
   type MainClip,
+  MIC_ASSET,
   type Overlay,
   type Placed,
   placeClips,
@@ -37,11 +38,12 @@ import {
   useState,
   type WheelEvent,
 } from "react";
+import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
 import { assetUrl, player, useSession } from "./session";
 import { newId, type Selection, timelineEnd, useEdit, usePlayback } from "./store";
-import { TimelineItemMenu } from "./TimelineMenus";
+import { DeviceMenu, TimelineItemMenu } from "./TimelineMenus";
 import { TimelineToolbar } from "./TimelineToolbar";
 import { Waveform } from "./Waveform";
 
@@ -107,6 +109,8 @@ export function Timeline() {
   const selectedZoom = usePlayback((s) => s.selectedZoom);
   const select = usePlayback((s) => s.select);
   const selectZoom = usePlayback((s) => s.selectZoom);
+  const selectedLayer = usePlayback((s) => s.selectedLayer);
+  const recordedLayers = useSession((s) => s.layers);
   const pointers = useSession((s) => s.pointers);
   const micUrl = useSession((s) => s.micUrl);
   const mediaOffset = useSession((s) => s.mediaOffset);
@@ -370,7 +374,8 @@ export function Timeline() {
   const overlayLanes = edit.overlays.length ? Math.max(...edit.overlays.map((o) => o.lane)) + 1 : 0;
   const audioLanes = edit.audio.length ? Math.max(...edit.audio.map((a) => a.lane)) + 1 : 0;
   const isSel = (kind: Selection["kind"], id: string) => selection?.kind === kind && selection.id === id;
-  const assetName = (id: string) => edit.assets.find((a) => a.id === id)?.name ?? "Media";
+  const assetName = (id: string) =>
+    id === MIC_ASSET ? "Voice" : (edit.assets.find((a) => a.id === id)?.name ?? "Media");
   const trackWidth = x(end);
 
   const toolCursor = tool === "blade" ? "cursor-crosshair" : tool === "hand" ? "cursor-grab active:cursor-grabbing" : "";
@@ -511,6 +516,49 @@ export function Timeline() {
             </Track>
           </Row>
 
+          {/* One track per recorded device */}
+          {edit.layers && recordedLayers.length > 1
+            ? edit.layers.map((le, i) => (
+                <Row
+                  key={`d-${le.instanceId}`}
+                  height={DEVICE}
+                  header={
+                    <TrackHeader
+                      name={`D${i + 1}`}
+                      hint={registry.get(le.deviceId)?.name ?? le.deviceId}
+                      color={DEVICE_COLORS[i % DEVICE_COLORS.length]}
+                      toggle={{
+                        on: !le.hidden,
+                        label: le.hidden ? "Show device" : "Hide device",
+                        icon: le.hidden ? ViewOffSlashIcon : ViewIcon,
+                        onClick: () => editActions.setLayerHidden(le.instanceId, !le.hidden),
+                      }}
+                    />
+                  }
+                >
+                  <Track width={trackWidth} dim={le.hidden}>
+                    {spans.map((p) => (
+                      <DeviceMenu key={`${le.instanceId}-${p.clip.id}`} instanceId={le.instanceId}>
+                        <div
+                          className={cn(
+                            "absolute inset-y-1 cursor-pointer rounded-md opacity-80 ring-1 ring-white/10 hover:opacity-100",
+                            DEVICE_COLORS[i % DEVICE_COLORS.length],
+                            selectedLayer === le.instanceId && "opacity-100 ring-2 ring-white/80",
+                          )}
+                          style={{ left: x(p.start), width: Math.max(2, x(p.end - p.start)) }}
+                          onPointerDown={(e) => {
+                            if (toolPress(e, { kind: "clip", id: p.clip.id })) return;
+                            usePlayback.getState().selectLayer(le.instanceId);
+                            seekDrag(e);
+                          }}
+                        />
+                      </DeviceMenu>
+                    ))}
+                  </Track>
+                </Row>
+              ))
+            : null}
+
           {/* Zoom track */}
           <Row height={ZOOM} header={<TrackHeader name="Zoom" color="bg-violet-500" />}>
             <Track width={trackWidth}>
@@ -643,7 +691,7 @@ export function Timeline() {
                           background={
                             <Waveform
                               url={assetUrl(edit, a.asset)}
-                              from={a.in}
+                              from={a.asset === MIC_ASSET ? a.in - mediaOffset : a.in}
                               duration={a.duration}
                               width={Math.max(6, x(a.duration))}
                               height={LANE + 2}
@@ -672,6 +720,9 @@ export function Timeline() {
     </div>
   );
 }
+
+const DEVICE = 22;
+const DEVICE_COLORS = ["bg-cyan-500/70", "bg-fuchsia-500/70", "bg-lime-500/70", "bg-orange-500/70", "bg-blue-500/70"];
 
 const OVERLAY_COLOR: Record<Overlay["kind"], string> = {
   text: "bg-gradient-to-b from-sky-500 to-sky-700 text-white",

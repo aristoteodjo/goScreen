@@ -1,6 +1,7 @@
 import {
   clipAt,
   type EditState,
+  MIC_ASSET,
   type RecordedLayer,
   type RecordedPointer,
   type Size,
@@ -96,6 +97,7 @@ export function requestPaint() {
 
 /** URL of an imported asset, by asset id. */
 export function assetUrl(edit: EditState, id: string): string | null {
+  if (id === MIC_ASSET) return useSession.getState().micUrl;
   const file = edit.assets.find((a) => a.id === id)?.file;
   return file ? (useSession.getState().assetUrls[file] ?? null) : null;
 }
@@ -134,7 +136,9 @@ function syncMedia(t: number, playing: boolean) {
     const a = o ? null : edit.audio.find((x) => x.id === id);
     const item = o?.kind === "video" ? { start: o.start, duration: o.duration, in: o.in, volume: o.volume } : a;
     if (!item) continue;
-    const local = t >= item.start && t <= item.start + item.duration ? t - item.start + item.in : null;
+    // Detached voice: `in` is source time; the mic file starts mediaOffset later.
+    const shift = a?.asset === MIC_ASSET ? mediaOffset : 0;
+    const local = t >= item.start && t <= item.start + item.duration ? t - item.start + item.in - shift : null;
     el.volume = Math.min(1, item.volume);
     // A muted music lane is silent (video overlays are muted by the painter).
     if (a) el.muted = edit.tracks.muted.includes(a.lane);

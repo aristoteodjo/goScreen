@@ -15,6 +15,8 @@ import {
   splitAt,
   type TextOverlay,
   type Transition,
+  MIC_ASSET,
+  placeClips,
 } from "@goscreen/render-engine";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
@@ -220,6 +222,65 @@ export const editActions = {
   /** Sets (or clears, with null) how a clip comes in over the one before it. */
   setTransition(id: string, transition: Transition | null) {
     change((ed) => ({ ...ed, clips: ed.clips.map((c) => (c.id === id ? { ...c, transition } : c)) }));
+  },
+
+  /**
+   * Detaches the voice from the video: the mic under each recording clip
+   * becomes a free audio clip (move, cut, fade it on its own) and the
+   * attached mic goes silent. Clips played at another speed keep theirs.
+   */
+  detachAudio() {
+    const edit = useEdit.getState().edit;
+    const clips: AudioClip[] = [];
+    // The voice gets a new lane below any music, so lane switches keep their meaning.
+    const lane = edit.audio.length ? Math.max(...edit.audio.map((a) => a.lane)) + 1 : 0;
+    for (const p of placeClips(edit.clips)) {
+      if (p.clip.kind !== "recording" || p.clip.speed !== 1 || p.clip.muted) continue;
+      clips.push({
+        id: newId("voice"),
+        lane,
+        start: p.start,
+        duration: p.end - p.start,
+        asset: MIC_ASSET,
+        in: p.clip.in,
+        volume: edit.mic.volume,
+        fadeIn: 0,
+        fadeOut: 0,
+      });
+    }
+    if (clips.length === 0) {
+      toast.info("Nothing to detach: no clip plays the microphone at normal speed.");
+      return;
+    }
+    change((ed) => ({
+      ...ed,
+      audio: [...ed.audio, ...clips],
+      tracks: { ...ed.tracks, micMuted: true },
+    }));
+    usePlayback.getState().select({ kind: "audio", id: clips[0].id });
+  },
+
+  /** Puts the voice back under the video and removes the detached clips. */
+  reattachAudio() {
+    change((ed) => ({
+      ...ed,
+      audio: ed.audio.filter((a) => a.asset !== MIC_ASSET),
+      tracks: { ...ed.tracks, micMuted: false },
+    }));
+  },
+
+  /** Switches a device track on or off. */
+  setLayerHidden(instanceId: string, hidden: boolean) {
+    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => (l.instanceId === instanceId ? { ...l, hidden } : l)) ?? null }));
+  },
+
+  /** Only this device shows: for a close-up or a user test of one device. */
+  soloLayer(instanceId: string) {
+    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => ({ ...l, hidden: l.instanceId !== instanceId })) ?? null }));
+  },
+
+  showAllLayers() {
+    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => ({ ...l, hidden: false })) ?? null }));
   },
 
   setClipSpeed(id: string, speed: number) {

@@ -3,6 +3,9 @@ import type { EditState } from "./types";
 
 export type AudioSource = { kind: "mic" } | { kind: "asset"; file: string };
 
+/** An audio clip whose asset is this id plays the take's own microphone (detached voice). */
+export const MIC_ASSET = "mic";
+
 // One stretch of sound on the exported timeline. `from` and `duration` are
 // in the file's own time (source time for the mic); `at` is timeline time.
 export type AudioPiece = {
@@ -37,10 +40,13 @@ export function audioPieces(edit: EditState, hasMic: boolean): AudioPiece[] {
   }
   const fileOf = (id: string) => edit.assets.find((a) => a.id === id)?.file;
   for (const a of edit.audio) {
-    const file = fileOf(a.asset);
-    if (!file || a.volume <= 0 || muted.includes(a.lane)) continue;
+    if (a.volume <= 0 || muted.includes(a.lane)) continue;
+    const mic = a.asset === MIC_ASSET;
+    const file = mic ? null : fileOf(a.asset);
+    if (mic ? !hasMic : !file) continue;
     out.push({
-      source: { kind: "asset", file },
+      // Detached voice: `in` is source time, like the mic under a clip.
+      source: mic ? { kind: "mic" } : { kind: "asset", file: file as string },
       from: a.in,
       duration: a.duration,
       at: a.start,

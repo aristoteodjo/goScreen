@@ -45,6 +45,7 @@ export function initialLayers(recorded: RecordedLayer[], area: Size, previous: L
         y: 0.5,
         scale: 0.8,
         rotation: r.rotation,
+        hidden: false,
       }
     );
   });
