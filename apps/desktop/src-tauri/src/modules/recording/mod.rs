@@ -4,6 +4,7 @@ pub mod commands;
 pub(crate) mod ffmpeg;
 pub mod permissions;
 pub mod split;
+pub mod voice;
 #[cfg(target_os = "macos")]
 mod sck;
 

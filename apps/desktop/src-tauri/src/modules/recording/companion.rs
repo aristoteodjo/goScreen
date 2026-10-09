@@ -57,24 +57,28 @@ pub struct Outputs {
     pub mic: Option<PathBuf>,
 }
 
-/// One avfoundation input carrying camera and/or microphone, split into
-/// `<stem>.camera.mp4` and `<stem>.mic.m4a`.
+/// Camera and microphone, recorded to `<stem>.camera.mp4` and `<stem>.mic.m4a`.
+///
+/// Each gets its own avfoundation input with a deep queue: sharing one input,
+/// a slow camera encode made avfoundation drop audio packets (~13% of the
+/// voice lost, drifting out of sync). The audio is also re-timed on its
+/// capture timestamps, so any gap that still happens becomes silence instead
+/// of shifting everything after it.
 pub fn companion_args(camera: Option<u32>, mic: Option<u32>, video: &Path) -> Option<(Vec<String>, Outputs)> {
     if camera.is_none() && mic.is_none() {
         return None;
     }
     let cam_out = camera.map(|_| video.with_extension("camera.mp4"));
     let mic_out = mic.map(|_| video.with_extension("mic.m4a"));
-    let input = format!(
-        "{}:{}",
-        camera.map_or("none".to_string(), |c| c.to_string()),
-        mic.map_or("none".to_string(), |m| m.to_string())
-    );
-    let mut args: Vec<String> = ["-hide_banner", "-y", "-f", "avfoundation"].map(String::from).to_vec();
-    if camera.is_some() {
-        args.extend(["-framerate", "30"].map(String::from));
+    let mut args: Vec<String> = ["-hide_banner", "-y"].map(String::from).to_vec();
+    if let Some(c) = camera {
+        args.extend(["-thread_queue_size", "1024", "-f", "avfoundation", "-framerate", "30", "-i"].map(String::from));
+        args.push(format!("{c}:none"));
     }
-    args.extend(["-i".to_string(), input]);
+    if let Some(m) = mic {
+        args.extend(["-thread_queue_size", "4096", "-f", "avfoundation", "-i"].map(String::from));
+        args.push(format!("none:{m}"));
+    }
     if let Some(out) = &cam_out {
         args.extend(
             ["-map", "0:v", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
@@ -83,7 +87,8 @@ pub fn companion_args(camera: Option<u32>, mic: Option<u32>, video: &Path) -> Op
         args.push(out.to_string_lossy().into_owned());
     }
     if let Some(out) = &mic_out {
-        args.extend(["-map", "0:a", "-c:a", "aac", "-b:a", "160k"].map(String::from));
+        let input = if camera.is_some() { "1:a" } else { "0:a" };
+        args.extend(["-map", input, "-af", "aresample=async=1:first_pts=0", "-c:a", "aac", "-b:a", "160k"].map(String::from));
         args.push(out.to_string_lossy().into_owned());
     }
     Some((args, Outputs { camera: cam_out, mic: mic_out }))
@@ -117,16 +122,18 @@ mod tests {
     }
 
     #[test]
-    fn builds_one_input_split_into_two_files() {
+    fn records_camera_and_mic_on_separate_inputs() {
         let (args, out) = companion_args(Some(0), Some(2), Path::new("/m/rec.mp4")).unwrap();
         let joined = args.join(" ");
-        assert!(joined.contains("-framerate 30 -i 0:2"));
+        assert!(joined.contains("-framerate 30 -i 0:none"));
+        assert!(joined.contains("-thread_queue_size 4096 -f avfoundation -i none:2"));
         assert!(joined.contains("-map 0:v") && joined.contains("/m/rec.camera.mp4"));
-        assert!(joined.ends_with("-map 0:a -c:a aac -b:a 160k /m/rec.mic.m4a"));
+        assert!(joined.ends_with("-map 1:a -af aresample=async=1:first_pts=0 -c:a aac -b:a 160k /m/rec.mic.m4a"));
         assert_eq!(out.mic, Some(PathBuf::from("/m/rec.mic.m4a")));
 
         let (mic_only, out) = companion_args(None, Some(2), Path::new("/m/rec.mp4")).unwrap();
         assert!(mic_only.join(" ").contains("-i none:2"));
+        assert!(mic_only.join(" ").contains("-map 0:a"));
         assert!(!mic_only.contains(&"-framerate".to_string()));
         assert!(out.camera.is_none());
         assert!(companion_args(None, None, Path::new("/m/rec.mp4")).is_none());

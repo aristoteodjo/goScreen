@@ -500,6 +500,12 @@ pub fn recording_stop(
     let existing = |p: &Option<PathBuf>| p.as_ref().filter(|p| p.is_file()).cloned();
     let camera = companion.as_ref().and_then(|c| existing(&c.camera));
     let mic = companion.as_ref().and_then(|c| existing(&c.mic));
+    if let Some(m) = &mic {
+        // Narration is unusable as captured (too quiet, hum): clean it now.
+        if let Err(e) = super::voice::ensure_enhanced(m) {
+            log::warn!("{e}");
+        }
+    }
     let file_name = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned());
     if let Some(obj) = interactions.as_object_mut() {
         obj.insert(

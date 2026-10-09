@@ -328,7 +328,15 @@ pub async fn recording_open(state: State<'_, MediaState>, video_path: String) ->
         None => None,
     };
     let mic_url = match companion_file(&path, media("mic").as_deref()) {
-        Some(p) => Some(state.publish(p).await?),
+        Some(p) => {
+            // Takes recorded before voice cleanup existed get it once, here.
+            let mic = p.clone();
+            let cleaned = tauri::async_runtime::spawn_blocking(move || crate::modules::recording::voice::ensure_enhanced(&mic)).await;
+            if let Ok(Err(e)) = cleaned {
+                log::warn!("{e}");
+            }
+            Some(state.publish(p).await?)
+        }
         None => None,
     };
     let mut assets = HashMap::new();
@@ -374,7 +382,12 @@ pub struct RecordingEntry {
 
 /// Raw captures, newest first. Exports and temp files are not recordings.
 pub fn is_raw_recording(name: &str) -> bool {
-    name.starts_with("goscreen-") && name.ends_with(".mp4") && !name.contains("-export-") && !name.ends_with(".video.mp4")
+    // Webcam companions are part of a take, not takes of their own.
+    name.starts_with("goscreen-")
+        && name.ends_with(".mp4")
+        && !name.contains("-export-")
+        && !name.ends_with(".video.mp4")
+        && !name.ends_with(".camera.mp4")
 }
 
 #[tauri::command(async)]
@@ -421,6 +434,7 @@ mod tests {
         assert!(!is_raw_recording("goscreen-1759-export-1760.mp4"));
         assert!(!is_raw_recording("goscreen-1759-export-1760.video.mp4"));
         assert!(!is_raw_recording("goscreen-1759.interactions.json"));
+        assert!(!is_raw_recording("goscreen-1759.camera.mp4"));
         assert!(!is_raw_recording("holiday.mp4"));
     }
 
