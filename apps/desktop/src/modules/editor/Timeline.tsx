@@ -17,7 +17,7 @@ import {
 } from "@goscreen/render-engine";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type PointerEvent, type ReactNode, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from "react";
+import { type ComponentProps, type PointerEvent, type ReactNode, useLayoutEffect, useMemo, useRef, useState, type WheelEvent } from "react";
 import { cn } from "@/lib/utils";
 import { player, useSession } from "./session";
 import { newId, type Selection, timelineEnd, useEdit, usePlayback } from "./store";
@@ -493,7 +493,8 @@ function Block({
   onPointerDown,
   onStart,
   onEnd,
-}: {
+  ...rest
+}: ComponentProps<"div"> & {
   left: number;
   width: number;
   selected: boolean;
@@ -503,8 +504,10 @@ function Block({
   onStart: (e: PointerEvent<HTMLElement>) => void;
   onEnd: (e: PointerEvent<HTMLElement>) => void;
 }) {
+  // `rest` carries what a context menu trigger injects (ref, onContextMenu).
   return (
     <div
+      {...rest}
       className={cn(
         "absolute inset-y-0 flex cursor-grab items-center overflow-hidden rounded-md px-2.5 text-[11px] font-medium active:cursor-grabbing",
         className,

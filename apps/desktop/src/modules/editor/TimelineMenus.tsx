@@ -1,5 +1,5 @@
 import { SPEEDS } from "@goscreen/render-engine";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -19,7 +19,7 @@ import { player } from "./session";
 import { type Selection, useEdit, usePlayback } from "./store";
 
 /** Right-click on a timeline item: it is selected, then quick actions. */
-export function TimelineItemMenu({ selection, children }: { selection: Selection; children: ReactNode }) {
+export function TimelineItemMenu({ selection, children }: { selection: Selection; children: ReactElement }) {
   const clip = useEdit((s) =>
     selection.kind === "clip" ? s.edit.clips.find((c) => c.id === selection.id) : undefined,
   );
@@ -33,17 +33,17 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
 
   return (
     <ContextMenu onOpenChange={(open) => open && usePlayback.getState().select(selection)}>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={editActions.splitAtPlayhead}>
+        <ContextMenuItem onClick={editActions.splitAtPlayhead}>
           Split at playhead
           <ContextMenuShortcut>S</ContextMenuShortcut>
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => editActions.duplicate(selection)}>
+        <ContextMenuItem onClick={() => editActions.duplicate(selection)}>
           Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
-        {item ? <ContextMenuItem onSelect={() => player.seek(item.start)}>Go to start</ContextMenuItem> : null}
+        {item ? <ContextMenuItem onClick={() => player.seek(item.start)}>Go to start</ContextMenuItem> : null}
 
         {clip?.kind === "recording" ? (
           <>
@@ -76,7 +76,7 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
         ) : null}
 
         <ContextMenuSeparator />
-        <ContextMenuItem variant="destructive" onSelect={() => editActions.deleteSelection()}>
+        <ContextMenuItem variant="destructive" onClick={() => editActions.deleteSelection()}>
           Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -24,35 +24,37 @@ import { useEditor } from "../store/editor";
 import { useProject } from "../store/project";
 
 /** Right-click on a device, in the canvas or the scene. */
-export function DeviceContextMenu({ id, children }: { id: string; children: ReactNode }) {
+export function DeviceContextMenu({ id, children }: { id: string; children: ReactElement }) {
   const device = useProject((s) => s.devices.find((d) => d.id === id));
   const view = useEditor((s) => s.view);
   const recording = useRecording((s) => s.active);
   const def = device ? registry.get(device.deviceId) : undefined;
-  if (!device || !def || recording) return children;
+  if (!device || !def) return children;
   const web = device.source.kind === "web";
 
   return (
-    <ContextMenu onOpenChange={(open) => open && useEditor.getState().select(id)}>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+    // Disabled, never unwrapped, while recording: unwrapping would remount the
+    // frame (and its page) and detach the element the capture measures.
+    <ContextMenu disabled={recording} onOpenChange={(open) => open && useEditor.getState().select(id)}>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-56">
         <ContextMenuLabel className="truncate">{def.name}</ContextMenuLabel>
-        <ContextMenuItem onSelect={() => studioActions.recordDevice(id)}>Record this device</ContextMenuItem>
-        <ContextMenuItem onSelect={() => studioActions.screenshotDevice(id)}>Screenshot this device</ContextMenuItem>
+        <ContextMenuItem onClick={() => studioActions.recordDevice(id)}>Record this device</ContextMenuItem>
+        <ContextMenuItem onClick={() => studioActions.screenshotDevice(id)}>Screenshot this device</ContextMenuItem>
         <ContextMenuSeparator />
         {view === "canvas" ? (
-          <ContextMenuItem onSelect={() => canvasCommands.focus(id)}>Zoom to device</ContextMenuItem>
+          <ContextMenuItem onClick={() => canvasCommands.focus(id)}>Zoom to device</ContextMenuItem>
         ) : (
           <>
-            <ContextMenuItem onSelect={() => useProject.getState().reorderDevice(id, "front")}>
+            <ContextMenuItem onClick={() => useProject.getState().reorderDevice(id, "front")}>
               Bring to front
             </ContextMenuItem>
-            <ContextMenuItem onSelect={() => useProject.getState().reorderDevice(id, "back")}>Send to back</ContextMenuItem>
+            <ContextMenuItem onClick={() => useProject.getState().reorderDevice(id, "back")}>Send to back</ContextMenuItem>
           </>
         )}
         {web ? (
           <>
-            <ContextMenuItem onSelect={() => studioActions.rotate(id)}>
+            <ContextMenuItem onClick={() => studioActions.rotate(id)}>
               Rotate
               <ContextMenuShortcut>{device.orientation === "portrait" ? "Landscape" : "Portrait"}</ContextMenuShortcut>
             </ContextMenuItem>
@@ -63,7 +65,7 @@ export function DeviceContextMenu({ id, children }: { id: string; children: Reac
               Sync with shared URL
             </ContextMenuCheckboxItem>
             {device.viewport ? (
-              <ContextMenuItem onSelect={() => useProject.getState().updateDevice(id, { viewport: null })}>
+              <ContextMenuItem onClick={() => useProject.getState().updateDevice(id, { viewport: null })}>
                 Reset to native size
               </ContextMenuItem>
             ) : null}
@@ -88,8 +90,8 @@ export function DeviceContextMenu({ id, children }: { id: string; children: Reac
           </ContextMenuSub>
         ) : null}
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => studioActions.duplicate(id)}>Duplicate</ContextMenuItem>
-        <ContextMenuItem variant="destructive" onSelect={() => studioActions.remove(id)}>
+        <ContextMenuItem onClick={() => studioActions.duplicate(id)}>Duplicate</ContextMenuItem>
+        <ContextMenuItem variant="destructive" onClick={() => studioActions.remove(id)}>
           Remove
         </ContextMenuItem>
       </ContextMenuContent>
@@ -98,53 +100,52 @@ export function DeviceContextMenu({ id, children }: { id: string; children: Reac
 }
 
 /** Right-click on the empty canvas or around the scene. */
-export function ViewContextMenu({ children }: { children: ReactNode }) {
+export function ViewContextMenu({ children }: { children: ReactElement }) {
   const view = useEditor((s) => s.view);
   const recording = useRecording((s) => s.active);
   const hasDevices = useProject((s) => s.devices.length > 0);
   const bubbleHidden = useCaptureSettings((s) => s.camera !== null && !s.bubble.visible);
-  if (recording) return children;
   const other = view === "canvas" ? "scene" : "canvas";
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+    <ContextMenu disabled={recording}>
+      <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-56">
-        <ContextMenuItem disabled={!hasDevices} onSelect={studioActions.recordView}>
+        <ContextMenuItem disabled={!hasDevices} onClick={studioActions.recordView}>
           Record the {view}
         </ContextMenuItem>
-        <ContextMenuItem disabled={!hasDevices} onSelect={studioActions.screenshotView}>
+        <ContextMenuItem disabled={!hasDevices} onClick={studioActions.screenshotView}>
           Screenshot the {view}
         </ContextMenuItem>
         <ContextMenuSeparator />
         {view === "canvas" ? (
           <>
-            <ContextMenuItem disabled={!hasDevices} onSelect={() => canvasCommands.fit()}>
+            <ContextMenuItem disabled={!hasDevices} onClick={() => canvasCommands.fit()}>
               Fit all devices
               <ContextMenuShortcut>⇧1</ContextMenuShortcut>
             </ContextMenuItem>
-            <ContextMenuItem onSelect={() => canvasCommands.reset()}>
+            <ContextMenuItem onClick={() => canvasCommands.reset()}>
               Zoom to 100%
               <ContextMenuShortcut>⌘0</ContextMenuShortcut>
             </ContextMenuItem>
-            <ContextMenuItem disabled={!hasDevices} onSelect={() => useProject.getState().arrangeCanvas()}>
+            <ContextMenuItem disabled={!hasDevices} onClick={() => useProject.getState().arrangeCanvas()}>
               Arrange in a row
             </ContextMenuItem>
           </>
         ) : (
-          <ContextMenuItem disabled={!hasDevices} onSelect={() => useProject.getState().autoLayout()}>
+          <ContextMenuItem disabled={!hasDevices} onClick={() => useProject.getState().autoLayout()}>
             Auto layout
           </ContextMenuItem>
         )}
-        <ContextMenuItem onSelect={() => useReload.getState().reloadAll()}>Reload all pages</ContextMenuItem>
+        <ContextMenuItem onClick={() => useReload.getState().reloadAll()}>Reload all pages</ContextMenuItem>
         {bubbleHidden ? (
-          <ContextMenuItem onSelect={() => useCaptureSettings.getState().setBubble({ visible: true })}>
+          <ContextMenuItem onClick={() => useCaptureSettings.getState().setBubble({ visible: true })}>
             Show camera bubble
           </ContextMenuItem>
         ) : null}
-        <ContextMenuItem onSelect={() => useEditor.getState().setView(other)}>Switch to {other}</ContextMenuItem>
+        <ContextMenuItem onClick={() => useEditor.getState().setView(other)}>Switch to {other}</ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => useEditor.getState().setPaletteOpen(true)}>
+        <ContextMenuItem onClick={() => useEditor.getState().setPaletteOpen(true)}>
           Add a device…
           <ContextMenuShortcut>⌘K</ContextMenuShortcut>
         </ContextMenuItem>

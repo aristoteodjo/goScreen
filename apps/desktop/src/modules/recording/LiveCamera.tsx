@@ -146,8 +146,7 @@ export function LiveCamera() {
     <div ref={hostRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       {visible ? (
         <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div
+          <ContextMenuTrigger
               onPointerDown={startDrag}
               className={cn(
                 "pointer-events-auto absolute overflow-hidden bg-neutral-900 shadow-2xl ring-1 ring-white/15",
@@ -175,7 +174,6 @@ export function LiveCamera() {
                   {name ? "Starting camera…" : "Camera unavailable"}
                 </div>
               )}
-            </div>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-48">
             <ContextMenuLabel>Camera bubble</ContextMenuLabel>
@@ -198,7 +196,7 @@ export function LiveCamera() {
             <ContextMenuCheckboxItem checked={bubble.mirror} onCheckedChange={(v) => setBubble({ mirror: v === true })}>
               Mirror
             </ContextMenuCheckboxItem>
-            <ContextMenuItem onSelect={() => setBubble({ visible: false })}>Hide bubble</ContextMenuItem>
+            <ContextMenuItem onClick={() => setBubble({ visible: false })}>Hide bubble</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
       ) : null}
