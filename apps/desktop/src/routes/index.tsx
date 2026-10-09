@@ -3,6 +3,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useAndroidSync } from "@/modules/android/useAndroid";
 import { CanvasRoot } from "@/modules/canvas/CanvasRoot";
 import { CaptureBar } from "@/modules/recording/CaptureBar";
+import { LiveCamera } from "@/modules/recording/LiveCamera";
 import { SiteTourDialog } from "@/modules/tour/SiteTourDialog";
 import { useCapture } from "@/modules/recording/useCapture";
 import { CommandPalette } from "@/modules/studio/components/CommandPalette";
@@ -31,7 +32,10 @@ function Studio() {
       <SidebarInset className="flex min-h-0 min-w-0 flex-row">
         <div className="relative flex min-w-0 flex-1 flex-col">
           <Toolbar capture={capture} />
-          {view === "canvas" ? <CanvasRoot /> : <Stage />}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            {view === "canvas" ? <CanvasRoot /> : <Stage />}
+            <LiveCamera />
+          </div>
           <CaptureBar capture={capture} />
         </div>
         <Inspector />

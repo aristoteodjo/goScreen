@@ -42,6 +42,22 @@ export function webcamRect(output: Size, camera: CameraEdit, hasCamera: boolean)
   return { x: at(col, output.width), y: at(row, output.height), width: side, height: side };
 }
 
+/** The 3x3 overlay slot (0 = top-left) whose center is closest to `point`. */
+export function nearestCorner(output: Size, camera: CameraEdit, point: Point): number {
+  let best = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let corner = 0; corner < 9; corner += 1) {
+    const r = webcamRect(output, { ...camera, layout: "overlay", visible: true, corner }, true);
+    if (!r) continue;
+    const d = Math.hypot(r.x + r.width / 2 - point.x, r.y + r.height / 2 - point.y);
+    if (d < bestDistance) {
+      bestDistance = d;
+      best = corner;
+    }
+  }
+  return best;
+}
+
 /** Side-by-side starting layout, bottoms aligned, normalized to the area. */
 export function arrangeLayers(frames: Size[], area: Size, gap = 0.05): { x: number; y: number; scale: number }[] {
   if (frames.length === 0) return [];

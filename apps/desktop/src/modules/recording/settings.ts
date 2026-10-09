@@ -1,4 +1,4 @@
-import type { CaptureMode } from "@goscreen/render-engine";
+import { type CameraEdit, type CaptureMode, DEFAULT_EDIT } from "@goscreen/render-engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useEditor } from "@/modules/studio/store/editor";
@@ -8,6 +8,8 @@ import { useEditor } from "@/modules/studio/store/editor";
 // recording never jumps to a view the user did not pick.
 type CaptureSettings = {
   deviceOnly: boolean;
+  // The live webcam bubble; the editor starts from this layout.
+  bubble: CameraEdit;
   camera: number | null;
   microphone: number | null;
   barOpen: boolean;
@@ -15,12 +17,14 @@ type CaptureSettings = {
   setCamera: (camera: number | null) => void;
   setMicrophone: (microphone: number | null) => void;
   setBarOpen: (open: boolean) => void;
+  setBubble: (patch: Partial<CameraEdit>) => void;
 };
 
 export const useCaptureSettings = create<CaptureSettings>()(
   persist(
     (set) => ({
       deviceOnly: false,
+      bubble: DEFAULT_EDIT.camera,
       camera: null,
       microphone: null,
       barOpen: false,
@@ -28,12 +32,13 @@ export const useCaptureSettings = create<CaptureSettings>()(
       setCamera: (camera) => set({ camera }),
       setMicrophone: (microphone) => set({ microphone }),
       setBarOpen: (barOpen) => set({ barOpen }),
+      setBubble: (patch) => set((s) => ({ bubble: { ...s.bubble, ...patch } })),
     }),
     {
       name: "goscreen.capture",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ deviceOnly: s.deviceOnly, camera: s.camera, microphone: s.microphone }),
+      partialize: (s) => ({ deviceOnly: s.deviceOnly, bubble: s.bubble, camera: s.camera, microphone: s.microphone }),
     },
   ),
 );

@@ -107,6 +107,10 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
   `media.offsetMs` aligne leur départ sur la première frame de l'écran. Un échec caméra/micro n'empêche
   jamais l'enregistrement de l'écran (avertissement). Webcam en overlay (coin 3x3, taille, forme, miroir) ou
   en split screen ; le micro est mixé à l'export.
+- Bulle webcam live (`recording/LiveCamera.tsx`) au-dessus du Canvas et de la Scène : `getUserMedia` retrouve la
+  caméra FFmpeg par son nom. Glisser = aimantation sur la grille 3x3 (`nearestCorner`), clic droit = taille, forme,
+  miroir. Sa mise en page part dans le journal (`camera`) et devient l'overlay initial de l'éditeur. Pendant la
+  prise, elle se masque si elle chevauche un verre (elle serait sinon gravée dans le calque).
 - Démarrage : FFmpeg ne crée la sortie qu'à la première frame. Sans fichier après 6 s, c'est la permission
   « Enregistrement de l'écran » qui manque : erreur explicite qui nomme l'app responsable (premier `.app`
   parmi les ancêtres du process, `recording/permissions.rs`) avec un bouton vers le bon panneau des Réglages.

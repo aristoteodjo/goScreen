@@ -140,6 +140,7 @@ export function useCapture() {
       const project = useProject.getState();
       const { events, pointers } = interactionLog.drain();
       const layers = layerLog.stop();
+      const { camera, bubble } = useCaptureSettings.getState();
       return ipc.recordingStop({
         version: 3,
         startedAt,
@@ -149,6 +150,8 @@ export function useCapture() {
         pointers,
         devices: project.devices,
         events,
+        // The editor opens the webcam where the bubble sat in the studio.
+        camera: camera === null ? null : { ...bubble, visible: true, layout: "overlay" },
       });
     },
     onSuccess: (result) => {

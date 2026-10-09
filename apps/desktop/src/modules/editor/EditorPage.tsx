@@ -3,6 +3,7 @@ import {
   type AspectId,
   buildAutoZooms,
   DEFAULT_EDIT,
+  EMPTY_RECORDING,
   type EditState,
   formatTime,
   outputSize,
@@ -67,7 +68,7 @@ export function EditorPage({ video }: { video: string }) {
   useEffect(() => {
     const data = recording.data;
     if (!data) return;
-    let file: RecordingFile = { stage: null, mode: null, layers: [], pointers: [], mediaOffset: 0 };
+    let file: RecordingFile = EMPTY_RECORDING;
     try {
       if (data.interactions) file = parseRecordingFile(data.interactions);
     } catch {
@@ -86,7 +87,7 @@ export function EditorPage({ video }: { video: string }) {
       layers: file.layers,
       mediaOffset: file.mediaOffset,
     });
-    useEdit.getState().load(saved ?? DEFAULT_EDIT);
+    useEdit.getState().load(saved ?? { ...DEFAULT_EDIT, camera: file.camera ?? DEFAULT_EDIT.camera });
     if (file.layers.length > 0) usePlayback.getState().setPanel("devices");
   }, [recording.data]);
 

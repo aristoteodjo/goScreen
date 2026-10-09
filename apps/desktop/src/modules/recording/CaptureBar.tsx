@@ -95,7 +95,10 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
           loading={devices.isPending}
           value={camera}
           options={devices.data?.cameras ?? []}
-          onChange={setCamera}
+          onChange={(index) => {
+            setCamera(index);
+            if (index !== null) useCaptureSettings.getState().setBubble({ visible: true });
+          }}
         />
         <DeviceMenu
           label={micName ?? "No microphone"}

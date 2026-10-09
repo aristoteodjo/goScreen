@@ -4,6 +4,7 @@ import {
   composeFrame,
   DEFAULT_EDIT,
   hitLayer,
+  nearestCorner,
   parseRecordingFile,
   rectAt,
   stageArea,
@@ -52,6 +53,15 @@ describe("layers", () => {
     expect(r).toEqual({ x: 1000 - 100 - 20, y: 500 - 100 - 20, width: 100, height: 100 });
     expect(stageArea(out, { ...cam, layout: "split" }, true).width).toBeCloseTo(660);
   });
+
+  it("snaps a dropped webcam to the closest of the nine slots", () => {
+    const cam = { ...DEFAULT_EDIT.camera, size: 0.2 };
+    const out = { width: 1000, height: 500 };
+    expect(nearestCorner(out, cam, { x: 10, y: 10 })).toBe(0);
+    expect(nearestCorner(out, cam, { x: 520, y: 240 })).toBe(4);
+    expect(nearestCorner(out, cam, { x: 990, y: 490 })).toBe(8);
+    expect(nearestCorner(out, cam, { x: 600, y: 20 })).toBe(1);
+  });
 });
 
 describe("layered compose", () => {
@@ -89,5 +99,13 @@ describe("layered compose", () => {
     expect(file.layers[0].rects).toHaveLength(2);
     expect(file.mode).toBe("canvas");
     expect(file.mediaOffset).toBeCloseTo(0.15);
+    expect(file.camera).toBeNull();
+  });
+
+  it("keeps the webcam layout placed in the studio, ignoring a broken one", () => {
+    const base = { version: 3, mode: "scene", capture: { width: 10, height: 10 }, layers: [], pointers: [] };
+    const camera = { ...DEFAULT_EDIT.camera, corner: 0, size: 0.3 };
+    expect(parseRecordingFile({ ...base, camera }).camera).toEqual(camera);
+    expect(parseRecordingFile({ ...base, camera: { corner: 42 } }).camera).toBeNull();
   });
 });

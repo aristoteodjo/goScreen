@@ -17,6 +17,7 @@ import {
 import { registry } from "@/lib/registry";
 import { canvasCommands } from "@/modules/canvas/commands";
 import { useReload } from "@/modules/interaction/runtime";
+import { useCaptureSettings } from "@/modules/recording/settings";
 import { useRecording } from "@/modules/recording/store";
 import { studioActions } from "../actions";
 import { useEditor } from "../store/editor";
@@ -101,6 +102,7 @@ export function ViewContextMenu({ children }: { children: ReactNode }) {
   const view = useEditor((s) => s.view);
   const recording = useRecording((s) => s.active);
   const hasDevices = useProject((s) => s.devices.length > 0);
+  const bubbleHidden = useCaptureSettings((s) => s.camera !== null && !s.bubble.visible);
   if (recording) return children;
   const other = view === "canvas" ? "scene" : "canvas";
 
@@ -135,6 +137,11 @@ export function ViewContextMenu({ children }: { children: ReactNode }) {
           </ContextMenuItem>
         )}
         <ContextMenuItem onSelect={() => useReload.getState().reloadAll()}>Reload all pages</ContextMenuItem>
+        {bubbleHidden ? (
+          <ContextMenuItem onSelect={() => useCaptureSettings.getState().setBubble({ visible: true })}>
+            Show camera bubble
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuItem onSelect={() => useEditor.getState().setView(other)}>Switch to {other}</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => useEditor.getState().setPaletteOpen(true)}>

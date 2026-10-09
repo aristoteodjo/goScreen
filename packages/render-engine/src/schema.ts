@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CaptureMode, EditState, RecordedLayer, RecordedPointer } from "./types";
+import type { CameraEdit, CaptureMode, EditState, RecordedLayer, RecordedPointer } from "./types";
 
 const pointerSchema = z.object({
   t: z.number(),
@@ -36,6 +36,15 @@ const mediaSchema = z
   .nullable()
   .catch(null);
 
+const cameraSchema = z.object({
+  visible: z.boolean(),
+  layout: z.enum(["overlay", "split"]),
+  corner: z.number().int().min(0).max(8),
+  size: z.number().min(0.08).max(0.6),
+  shape: z.enum(["rounded", "circle", "square"]),
+  mirror: z.boolean(),
+});
+
 // v3: each device screen is a layer of the captured region.
 const v3Schema = z.object({
   version: z.literal(3),
@@ -44,6 +53,8 @@ const v3Schema = z.object({
   layers: z.array(layerSchema),
   pointers: z.array(pointerSchema),
   media: mediaSchema.optional(),
+  // The webcam bubble as placed in the studio during the take.
+  camera: cameraSchema.nullable().optional().catch(null),
 });
 
 // v1 files (before the editor existed) logged raw bridge events in iframe
@@ -63,6 +74,16 @@ export type RecordingFile = {
   pointers: RecordedPointer[];
   // Camera/mic start relative to the first screen frame.
   mediaOffset: number;
+  camera: CameraEdit | null;
+};
+
+export const EMPTY_RECORDING: RecordingFile = {
+  stage: null,
+  mode: null,
+  layers: [],
+  pointers: [],
+  mediaOffset: 0,
+  camera: null,
 };
 
 const ordered = (pointers: RecordedPointer[]) => pointers.filter((p) => p.t >= 0).sort((a, b) => a.t - b.t);
@@ -77,13 +98,21 @@ export function parseRecordingFile(json: unknown): RecordingFile {
       layers,
       pointers: ordered(v3.data.pointers),
       mediaOffset: (v3.data.media?.offsetMs ?? 0) / 1000,
+      camera: v3.data.camera ?? null,
     };
   }
   const v2 = v2Schema.safeParse(json);
   if (v2.success) {
-    return { stage: v2.data.stage, mode: null, layers: [], pointers: ordered(v2.data.pointers), mediaOffset: 0 };
+    return {
+      stage: v2.data.stage,
+      mode: null,
+      layers: [],
+      pointers: ordered(v2.data.pointers),
+      mediaOffset: 0,
+      camera: null,
+    };
   }
-  if (v1Schema.safeParse(json).success) return { stage: null, mode: null, layers: [], pointers: [], mediaOffset: 0 };
+  if (v1Schema.safeParse(json).success) return EMPTY_RECORDING;
   throw new Error("Unrecognised interactions file.");
 }
 
@@ -151,16 +180,7 @@ const editSchema = z.object({
     )
     .nullable()
     .catch(null),
-  camera: z
-    .object({
-      visible: z.boolean(),
-      layout: z.enum(["overlay", "split"]),
-      corner: z.number().int().min(0).max(8),
-      size: z.number().min(0.08).max(0.6),
-      shape: z.enum(["rounded", "circle", "square"]),
-      mirror: z.boolean(),
-    })
-    .catch(DEFAULT_EDIT.camera),
+  camera: cameraSchema.catch(DEFAULT_EDIT.camera),
   mic: z.object({ volume: z.number().min(0).max(2) }).catch(DEFAULT_EDIT.mic),
 });
 
