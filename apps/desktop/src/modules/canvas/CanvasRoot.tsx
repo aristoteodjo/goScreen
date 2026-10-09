@@ -7,6 +7,7 @@ import { attachCanvas, canvasCommands } from "./commands";
 import { type View, zoomAt } from "./math";
 import { useCanvasView } from "./view";
 import { ZoomControls } from "./ZoomControls";
+import { ViewContextMenu } from "@/modules/studio/components/StudioContextMenus";
 
 // Dot grid spacing stays between 12 and 48 screen px at any zoom.
 function gridSize(zoom: number) {
@@ -145,6 +146,7 @@ export function CanvasRoot() {
   };
 
   return (
+    <ViewContextMenu>
     <div
       ref={hostRef}
       onPointerDown={startPan}
@@ -176,6 +178,7 @@ export function CanvasRoot() {
       {spaceHeld ? <div className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing" onPointerDown={startPan} /> : null}
       {hasDevices ? <ZoomControls /> : <EmptyCanvas />}
     </div>
+    </ViewContextMenu>
   );
 }
 

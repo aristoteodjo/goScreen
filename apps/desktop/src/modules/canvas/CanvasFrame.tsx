@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { DeviceMockup } from "@/modules/device/DeviceMockup";
 import { useRecording } from "@/modules/recording/store";
 import { type CanvasPoint, frameSizeOf, type ProjectDevice, useProject } from "@/modules/studio/store/project";
+import { DeviceContextMenu } from "@/modules/studio/components/StudioContextMenus";
 import { useEditor } from "@/modules/studio/store/editor";
 import { snapViewportSize } from "./snap";
 import { useCanvasView } from "./view";
@@ -98,7 +99,8 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
   };
 
   return (
-    <div className="absolute" style={{ left: position.x, top: position.y, width: frame.width, height: frame.height }}>
+    <DeviceContextMenu id={device.id}>
+      <div className="absolute" style={{ left: position.x, top: position.y, width: frame.width, height: frame.height }}>
       <div
         className="absolute bottom-full left-0 origin-bottom-left pb-2"
         style={{ width: `calc(${frame.width}px * var(--canvas-zoom, 1))`, transform: "scale(calc(1 / var(--canvas-zoom, 1)))" }}
@@ -183,7 +185,8 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
           {shown.width} × {shown.height}
         </div>
       ) : null}
-    </div>
+      </div>
+    </DeviceContextMenu>
   );
 }
 

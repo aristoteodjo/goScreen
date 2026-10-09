@@ -11,6 +11,7 @@ import { Stage } from "@/modules/studio/components/Stage";
 import { StudioSidebar } from "@/modules/studio/components/StudioSidebar";
 import { Toolbar } from "@/modules/studio/components/Toolbar";
 import { useEditor } from "@/modules/studio/store/editor";
+import { bindCapture } from "@/modules/studio/actions";
 import { useBridgeWiring } from "@/modules/studio/useBridgeWiring";
 
 export const Route = createFileRoute("/")({
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/")({
 function Studio() {
   const capture = useCapture();
   const view = useEditor((s) => s.view);
+  bindCapture(capture);
   useBridgeWiring();
   useAndroidSync();
 

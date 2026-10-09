@@ -3,6 +3,7 @@ import { type PointerEvent, useLayoutEffect, useRef, useState } from "react";
 import { DeviceMockup } from "@/modules/device/DeviceMockup";
 import { useRecording } from "@/modules/recording/store";
 import { setStageElement } from "../stageRef";
+import { DeviceContextMenu, ViewContextMenu } from "./StudioContextMenus";
 import { ASPECTS } from "../store/aspect";
 import { backgroundToCss } from "../store/backgrounds";
 import { useEditor } from "../store/editor";
@@ -56,6 +57,7 @@ export function Stage() {
   };
 
   return (
+    <ViewContextMenu>
     <div
       ref={hostRef}
       className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-stage"
@@ -79,8 +81,8 @@ export function Stage() {
             style={{ width: stage.width, height: stage.height, transform: `scale(${zoom})` }}
           >
             {devices.map((d) => (
+              <DeviceContextMenu key={d.id} id={d.id}>
               <div
-                key={d.id}
                 className="absolute top-0 left-0 will-change-transform"
                 style={
                   recording
@@ -101,12 +103,14 @@ export function Stage() {
                   onFramePointerDown={onFramePointerDown(d.id)}
                 />
               </div>
+              </DeviceContextMenu>
             ))}
           </div>
         </div>
       ) : null}
       {devices.length === 0 ? <EmptyStage /> : null}
     </div>
+    </ViewContextMenu>
   );
 }
 

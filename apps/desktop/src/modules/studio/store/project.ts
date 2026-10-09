@@ -51,6 +51,8 @@ type ProjectActions = {
   setAllSynced: (synced: boolean) => void;
   addDevice: (deviceId: string, init?: NewDevice) => string | null;
   removeDevice: (id: string) => void;
+  /** Scene stacking: later devices are drawn on top. */
+  reorderDevice: (id: string, to: "front" | "back") => void;
   updateDevice: (id: string, patch: Partial<ProjectDevice>) => void;
   moveOnCanvas: (id: string, point: CanvasPoint) => void;
   arrangeCanvas: () => void;
@@ -191,6 +193,14 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
         devices: relayout({ aspect: s.aspect, devices: s.devices.filter((d) => d.id !== id) }),
         canvas,
       };
+    }),
+
+  reorderDevice: (id, to) =>
+    set((s) => {
+      const d = s.devices.find((x) => x.id === id);
+      if (!d) return s;
+      const rest = s.devices.filter((x) => x.id !== id);
+      return { devices: to === "front" ? [...rest, d] : [d, ...rest] };
     }),
 
   updateDevice: (id, patch) =>
