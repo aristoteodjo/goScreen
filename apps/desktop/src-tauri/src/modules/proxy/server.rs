@@ -17,7 +17,7 @@ use url::Url;
 
 use super::bridge::{bridge_script, BridgeConfig};
 use super::relay::{
-    is_local_origin, is_private, relay_location, relay_param, relay_target, DROPPED_RELAY_RESPONSE_HEADERS, RELAY_PATH,
+    is_local_origin, relay_location, PublicResolver, relay_param, relay_target, DROPPED_RELAY_RESPONSE_HEADERS, RELAY_PATH,
 };
 use super::rewrite::{
     inject_bridge, is_html, rewrite_origin, rewrite_set_cookie, DROPPED_REQUEST_HEADERS,
@@ -35,6 +35,8 @@ struct ListenerKey {
 
 struct Inner {
     client: reqwest::Client,
+    // Cross-origin relay: public addresses only, checked at connect time.
+    relay: reqwest::Client,
     probe: reqwest::Client,
     listeners: Mutex<HashMap<ListenerKey, u16>>,
 }
@@ -48,6 +50,12 @@ impl Default for ProxyState {
             .timeout(Duration::from_secs(60))
             .build()
             .expect("proxy client builds");
+        let relay = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .dns_resolver(Arc::new(PublicResolver))
+            .timeout(Duration::from_secs(60))
+            .build()
+            .expect("relay client builds");
         let probe = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
             .timeout(Duration::from_secs(15))
@@ -55,6 +63,7 @@ impl Default for ProxyState {
             .expect("probe client builds");
         Self(Arc::new(Inner {
             client,
+            relay,
             probe,
             listeners: Mutex::new(HashMap::new()),
         }))
@@ -294,25 +303,16 @@ async fn relay(ctx: &Arc<Ctx>, req: Request) -> Result<Response, String> {
     let raw = relay_param(req.uri().query()).ok_or("Relay needs a u= parameter.")?;
     let allow_local = is_local_origin(&ctx.origin);
     let target = relay_target(&raw, allow_local)?;
-    if !allow_local {
-        // A public name can still point inside the network (DNS rebinding).
-        let host = target.host_str().unwrap_or_default().to_string();
-        let port = target.port_or_known_default().unwrap_or(443);
-        let addrs = tokio::net::lookup_host((host.as_str(), port))
-            .await
-            .map_err(|e| format!("relay lookup {host}: {e}"))?;
-        if addrs.into_iter().any(|a| is_private(a.ip())) {
-            return Err(format!("{host} points to a private address."));
-        }
-    }
+    // Names are checked by the relay client's resolver at connect time (no
+    // rebinding window); IP literals by `relay_target`. Redirects are never
+    // followed here: they come back to the relay and are checked again.
+    let client = if allow_local { &ctx.inner.client } else { &ctx.inner.relay };
     let (parts, body) = req.into_parts();
     let body = axum::body::to_bytes(body, MAX_REQUEST_BODY)
         .await
         .map_err(|e| format!("request body: {e}"))?;
     let headers = upstream_headers(ctx, &parts.headers, true);
-    let resp = ctx
-        .inner
-        .client
+    let resp = client
         .request(parts.method, target.clone())
         .headers(headers)
         .body(body)

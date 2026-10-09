@@ -25,22 +25,56 @@ pub fn relay_param(query: Option<&str>) -> Option<String> {
     url::form_urlencoded::parse(query?.as_bytes()).find(|(k, _)| k == "u").map(|(_, v)| v.into_owned())
 }
 
-/// Loopback, private, link-local and similar: never reachable through the relay,
-/// or a website in a device frame could probe the user's machine and network.
+/// Anything that is not a public internet address: never reachable through
+/// the relay, or a website in a device frame could probe the user's machine
+/// and network. IPv4 hidden in IPv6 (mapped, NAT64, 6to4) is checked too.
 pub fn is_private(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
-            v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast()
-                // 100.64.0.0/10 (CGNAT, Tailscale)
-                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+            let [a, b, c, _] = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_multicast()
+                || a == 0 // 0.0.0.0/8
+                || a >= 240 // reserved
+                || (a == 100 && (b & 0xc0) == 64) // 100.64.0.0/10 CGNAT, Tailscale
+                || (a == 192 && b == 0 && c == 0) // 192.0.0.0/24 protocol assignments
+                || (a == 198 && (b & 0xfe) == 18) // 198.18.0.0/15 benchmarking
         }
         IpAddr::V6(v6) => {
+            let s = v6.segments();
+            let embedded_v4 = |hi: u16, lo: u16| IpAddr::V4(std::net::Ipv4Addr::new((hi >> 8) as u8, hi as u8, (lo >> 8) as u8, lo as u8));
             v6.is_loopback()
                 || v6.is_unspecified()
-                || (v6.segments()[0] & 0xfe00) == 0xfc00
-                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || v6.is_multicast()
+                || (s[0] & 0xfe00) == 0xfc00 // unique local
+                || (s[0] & 0xffc0) == 0xfe80 // link local
+                || (s[0] & 0xffc0) == 0xfec0 // site local (deprecated)
                 || v6.to_ipv4_mapped().is_some_and(|v4| is_private(IpAddr::V4(v4)))
+                || (s[0] == 0x64 && s[1] == 0xff9b && is_private(embedded_v4(s[6], s[7]))) // NAT64
+                || (s[0] == 0x2002 && is_private(embedded_v4(s[1], s[2]))) // 6to4
         }
+    }
+}
+
+/// DNS for the relay: private answers are dropped at connect time, so a
+/// name cannot pass a check and then rebind to 127.0.0.1 for the request.
+pub struct PublicResolver;
+
+impl reqwest::dns::Resolve for PublicResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        Box::pin(async move {
+            let host = name.as_str().to_string();
+            let public: Vec<std::net::SocketAddr> =
+                tokio::net::lookup_host((host.as_str(), 0)).await?.filter(|a| !is_private(a.ip())).collect();
+            if public.is_empty() {
+                return Err(format!("{host} only resolves to private addresses").into());
+            }
+            Ok(Box::new(public.into_iter()) as reqwest::dns::Addrs)
+        })
     }
 }
 
@@ -109,6 +143,23 @@ mod tests {
             assert!(relay_target(bad, false).is_err(), "{bad} should be refused");
         }
         assert!(relay_target("http://localhost:4000/api", true).is_ok());
+    }
+
+    #[test]
+    fn refuses_every_non_public_range() {
+        for ip in [
+            "0.1.2.3", "224.0.0.1", "240.0.0.1", "198.18.0.5", "192.0.0.8", "100.64.0.1",
+            "::ffff:127.0.0.1", "64:ff9b::a00:1", "2002:c0a8:101::", "fec0::1", "ff02::1", "fd00::1",
+        ] {
+            assert!(is_private(ip.parse().unwrap()), "{ip} should be private");
+        }
+        for ip in ["8.8.8.8", "76.76.21.21", "2606:4700::1111"] {
+            assert!(!is_private(ip.parse().unwrap()), "{ip} is public");
+        }
+        // Odd IPv4 spellings are normalized by the URL parser before the check.
+        for bad in ["http://2130706433/", "http://0x7f.0.0.1/", "http://0177.0.0.1/", "http://[::ffff:7f00:1]/"] {
+            assert!(relay_target(bad, false).is_err(), "{bad} should be refused");
+        }
     }
 
     #[test]
