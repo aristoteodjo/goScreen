@@ -22,11 +22,15 @@ jobs:
         run: |
           version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
           tag="v$version"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "goScreen $tag" --notes \
-              "Installers for macOS (Apple Silicon / Intel), Windows and Linux. FFmpeg is required. Builds are not signed yet: on macOS, right-click the app and choose Open the first time."
+          # Drafts have no tag yet, so look them up by name in the list (the token can see drafts).
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq "map(select(.tag_name == \"$tag\")) | .[0].id // empty")
+          if [ -z "$id" ]; then
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" --jq .id \
+              -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" -f name="goScreen $tag" -F draft=true \
+              -f body="Installers for macOS (Apple Silicon / Intel), Windows and Linux. FFmpeg is required. Builds are not signed yet: on macOS, right-click the app and choose Open the first time.")
           fi
-          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$tag\") | .id")" >> "$GITHUB_OUTPUT"
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
     needs: create-release
