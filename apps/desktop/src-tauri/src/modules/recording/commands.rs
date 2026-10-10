@@ -75,6 +75,8 @@ pub struct RecordingResult {
     duration_ms: u64,
     camera_path: Option<String>,
     mic_path: Option<String>,
+    // The mic recorded nothing but silence: wrong or inactive device.
+    mic_silent: bool,
 }
 
 #[derive(Serialize)]
@@ -506,6 +508,7 @@ pub fn recording_stop(
             log::warn!("{e}");
         }
     }
+    let mic_silent = mic.as_deref().is_some_and(super::voice::is_silent);
     let file_name = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned());
     if let Some(obj) = interactions.as_object_mut() {
         obj.insert(
@@ -528,6 +531,7 @@ pub fn recording_stop(
         duration_ms,
         camera_path: camera.map(|p| p.to_string_lossy().into_owned()),
         mic_path: mic.map(|p| p.to_string_lossy().into_owned()),
+        mic_silent,
     })
 }
 

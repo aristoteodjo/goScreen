@@ -15,6 +15,7 @@ const recordingResultSchema = z.object({
   durationMs: z.number().nonnegative(),
   cameraPath: z.string().nullable(),
   micPath: z.string().nullable(),
+  micSilent: z.boolean().catch(false),
 });
 
 const captureDeviceSchema = z.object({

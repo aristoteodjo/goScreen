@@ -4,7 +4,6 @@ import {
   type Rect,
   webcamRect,
 } from "@goscreen/render-engine";
-import { useQuery } from "@tanstack/react-query";
 import {
   type PointerEvent,
   useEffect,
@@ -23,7 +22,6 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { ipc } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useCaptureSettings } from "./settings";
 import { screenElements } from "./stagePoint";
@@ -110,19 +108,11 @@ export function LiveCamera() {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const [overGlass, setOverGlass] = useState(false);
-  const cameraIndex = useCaptureSettings((s) => s.camera);
+  const name = useCaptureSettings((s) => s.camera);
   const bubble = useCaptureSettings((s) => s.bubble);
   const setBubble = useCaptureSettings((s) => s.setBubble);
   const recording = useRecording((s) => s.active);
-  const devices = useQuery({
-    queryKey: ["capture-devices"],
-    queryFn: ipc.captureDevices,
-    enabled: cameraIndex !== null,
-    staleTime: 15_000,
-  });
-  const name =
-    devices.data?.cameras.find((c) => c.index === cameraIndex)?.name ?? null;
-  const shown = cameraIndex !== null && bubble.visible;
+  const shown = name !== null && bubble.visible;
   const { stream, error: cameraError } = useCameraStream(shown ? name : null);
 
   useLayoutEffect(() => {

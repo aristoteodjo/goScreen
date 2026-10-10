@@ -16,13 +16,16 @@ type CaptureSettings = {
   separate: boolean;
   // The live webcam bubble; the editor starts from this layout.
   bubble: CameraEdit;
-  camera: number | null;
-  microphone: number | null;
+  // Devices are kept by name: AVFoundation renumbers them whenever one comes
+  // or goes (iPhone Continuity, Bluetooth, virtual mics), so a stored index
+  // ends up pointing at another, often silent, device.
+  camera: string | null;
+  microphone: string | null;
   barOpen: boolean;
   setDeviceOnly: (deviceOnly: boolean) => void;
   setSeparate: (separate: boolean) => void;
-  setCamera: (camera: number | null) => void;
-  setMicrophone: (microphone: number | null) => void;
+  setCamera: (camera: string | null) => void;
+  setMicrophone: (microphone: string | null) => void;
   setBarOpen: (open: boolean) => void;
   setBubble: (patch: Partial<CameraEdit>) => void;
 };
@@ -45,7 +48,12 @@ export const useCaptureSettings = create<CaptureSettings>()(
     }),
     {
       name: "goscreen.capture",
-      version: 1,
+      version: 2,
+      // v1 stored indexes, which may now name another device: pick again.
+      migrate: (state, version) => {
+        const s = state as Partial<CaptureSettings>;
+        return version < 2 ? { ...s, camera: null, microphone: null } : s;
+      },
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         deviceOnly: s.deviceOnly,
@@ -57,6 +65,15 @@ export const useCaptureSettings = create<CaptureSettings>()(
     },
   ),
 );
+
+/** Current index of a device chosen by name; null if it is not connected. */
+export function deviceIndex(
+  name: string | null,
+  list: { index: number; name: string }[],
+): number | null {
+  if (name === null) return null;
+  return list.find((d) => d.name === name)?.index ?? null;
+}
 
 /** The area the next capture records: the selected device, or the current view. */
 export function captureMode(): CaptureMode {

@@ -11,7 +11,7 @@ import { stageRegion } from "@/modules/studio/stageRef";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
 import { layerLog } from "./layerLog";
-import { captureMode, useCaptureSettings } from "./settings";
+import { captureMode, deviceIndex, useCaptureSettings } from "./settings";
 import { splitParts, type TakeJournal } from "./split";
 import { screenRect } from "./stagePoint";
 import { interactionLog, useRecording } from "./store";
@@ -101,6 +101,23 @@ function regionFor(mode: CaptureMode): CaptureRegion {
   return r;
 }
 
+/** Indexes of the chosen camera and microphone, looked up by name right now. */
+async function pickedDevices() {
+  const { camera, microphone } = useCaptureSettings.getState();
+  if (camera === null && microphone === null)
+    return { camera: null, microphone: null };
+  const found = await ipc.captureDevices();
+  const media = {
+    camera: deviceIndex(camera, found.cameras),
+    microphone: deviceIndex(microphone, found.microphones),
+  };
+  if (camera !== null && media.camera === null)
+    throw new Error(`The camera "${camera}" is not connected.`);
+  if (microphone !== null && media.microphone === null)
+    throw new Error(`The microphone "${microphone}" is not connected.`);
+  return media;
+}
+
 export function useCapture() {
   const navigate = useNavigate();
   const active = useRecording((s) => s.active);
@@ -110,7 +127,7 @@ export function useCapture() {
     mutationFn: async () => {
       if (useProject.getState().devices.length === 0)
         throw new Error("Add a device to record first.");
-      const { camera, microphone } = useCaptureSettings.getState();
+      const media = await pickedDevices();
       // Canvas and Scene record the view on screen; the view never changes here.
       const mode = captureMode();
       interactionLog.reset();
@@ -128,7 +145,7 @@ export function useCapture() {
       const region = regionFor(mode);
       useRecording.getState().setCapture(mode, region);
       const called = performance.now();
-      const started = await ipc.recordingStart(region, { camera, microphone });
+      const started = await ipc.recordingStart(region, media);
       return { started, called, region };
     },
     onSuccess: ({ started, called, region }) => {
@@ -219,6 +236,12 @@ export function useCapture() {
       if (!result?.videoPath) {
         toast.error("Recording finished without a video file.");
         return;
+      }
+      if (result.micSilent) {
+        toast.warning("The microphone recorded only silence", {
+          description: `"${useCaptureSettings.getState().microphone}" is listed but sends no sound (an iPhone or meeting app mic, for example). Pick another one in the capture bar.`,
+          duration: 15_000,
+        });
       }
       // Straight into the editor, like a screen recorder should.
       navigate({ to: "/editor", search: { video: result.videoPath } });

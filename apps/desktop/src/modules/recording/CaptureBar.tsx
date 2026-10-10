@@ -85,12 +85,6 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
 
   if (!open || active) return null;
 
-  const cameraName = devices.data?.cameras.find(
-    (c) => c.index === camera,
-  )?.name;
-  const micName = devices.data?.microphones.find(
-    (m) => m.index === microphone,
-  )?.name;
   const blocked = !hasDevices || (mode === "device" && !selected);
 
   return (
@@ -137,20 +131,20 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
         ) : null}
         <Divider />
         <DeviceMenu
-          label={cameraName ?? "No camera"}
+          label={camera ?? "No camera"}
           icon={camera === null ? VideoOffIcon : Video01Icon}
           title="Camera"
           loading={devices.isPending}
           value={camera}
           options={devices.data?.cameras ?? []}
-          onChange={(index) => {
-            setCamera(index);
-            if (index !== null)
+          onChange={(name) => {
+            setCamera(name);
+            if (name !== null)
               useCaptureSettings.getState().setBubble({ visible: true });
           }}
         />
         <DeviceMenu
-          label={micName ?? "No microphone"}
+          label={microphone ?? "No microphone"}
           icon={microphone === null ? MicOff01Icon : Mic01Icon}
           title="Microphone"
           loading={devices.isPending}
@@ -209,9 +203,9 @@ function DeviceMenu({
   icon: typeof Video01Icon;
   title: string;
   loading: boolean;
-  value: number | null;
+  value: string | null;
   options: { index: number; name: string }[];
-  onChange: (v: number | null) => void;
+  onChange: (v: string | null) => void;
 }) {
   return (
     <DropdownMenu>
@@ -246,12 +240,12 @@ function DeviceMenu({
           </div>
         ) : (
           <DropdownMenuRadioGroup
-            value={value === null ? NONE : String(value)}
-            onValueChange={(v) => onChange(v === NONE ? null : Number(v))}
+            value={value ?? NONE}
+            onValueChange={(v) => onChange(v === NONE ? null : v)}
           >
             <DropdownMenuRadioItem value={NONE}>None</DropdownMenuRadioItem>
             {options.map((o) => (
-              <DropdownMenuRadioItem key={o.index} value={String(o.index)}>
+              <DropdownMenuRadioItem key={o.index} value={o.name}>
                 {o.name}
               </DropdownMenuRadioItem>
             ))}

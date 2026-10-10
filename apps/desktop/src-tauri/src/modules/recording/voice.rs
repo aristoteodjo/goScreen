@@ -51,9 +51,46 @@ pub fn ensure_enhanced(mic: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Loudest sample of `volumedetect` output, in dB.
+pub fn peak_db(stderr: &str) -> Option<f64> {
+    let line = stderr.lines().find(|l| l.contains("max_volume:"))?;
+    line.split("max_volume:").nth(1)?.trim().trim_end_matches("dB").trim().parse().ok()
+}
+
+/// A mic that is listed but not live (an iPhone through Continuity, a virtual
+/// meeting device) records pure digital silence: -91 dB, the AAC floor. A
+/// quiet room is still around -60 dB, so -85 never flags a real take.
+pub const SILENT_DB: f64 = -85.0;
+
+/// True when the capture holds no sound at all; false if it cannot be read.
+pub fn is_silent(mic: &Path) -> bool {
+    let Some(bin) = ffmpeg::locate() else { return false };
+    let raw = raw_path(mic);
+    let input = if raw.is_file() { raw } else { mic.to_path_buf() };
+    let out = Command::new(bin)
+        .args(["-hide_banner", "-nostats", "-i"])
+        .arg(&input)
+        .args(["-af", "volumedetect", "-f", "null", "-"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output();
+    let Ok(out) = out else { return false };
+    peak_db(&String::from_utf8_lossy(&out.stderr)).is_some_and(|db| db <= SILENT_DB)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_peak_of_volumedetect() {
+        let log = "[Parsed_volumedetect_0 @ 0x1] mean_volume: -91.0 dB\n[Parsed_volumedetect_0 @ 0x1] max_volume: -91.0 dB\n";
+        assert_eq!(peak_db(log), Some(-91.0));
+        assert!(peak_db(log).unwrap() <= SILENT_DB);
+        assert!(peak_db("max_volume: -31.8 dB").unwrap() > SILENT_DB);
+        assert_eq!(peak_db("no stats"), None);
+    }
 
     #[test]
     fn keeps_the_raw_capture_next_to_the_take() {
