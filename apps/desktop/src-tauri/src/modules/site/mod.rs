@@ -3,7 +3,7 @@
 
 pub mod brand;
 
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 
 use url::Url;
 
@@ -84,14 +84,6 @@ pub fn dedupe(urls: impl IntoIterator<Item = Url>, home: &Url, limit: usize) -> 
     out
 }
 
-async fn fetch(client: &reqwest::Client, url: &Url) -> Option<String> {
-    let resp = client.get(url.clone()).send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
-    }
-    resp.text().await.ok()
-}
-
 /// Pages for a site tour: the sitemap when there is one, otherwise the
 /// links found on the home page and on the pages it links to.
 #[tauri::command]
@@ -101,27 +93,23 @@ pub async fn site_pages(url: String, limit: Option<usize>) -> Result<Vec<String>
         return Err("Only http and https sites can be toured.".into());
     }
     let limit = limit.unwrap_or(30).clamp(1, 100);
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .user_agent("goScreen site tour")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = brand::SiteClient::for_site(&home, "goScreen site tour")?;
 
     let mut found: Vec<Url> = Vec::new();
     if let Ok(sitemap) = home.join("/sitemap.xml") {
-        if let Some(xml) = fetch(&client, &sitemap).await {
+        if let Some(xml) = client.text(&sitemap).await {
             found.extend(sitemap_locs(&xml).iter().filter_map(|l| page_url(l, &home)));
         }
     }
     if found.is_empty() {
-        let html = fetch(&client, &home).await.ok_or_else(|| format!("Could not load {home}"))?;
+        let html = client.text(&home).await.ok_or_else(|| format!("Could not load {home}"))?;
         let first: Vec<Url> = anchor_hrefs(&html).iter().filter_map(|h| page_url(h, &home)).collect();
         found.extend(first.clone());
         for page in dedupe(first, &home, limit).into_iter().skip(1) {
             if found.len() >= limit * 3 {
                 break;
             }
-            if let Some(html) = fetch(&client, &page).await {
+            if let Some(html) = client.text(&page).await {
                 found.extend(anchor_hrefs(&html).iter().filter_map(|h| page_url(h, &page)));
             }
         }

@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use serde::Serialize;
 use url::Url;
 
-use crate::modules::proxy::relay::{is_local_origin, PublicResolver};
+use crate::modules::proxy::relay::{is_local_origin, relay_target, PublicResolver};
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]
 pub struct BrandColors {
@@ -484,18 +484,39 @@ pub fn sections_of(html: &str) -> Vec<Section> {
 
 // ---------- commands ----------
 
-fn client_for(url: &Url) -> Result<reqwest::Client, String> {
-    let mut b = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent("goScreen site reader");
-    if !is_local_origin(&url.origin().ascii_serialization()) {
-        b = b.dns_resolver(Arc::new(PublicResolver));
-    }
-    b.build().map_err(|e| e.to_string())
+/// HTTP client for reading a site. A public site may only reach public
+/// addresses: the resolver drops private IPs, and IP literals (which skip DNS),
+/// including those reached by redirection, are checked like relay targets.
+pub(crate) struct SiteClient {
+    client: reqwest::Client,
+    allow_local: bool,
 }
 
-async fn get_text(client: &reqwest::Client, url: &Url) -> Option<String> {
-    let resp = client.get(url.clone()).send().await.ok()?;
-    resp.status().is_success().then_some(())?;
-    resp.text().await.ok()
+impl SiteClient {
+    pub(crate) fn for_site(url: &Url, user_agent: &str) -> Result<Self, String> {
+        let allow_local = is_local_origin(&url.origin().ascii_serialization());
+        let policy = reqwest::redirect::Policy::custom(move |attempt| {
+            if attempt.previous().len() >= 10 {
+                attempt.error("too many redirects")
+            } else if relay_target(attempt.url().as_str(), allow_local).is_err() {
+                attempt.error("redirect to a local address")
+            } else {
+                attempt.follow()
+            }
+        });
+        let mut b = reqwest::Client::builder().timeout(Duration::from_secs(10)).user_agent(user_agent).redirect(policy);
+        if !allow_local {
+            b = b.dns_resolver(Arc::new(PublicResolver));
+        }
+        Ok(Self { client: b.build().map_err(|e| e.to_string())?, allow_local })
+    }
+
+    pub(crate) async fn text(&self, url: &Url) -> Option<String> {
+        relay_target(url.as_str(), self.allow_local).ok()?;
+        let resp = self.client.get(url.clone()).send().await.ok()?;
+        resp.status().is_success().then_some(())?;
+        resp.text().await.ok()
+    }
 }
 
 fn parse_http(url: &str) -> Result<Url, String> {
@@ -506,19 +527,19 @@ fn parse_http(url: &str) -> Result<Url, String> {
 #[tauri::command]
 pub async fn site_brand(url: String) -> Result<Brand, String> {
     let home = parse_http(&url)?;
-    let client = client_for(&home)?;
-    let html = get_text(&client, &home).await.ok_or_else(|| format!("Could not load {home}"))?;
+    let client = SiteClient::for_site(&home, "goScreen site reader")?;
+    let html = client.text(&home).await.ok_or_else(|| format!("Could not load {home}"))?;
     let meta = page_meta(&html);
     let mut css = String::new();
     for href in meta.stylesheets.iter().take(6) {
-        if let Some(text) = home.join(href).ok().as_ref().map(|u| get_text(&client, u)) {
+        if let Some(text) = home.join(href).ok().as_ref().map(|u| client.text(u)) {
             css.push_str(&text.await.unwrap_or_default());
             css.push('\n');
         }
     }
     let logo = meta.icons.first().and_then(|h| home.join(h).ok()).or_else(|| home.join("/favicon.ico").ok());
     let logo_svg = match &logo {
-        Some(u) if u.path().ends_with(".svg") => get_text(&client, u).await,
+        Some(u) if u.path().ends_with(".svg") => client.text(u).await,
         _ => None,
     };
     Ok(brand_from(meta, &css, logo_svg.as_deref(), logo.map(|u| u.to_string())))
@@ -527,7 +548,7 @@ pub async fn site_brand(url: String) -> Result<Brand, String> {
 #[tauri::command]
 pub async fn site_sections(url: String) -> Result<Vec<Section>, String> {
     let page = parse_http(&url)?;
-    let html = get_text(&client_for(&page)?, &page).await.ok_or_else(|| format!("Could not load {page}"))?;
+    let html = SiteClient::for_site(&page, "goScreen site reader")?.text(&page).await.ok_or_else(|| format!("Could not load {page}"))?;
     Ok(sections_of(&html))
 }
 
@@ -594,5 +615,15 @@ mod tests {
         assert_eq!(resolve("var(--missing)", &vars), None);
         assert_eq!(decode_entities("D&#x27;OR &amp; co &#39;x&#39; & y"), "D'OR & co 'x' & y");
         assert_eq!(text_of("<p>a<!-- c --><b>b</b><script>x</script></p>"), "a b");
+    }
+
+    #[tokio::test]
+    async fn a_public_site_cannot_reach_local_addresses() {
+        let public = SiteClient::for_site(&Url::parse("https://shop.example/").unwrap(), "test").unwrap();
+        for target in ["http://127.0.0.1:1/x.css", "http://[::1]:1/", "http://10.0.0.1/", "http://localhost:1/"] {
+            assert_eq!(public.text(&Url::parse(target).unwrap()).await, None, "{target}");
+        }
+        assert!(!public.allow_local);
+        assert!(SiteClient::for_site(&Url::parse("http://localhost:3000/").unwrap(), "test").unwrap().allow_local);
     }
 }
