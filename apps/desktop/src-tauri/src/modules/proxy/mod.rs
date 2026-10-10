@@ -1,5 +1,5 @@
 mod bridge;
-mod relay;
+pub(crate) mod relay;
 mod rewrite;
 pub mod server;
 

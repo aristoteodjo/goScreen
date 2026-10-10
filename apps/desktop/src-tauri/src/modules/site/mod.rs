@@ -1,6 +1,8 @@
 //! Site tour discovery: which pages of a site to visit, from its sitemap and
 //! its own links. Parsing is pure; only `site_pages` touches the network.
 
+pub mod brand;
+
 use std::{collections::HashSet, time::Duration};
 
 use url::Url;

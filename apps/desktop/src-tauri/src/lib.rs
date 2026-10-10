@@ -33,6 +33,8 @@ pub fn run() {
             media::edit_save,
             media::recordings_list,
             modules::site::site_pages,
+            modules::site::brand::site_brand,
+            modules::site::brand::site_sections,
             export::export_begin,
             export::export_frame,
             export::export_finish,
