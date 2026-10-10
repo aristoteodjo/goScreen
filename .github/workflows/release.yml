@@ -8,17 +8,38 @@ on:
 permissions: {}
 
 jobs:
-  build:
+  create-release:
+    runs-on: ubuntu-latest
     permissions:
-      contents: write # creates the draft release and uploads installers
+      contents: write # creates the draft release
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          tag="v$version"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "goScreen $tag" --notes \
+              "Installers for macOS (Apple Silicon / Intel), Windows and Linux. FFmpeg is required. Builds are not signed yet: on macOS, right-click the app and choose Open the first time."
+          fi
+          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$tag\") | .id")" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: create-release
+    permissions:
+      contents: write # uploads installers to the draft release
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-15
+          - platform: macos-26
             args: --target aarch64-apple-darwin
             rust-targets: aarch64-apple-darwin
-          - platform: macos-15
+          - platform: macos-26
             args: --target x86_64-apple-darwin
             rust-targets: x86_64-apple-darwin
           - platform: windows-latest
@@ -57,11 +78,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseName: goScreen ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseBody: |
-            Installers for macOS (Apple Silicon / Intel), Windows and Linux.
-            FFmpeg is required. Builds are not signed yet: on macOS, right-click the app and choose Open the first time.
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.id }}
           args: ${{ matrix.args }}
