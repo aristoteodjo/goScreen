@@ -8,8 +8,9 @@ Device Studio : n'importe quel device + n'importe quelle expérience web -> vid�
 Le Device Engine est le coeur ; recording, caméra, timeline, export et cloud se construisent autour.
 
 - Gestionnaire de paquets : **pnpm** uniquement (monorepo `pnpm-workspace.yaml`).
-- Serveurs de dev : **Portly** (`portly status`), projet `goScreen`, serveurs `desktop` (:1430) et `web` (:3100).
-- Base de données : `docker compose up -d` (Postgres 17 sur :5434).
+- Serveurs de dev : **Portly** (`portly status`), projet `goScreen`, serveur `desktop` (:1430).
+- Licence MIT, projet open source : rien ne dépend d'un compte ni d'un serveur.
+- Release : un tag `v*` lance `.github/workflows/release.yml` (macOS arm64/x64, Windows, Linux) et crée une release brouillon.
 
 ## Arborescence
 
@@ -17,14 +18,12 @@ Le Device Engine est le coeur ; recording, caméra, timeline, export et cloud se
 apps/
   desktop/            Tauri 2 + Vite + React 19 + TanStack Router/Query + shadcn
     src-tauri/        Rust : proxy de preview, capture FFmpeg (tout accès OS)
-  web/                SaaS : TanStack Start + better-auth + TanStack Form + shadcn
 packages/
   device-registry/    Définitions JSON validées par zod + Device Packs
   device-engine/      Fonctions pures : géométrie, orientation, safe area, layout, styles
   content-source/     Contrat DeviceContentSource : d'où viennent les pixels d'un frame (web, android…)
   android-source/     Modèle AndroidDevice, provider ADB (via transport injecté), gestes, choix de profil
   render-engine/      Éditeur, cœur pur : EditState, caméra/zoom, touch rings, timeline, composeFrame
-  entitlements/       Plans -> droits. Seul endroit qui connaît les plans.
   campaign/           Brief de campagne (zod), catalogue de recettes, choix des 8 propositions (pur)
 ```
 
@@ -34,8 +33,6 @@ packages/
   (`device-engine`, `proxy/rewrite.rs`, `recording/capture.rs`) ; commandes Tauri et composants React restent fins.
 - Le Device Engine ne dépend ni de React ni du DOM, et ne connaît rien de l'éditeur vidéo.
 - Aucun device codé en dur : tout passe par `createRegistry([...packs])`. Un pack ultérieur écrase un id existant.
-- Jamais de `if (plan === "pro")` : utiliser `can*()` de `@goscreen/entitlements`.
-- Le champ `plan` de l'utilisateur a `input: false` dans better-auth : le client ne peut jamais l'écrire.
 - Mutations React Query : utiliser `isPending`, jamais de `useState` de chargement ; vérifier la forme des données dans `onSuccess`.
 - Imports frontend en `@/...`. Composants `components/ui/` générés par shadcn : ne pas éditer à la main
   (exception : le registre génère parfois `from "cn"`, à remplacer par `@/lib/utils`).
@@ -225,7 +222,6 @@ n'en sait rien.
 
 - Frontend : `pnpm -r check-types`, `pnpm -r test`, `pnpm lint`
 - Rust : `cd apps/desktop/src-tauri && cargo test` (via `portly temp`)
-- Web : `pnpm --filter @goscreen/web auth:migrate` après un changement de schéma better-auth
 
 ## Plan : vidéos produit automatiques, pilotées par la campagne
 
@@ -299,7 +295,7 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 - `buildProposals(ctx) -> Proposal[8]` : **score** chaque couple (recette, format) selon l'objectif, les canaux et
   les rôles disponibles (pas de « Prix + CTA » sans section `pricing`), puis garde les 8 meilleurs, variés.
 - Textes : accroche, bénéfices et CTA viennent de la campagne, sinon des sections ; langue = `campaign.language`.
-  Point d'extension `CopyProvider` (gabarits locaux par défaut, rédaction IA plus tard via le web).
+  Point d'extension `CopyProvider` (gabarits locaux par défaut, rédaction IA plus tard).
 - Zooms sur les **repères** du rôle visé (remplace `buildAutoZooms` dans ces montages).
 - Catalogue aligné sur les genres de référence. MVP : **Product launch**, **Product demo / walkthrough**,
   **Video ad verticale**. Puis : **Explainer** (problème -> solution, voix off), **Teaser** rythmé, **Integration**,
@@ -341,5 +337,4 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 1. Éditeur : curseur pour les sources web, motion blur, transitions entre clips, crop ; export plus rapide.
 2. Android : drag en direct, audio (`AndroidAudioProvider`), « Synchronize Interactions » multi-device.
 3. `project.json` versionné, avec migrations.
-4. Connexion desktop -> web (jeton dans le keychain, entitlements vérifiés côté serveur).
-5. Fichier HTML local, browser chrome (Safari / Chrome Android), status bar custom.
+4. Fichier HTML local, browser chrome (Safari / Chrome Android), status bar custom.

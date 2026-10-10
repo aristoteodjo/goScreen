@@ -8,11 +8,22 @@ goScreen is a desktop device studio. Open a website or a running Android app ins
 frames, record yourself using it, then turn the take into a product video with smart zooms, touch
 indicators, webcam, voice-over, music and titles, all without leaving the app.
 
-[Features](#features) · [Quick start](#quick-start) · [Architecture](#architecture) · [Plans](#plans) · [Roadmap](#roadmap)
+[Download](#download) · [Features](#features) · [Quick start](#quick-start) · [Architecture](#architecture) · [Roadmap](#roadmap)
+
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Release](https://github.com/aristoteodjo/goScreen/actions/workflows/release.yml/badge.svg)](https://github.com/aristoteodjo/goScreen/actions/workflows/release.yml)
 
 </div>
 
 ---
+
+## Download
+
+Prebuilt installers for **macOS** (Apple Silicon and Intel, `.dmg`), **Windows** (`.msi` / `.exe`) and
+**Linux** (`.AppImage`, `.deb`, `.rpm`) are attached to each [GitHub release](https://github.com/aristoteodjo/goScreen/releases).
+goScreen is free and open source (MIT); it needs no account and no server.
+
+FFmpeg must be installed (`brew install ffmpeg`, `winget install ffmpeg`, `apt install ffmpeg`). The builds are
+not signed yet: on macOS, right-click the app and choose **Open** the first time.
 
 ## Why goScreen
 
@@ -79,7 +90,6 @@ video editor where you rebuild zooms and taps by hand. goScreen merges them:
 | pnpm | 10.x | the only supported package manager |
 | Rust | stable | for the Tauri desktop app ([Tauri prerequisites](https://tauri.app/start/prerequisites/)) |
 | FFmpeg | recent | looked up in `PATH`, `/opt/homebrew/bin`, `/usr/local/bin` |
-| Docker | any | only for the web app's Postgres |
 | Android SDK platform-tools | optional | for Android sources (`adb`) |
 
 ### Install
@@ -101,15 +111,6 @@ development). If recording fails after a few seconds, goScreen tells you which a
 opens the right System Settings panel.
 
 Recordings are saved to `~/Movies/goScreen/`, screenshots to `~/Pictures/goScreen/`.
-
-### Web app (accounts and subscriptions)
-
-```bash
-docker compose up -d                       # Postgres 17 on :5434
-cp apps/web/.env.example apps/web/.env     # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-pnpm --filter @goscreen/web auth:migrate
-pnpm dev:web                               # http://localhost:3100
-```
 
 ### Checks
 
@@ -139,7 +140,6 @@ thin (*functional core, imperative shell*).
 apps/
   desktop/            Tauri 2 + Vite + React 19 + TanStack Router/Query + shadcn/ui
     src-tauri/        Rust: preview proxy, native capture, FFmpeg, ADB, export, site reader
-  web/                SaaS: TanStack Start + better-auth + Postgres
 packages/
   device-registry/    Device definitions (JSON, validated by zod) and device packs
   device-engine/      Pure geometry, orientation, safe areas, layout, styles
@@ -147,7 +147,6 @@ packages/
   android-source/     Android device model, ADB provider, gestures, profile matching
   render-engine/      Editor core: edit state, camera/zoom, touches, timeline, composeFrame
   campaign/           Campaign brief model and video proposals
-  entitlements/       Plans → rights. The only place that knows about plans.
 ```
 
 Key design choices:
@@ -172,39 +171,19 @@ Drop a JSON file in `packages/device-registry/src/devices/<brand>/` following th
 cutout, status bar, user agent, `tier`), import it in `builtin.ts`, and run `pnpm test`. Set `verified: true`
 only once the dimensions have been checked against the manufacturer's specs.
 
-## Plans
-
-goScreen is built in the open, with a hosted offer for professionals and teams.
-
-| | **Free** | **Pro** | **Team** | **Enterprise** |
-|---|---|---|---|---|
-| Price | $0 | **$19 / month** or **$149 / year** | Contact us | Contact us |
-| Projects | 3 | Unlimited | Unlimited | Unlimited |
-| Max export | 720p | 4K | 4K | 4K |
-| Watermark | Yes | No | No | No |
-| Premium devices | — | ✅ | ✅ | ✅ |
-| Premium templates | — | ✅ | ✅ | ✅ |
-| Cloud sync | — | ✅ | ✅ | ✅ |
-| Share links | — | ✅ | ✅ | ✅ |
-| Team workspace | — | — | ✅ | ✅ |
-
-A Pro trial gives the full Pro plan. Full details in [**PRICING.md**](PRICING.md).
-
 ## Roadmap
 
 1. Automatic product videos driven by a campaign brief (site reader → recipes → 8 proposals).
 2. Editor: cursor for web sources, motion blur, transitions between clips, crop, faster export.
 3. Android: live drag, device audio, synchronized interactions across devices.
 4. Versioned `project.json` with migrations.
-5. Desktop ↔ web connection (token in the system keychain, entitlements checked server-side).
-6. Local HTML files, browser chrome (Safari / Chrome Android), custom status bar.
+5. Local HTML files, browser chrome (Safari / Chrome Android), custom status bar.
 
 ## Contributing
 
-Issues and pull requests are welcome. Before you open a PR:
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Before you open a PR:
 
-- read [`GOSCREEN.md`](GOSCREEN.md) and follow its rules (pure logic in packages, no hard-coded devices,
-  never `if (plan === "pro")`, always `can*()` from `@goscreen/entitlements`);
+- read [`GOSCREEN.md`](GOSCREEN.md) and follow its rules (pure logic in packages, no hard-coded devices);
 - don't hand-edit generated shadcn components in `components/ui/`;
 - make sure `pnpm check-types`, `pnpm test`, `pnpm lint` and `cargo test` pass.
 
@@ -216,7 +195,7 @@ origin's data, please report it privately to **oaristote@gmail.com** rather than
 
 ## License
 
-No license has been chosen yet. Until a `LICENSE` file is added, all rights are reserved by the author.
+[MIT](LICENSE) © 2026 Aristote O.
 
 Device names (iPhone, iPad, MacBook, iMac, Pixel, Galaxy…) are trademarks of their respective owners and are
 used only to describe the device frames. goScreen is not affiliated with Apple, Google or Samsung.

@@ -1,6 +1,7 @@
 {
   "name": "goscreen",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.16.1",
   "engines": {
@@ -8,7 +9,6 @@
   },
   "scripts": {
     "dev:desktop": "pnpm --filter @goscreen/desktop tauri dev",
-    "dev:web": "pnpm --filter @goscreen/web dev",
     "check-types": "pnpm -r check-types",
     "test": "pnpm -r test",
     "lint": "biome lint .",
