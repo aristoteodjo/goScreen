@@ -1,6 +1,6 @@
-import { formatsFor, type Campaign, type Format } from "./campaign";
+import { type Campaign, type Format, formatsFor } from "./campaign";
 import { feasible, RECIPES, type Recipe } from "./recipes";
-import { rolesOf, type Role, type Site } from "./site";
+import { type Role, rolesOf, type Site } from "./site";
 
 /** Why a proposal was chosen, as codes the UI translates. */
 export type Reason =
@@ -76,7 +76,10 @@ const SAME_PAIR = 4;
  * then picked greedily with penalties for repeating a recipe or a format. When
  * there are fewer pairs than `count`, a pair comes back as another variant.
  */
-export function buildProposals({ site, campaign, recipes = RECIPES }: ProposalContext, count = 8): Proposal[] {
+export function buildProposals(
+  { site, campaign, recipes = RECIPES }: ProposalContext,
+  count = 8,
+): Proposal[] {
   const roles = rolesOf(site.sections);
   const formats = formatsFor(campaign.channels);
   const candidates = recipes
@@ -84,7 +87,11 @@ export function buildProposals({ site, campaign, recipes = RECIPES }: ProposalCo
     .flatMap((recipe) =>
       formats
         .filter((f) => recipe.formats.includes(f))
-        .map((format) => ({ recipe, format, ...scoreCandidate(recipe, format, roles, campaign) })),
+        .map((format) => ({
+          recipe,
+          format,
+          ...scoreCandidate(recipe, format, roles, campaign),
+        })),
     );
   if (candidates.length === 0) return [];
 
@@ -98,7 +105,8 @@ export function buildProposals({ site, campaign, recipes = RECIPES }: ProposalCo
         c.score -
         SAME_RECIPE * times((p) => p.recipe.id === c.recipe.id) -
         SAME_FORMAT * times((p) => p.format === c.format) -
-        SAME_PAIR * times((p) => p.recipe.id === c.recipe.id && p.format === c.format);
+        SAME_PAIR *
+          times((p) => p.recipe.id === c.recipe.id && p.format === c.format);
       if (value > bestValue) {
         best = c;
         bestValue = value;
@@ -106,7 +114,12 @@ export function buildProposals({ site, campaign, recipes = RECIPES }: ProposalCo
     }
     if (!best) break;
     const chosen = best;
-    picked.push({ ...chosen, variant: times((p) => p.recipe.id === chosen.recipe.id && p.format === chosen.format) });
+    picked.push({
+      ...chosen,
+      variant: times(
+        (p) => p.recipe.id === chosen.recipe.id && p.format === chosen.format,
+      ),
+    });
   }
   return picked;
 }

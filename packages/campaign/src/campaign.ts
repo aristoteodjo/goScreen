@@ -1,14 +1,36 @@
 import { z } from "zod";
 
-import { roleSchema, rolesOf, type Role, type Site } from "./site";
+import { type Role, roleSchema, rolesOf, type Site } from "./site";
 
-export const OBJECTIVES = ["launch", "acquisition", "promo", "feature", "recruit-supply", "awareness"] as const;
+export const OBJECTIVES = [
+  "launch",
+  "acquisition",
+  "promo",
+  "feature",
+  "recruit-supply",
+  "awareness",
+] as const;
 export type Objective = (typeof OBJECTIVES)[number];
 
-export const TONES = ["energetic", "calm", "premium", "playful", "corporate"] as const;
+export const TONES = [
+  "energetic",
+  "calm",
+  "premium",
+  "playful",
+  "corporate",
+] as const;
 export type Tone = (typeof TONES)[number];
 
-export const CHANNELS = ["youtube", "website", "linkedin", "instagram-reel", "instagram-feed", "tiktok", "x", "booth"] as const;
+export const CHANNELS = [
+  "youtube",
+  "website",
+  "linkedin",
+  "instagram-reel",
+  "instagram-feed",
+  "tiktok",
+  "x",
+  "booth",
+] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export const FORMATS = ["16:9", "9:16", "1:1", "4:5"] as const;
@@ -32,20 +54,30 @@ export const campaignSchema = z.object({
   audience: z.string().catch(""),
   tone: z.enum(TONES).catch("energetic"),
   offer: z.string().catch(""),
-  cta: z.object({ label: z.string(), url: z.string() }).catch({ label: "", url: "" }),
+  cta: z
+    .object({ label: z.string(), url: z.string() })
+    .catch({ label: "", url: "" }),
   channels: z.array(z.enum(CHANNELS)).min(1).catch(["youtube"]),
   language: z.string().min(2).catch("en"),
   /** Target duration in seconds; null lets each recipe pick. */
   durationHint: z.number().positive().nullable().catch(null),
-  focus: z.object({ pages: z.array(z.string()), roles: z.array(roleSchema) }).catch({ pages: [], roles: [] }),
+  focus: z
+    .object({ pages: z.array(z.string()), roles: z.array(roleSchema) })
+    .catch({ pages: [], roles: [] }),
   brand: z
-    .object({ primary: z.string().optional(), logo: z.string().optional(), font: z.string().optional() })
+    .object({
+      primary: z.string().optional(),
+      logo: z.string().optional(),
+      font: z.string().optional(),
+    })
     .catch({}),
 });
 export type Campaign = z.infer<typeof campaignSchema>;
 
 export function parseCampaign(raw: unknown): Campaign {
-  return campaignSchema.parse(typeof raw === "object" && raw !== null ? raw : {});
+  return campaignSchema.parse(
+    typeof raw === "object" && raw !== null ? raw : {},
+  );
 }
 
 /** Formats to produce, in channel order, without duplicates. */
@@ -62,17 +94,25 @@ const CTA_LABELS: Record<string, string> = {
 };
 
 /** Roles worth showing, in the order a viewer expects them. */
-const FOCUS_ORDER: Role[] = ["how-it-works", "features", "listing", "stats", "pricing", "testimonials"];
+const FOCUS_ORDER: Role[] = [
+  "how-it-works",
+  "features",
+  "listing",
+  "stats",
+  "pricing",
+  "testimonials",
+];
 
 /** A brief filled from what the site says; the client corrects it. */
 export function defaultCampaign(site: Site): Campaign {
   const roles = rolesOf(site.sections);
   const language = (site.brand.lang ?? "en").slice(0, 2).toLowerCase();
   return parseCampaign({
-    objective: roles.has("pricing") || roles.has("cta") ? "acquisition" : "awareness",
+    objective:
+      roles.has("pricing") || roles.has("cta") ? "acquisition" : "awareness",
     audience: "",
     tone: "energetic",
-    offer: site.brand.description ?? site.brand.tagline ?? "",
+    offer: site.brand.tagline ?? site.brand.description ?? "",
     cta: { label: CTA_LABELS[language] ?? CTA_LABELS.en, url: site.url },
     channels: ["youtube", "instagram-reel", "linkedin"],
     language,

@@ -16,7 +16,10 @@ export const ROLES = [
 export const roleSchema = z.enum(ROLES);
 export type Role = z.infer<typeof roleSchema>;
 
-const opt = z.string().nullish().transform((v) => v ?? undefined);
+const opt = z
+  .string()
+  .nullish()
+  .transform((v) => v ?? undefined);
 
 export const brandSchema = z.object({
   name: z.string(),

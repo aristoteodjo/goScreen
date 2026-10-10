@@ -272,8 +272,7 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 - Sauvé avec le projet (`<stem>.campaign.json`), parse champ par champ avec repli.
 - **Fait** : schéma, `defaultCampaign`, `formatsFor`, catalogue `RECIPES` (métadonnées : objectifs, formats, `needs`,
   `needsAny`, `wants`, durée du genre) et `buildProposals` (score puis choix glouton avec pénalités de répétition ;
-  variantes quand il y a moins de couples que de cases). Le `build(ctx) -> EditState` de chaque recette reste à faire
-  dans render-engine (tranche C).
+  variantes quand il y a moins de couples que de cases).
 
 ### Tranche A : lecture du site (Rust, pur + testé)
 - `modules/site/brand.rs` : `site_brand(url)` -> `{ name, tagline, description, lang, colors: { background,
@@ -306,6 +305,16 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
   **Video ad verticale**. Puis : **Explainer** (problème -> solution, voix off), **Teaser** rythmé, **Integration**,
   **Booth video** (boucle muette), **Use case** (une section `listing` / `stats` mise en scène), Prix + CTA.
   Chaque recette suit la structure de son genre ; la campagne choisit lequel et règle durée, ton et textes.
+
+- **Fait** (`packages/campaign/src/build/`, qui dépend de render-engine, et jamais l'inverse) : chaque recette
+  déclare sa `structure` (cartes `hook | name | walkthrough | cta` et séquences de plans par rôles, avec poids,
+  vitesse, légendes numérotées ou non) ; un seul moteur `buildEdit(proposal, ctx)` la transforme en `EditState`
+  valide (`parseEditState`) à la durée du genre (`targetDuration` : l'indice du brief borné au genre).
+  `scenesFrom` place les sections dans la prise (sections d'une page réparties sur son chapitre, en attendant les
+  `marks`) ; `pickScenes` complète avec les autres sections quand un rôle manque. Le ton règle transitions,
+  animations du texte et durée des cartes ; couleurs normalisées en `#rrggbb` (`toHex`), texte lisible
+  (`readableOn`). `layers: null` : le shell place les devices (`initialLayers`) quand il connaît la taille source.
+  Reste : zooms sur les vrais repères (journal v4), musique, voix off.
 
 ### Tranche D : bouton « Propositions » (desktop)
 - URL -> lecture du site -> formulaire de brief prérempli (objectif, cible, offre, CTA, canaux) -> tour

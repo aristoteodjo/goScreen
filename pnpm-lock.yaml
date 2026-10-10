@@ -266,6 +266,9 @@ importers:
 
   packages/campaign:
     dependencies:
+      '@goscreen/render-engine':
+        specifier: workspace:*
+        version: link:../render-engine
       zod:
         specifier: ^4.6.5
         version: 4.6.5

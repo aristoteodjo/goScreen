@@ -1,10 +1,11 @@
+import type { Beat } from "./build/compose";
 import type { Format, Objective } from "./campaign";
 import type { Role } from "./site";
 
 /**
  * A montage structure, after the genres of the reference playlist. It knows no
  * site and no campaign: only which objectives it serves, which formats it fits
- * and which section roles it needs. Building the EditState lives in render-engine.
+ * and which section roles it needs. `buildEdit` (build/compose.ts) turns it into an EditState.
  */
 export interface Recipe {
   id: string;
@@ -20,7 +21,27 @@ export interface Recipe {
   wants: Role[];
   /** Usual length of the genre, in seconds. */
   duration: [min: number, max: number];
+  /** Order of scenes, after the genre of the reference videos. */
+  structure: Beat[];
 }
+
+const card = (
+  text: "hook" | "name" | "cta" | "walkthrough",
+  seconds: number,
+): Beat => ({ kind: "card", text, seconds });
+const shots = (
+  roles: Role[],
+  count: number,
+  weight: number,
+  extra: Partial<Extract<Beat, { kind: "shots" }>> = {},
+): Beat => ({
+  kind: "shots",
+  roles,
+  count,
+  weight,
+  captions: true,
+  ...extra,
+});
 
 const ALL: Format[] = ["16:9", "9:16", "1:1", "4:5"];
 const SOCIAL: Format[] = ["9:16", "1:1", "4:5"];
@@ -35,6 +56,14 @@ export const RECIPES: Recipe[] = [
     needsAny: [],
     wants: ["features", "stats", "cta"],
     duration: [45, 70],
+    structure: [
+      card("hook", 3),
+      card("name", 2.2),
+      shots(["hero"], 1, 1, { captions: false }),
+      shots(["features", "how-it-works", "listing", "pricing"], 3, 3),
+      shots(["stats", "testimonials"], 1, 1),
+      card("cta", 3.5),
+    ],
   },
   {
     id: "product-demo",
@@ -45,6 +74,14 @@ export const RECIPES: Recipe[] = [
     needsAny: ["how-it-works", "features", "listing"],
     wants: ["how-it-works", "features", "listing"],
     duration: [40, 90],
+    structure: [
+      card("walkthrough", 2.5),
+      shots(["how-it-works", "features", "listing"], 4, 1, {
+        numbered: true,
+        chronological: true,
+      }),
+      card("cta", 3),
+    ],
   },
   {
     id: "video-ad",
@@ -55,6 +92,13 @@ export const RECIPES: Recipe[] = [
     needsAny: [],
     wants: ["pricing", "stats", "cta"],
     duration: [15, 30],
+    structure: [
+      card("hook", 1.8),
+      shots(["hero", "pricing", "listing", "stats", "features"], 3, 1, {
+        speed: 1.25,
+      }),
+      card("cta", 2.6),
+    ],
   },
   {
     id: "explainer",
@@ -65,6 +109,13 @@ export const RECIPES: Recipe[] = [
     needsAny: ["how-it-works", "features"],
     wants: ["how-it-works", "features", "stats", "testimonials"],
     duration: [60, 120],
+    structure: [
+      card("hook", 3.5),
+      card("name", 2.5),
+      shots(["how-it-works", "features"], 3, 3),
+      shots(["stats", "testimonials"], 1, 1),
+      card("cta", 4),
+    ],
   },
   {
     id: "teaser",
@@ -75,6 +126,14 @@ export const RECIPES: Recipe[] = [
     needsAny: [],
     wants: ["stats"],
     duration: [15, 30],
+    structure: [
+      card("hook", 2),
+      shots(["hero", "features", "listing", "stats"], 3, 1, {
+        speed: 1.5,
+        captions: false,
+      }),
+      card("name", 2.5),
+    ],
   },
   {
     id: "booth-loop",
@@ -85,6 +144,11 @@ export const RECIPES: Recipe[] = [
     needsAny: ["listing", "features", "stats"],
     wants: ["listing", "stats"],
     duration: [30, 60],
+    structure: [
+      card("name", 3),
+      shots(["listing", "features", "stats"], 4, 1),
+      card("hook", 3),
+    ],
   },
   {
     id: "use-case",
@@ -95,6 +159,12 @@ export const RECIPES: Recipe[] = [
     needsAny: ["listing", "stats"],
     wants: ["listing", "stats", "testimonials"],
     duration: [30, 60],
+    structure: [
+      card("hook", 2.5),
+      shots(["listing", "stats"], 2, 2),
+      shots(["testimonials", "how-it-works"], 1, 1),
+      card("cta", 3),
+    ],
   },
   {
     id: "social-proof",
@@ -105,6 +175,11 @@ export const RECIPES: Recipe[] = [
     needsAny: ["testimonials", "stats"],
     wants: ["testimonials", "stats"],
     duration: [20, 45],
+    structure: [
+      card("hook", 2.2),
+      shots(["testimonials", "stats"], 2, 1),
+      card("cta", 3),
+    ],
   },
   {
     id: "how-it-works",
@@ -115,6 +190,12 @@ export const RECIPES: Recipe[] = [
     needsAny: [],
     wants: ["cta"],
     duration: [30, 60],
+    structure: [
+      card("walkthrough", 2.5),
+      shots(["how-it-works"], 2, 2, { numbered: true, chronological: true }),
+      shots(["cta", "hero"], 1, 1, { captions: false }),
+      card("cta", 3),
+    ],
   },
   {
     id: "pricing-cta",
@@ -125,6 +206,12 @@ export const RECIPES: Recipe[] = [
     needsAny: [],
     wants: ["cta", "testimonials"],
     duration: [15, 30],
+    structure: [
+      card("hook", 2),
+      shots(["pricing"], 1, 2),
+      shots(["testimonials", "stats"], 1, 1),
+      card("cta", 3),
+    ],
   },
 ];
 
