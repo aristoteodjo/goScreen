@@ -1,4 +1,5 @@
 import { activeZoom, autoFocus, cameraAt } from "./camera";
+import { cursorAt } from "./cursor";
 import {
   layerPoint,
   placeLayer,
@@ -127,5 +128,9 @@ export function composeFrame(
   const touches =
     edit.touch.style === "none" ? [] : touchesAt(timeline.presses, t, toOutput);
 
-  return { output, content, layers, camera, touches, webcam };
+  const cursor = edit.cursor.visible
+    ? cursorAt(timeline.pointers, timeline.presses, t, toOutput)
+    : null;
+
+  return { output, content, layers, camera, touches, cursor, webcam };
 }

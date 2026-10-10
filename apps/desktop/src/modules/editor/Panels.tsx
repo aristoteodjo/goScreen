@@ -1,4 +1,5 @@
 import {
+  buildAutoZooms,
   type EditBackground,
   type EditState,
   MIC_ASSET,
@@ -37,7 +38,7 @@ const PANELS: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] = [
   { id: "proposals", label: "Proposals", icon: AiMagicIcon },
   { id: "devices", label: "Devices", icon: SmartPhone01Icon },
   { id: "background", label: "Background", icon: PaintBoardIcon },
-  { id: "touch", label: "Touch indicators", icon: TouchInteraction01Icon },
+  { id: "touch", label: "Cursor & clicks", icon: TouchInteraction01Icon },
   { id: "zoom", label: "Zoom", icon: ZoomInAreaIcon },
   { id: "camera", label: "Camera", icon: WebcamIcon },
   { id: "audio", label: "Audio", icon: VolumeHighIcon },
@@ -247,19 +248,45 @@ const TOUCH_COLORS = [
 
 function TouchPanel() {
   const touch = useEdit((s) => s.edit.touch);
+  const cursor = useEdit((s) => s.edit.cursor);
   const taps = useSessionTaps();
   const change = useChange();
   const set = (patch: Partial<EditState["touch"]>, key?: string) =>
     change((ed) => ({ ...ed, touch: { ...ed.touch, ...patch } }), key);
+  const setCursor = (patch: Partial<EditState["cursor"]>, key?: string) =>
+    change((ed) => ({ ...ed, cursor: { ...ed.cursor, ...patch } }), key);
 
   return (
     <>
       <Section
-        title="Touch indicators"
+        title="Cursor"
+        hint="Drawn from the recorded mouse moves, smoothed; it shrinks on each click."
+      >
+        <div className="flex items-center justify-between text-sm">
+          <span>Show the cursor</span>
+          <Switch
+            checked={cursor.visible}
+            onCheckedChange={(visible) => setCursor({ visible })}
+          />
+        </div>
+        {cursor.visible ? (
+          <SliderRow
+            value={cursor.size}
+            min={12}
+            max={96}
+            step={1}
+            format={(v) => `${v}px`}
+            onChange={(size) => setCursor({ size }, "cursor-size")}
+            onReset={() => setCursor({ size: 28 })}
+          />
+        ) : null}
+      </Section>
+      <Section
+        title="Click indicators"
         hint={
           taps > 0
-            ? `${taps} tap${taps > 1 ? "s" : ""} recorded. Rings are drawn at render time, never burned into the source.`
-            : "No tap recorded in this video."
+            ? `${taps} click${taps > 1 ? "s" : ""} recorded. Rings are drawn at render time, never burned into the source.`
+            : "No click recorded in this video."
         }
       >
         <ToggleGroup
@@ -323,10 +350,12 @@ function ZoomPanel() {
         title="Zoom"
         hint={
           count === 0
-            ? "Click the zoom track under the clip to add a zoom. Auto zooms follow the taps."
+            ? "Click the zoom track under the clip to add a zoom, or let your clicks drive them."
             : "Select a zoom on the timeline to edit it."
         }
-      />
+      >
+        <AutoZoomButton />
+      </Section>
     );
   }
 
@@ -469,6 +498,27 @@ function MicSection() {
         onReset={() => change((ed) => ({ ...ed, mic: { volume: 1 } }))}
       />
     </Section>
+  );
+}
+
+/** Replaces every zoom with one per burst of clicks; undo restores them. */
+function AutoZoomButton() {
+  const taps = useSessionTaps();
+  const change = useChange();
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={taps === 0}
+      onClick={() => {
+        const { pointers } = useSession.getState();
+        const zooms = buildAutoZooms(pointers, usePlayback.getState().duration);
+        change((ed) => ({ ...ed, zooms }));
+        usePlayback.getState().selectZoom(null);
+      }}
+    >
+      {taps === 0 ? "No click to follow" : "Auto zoom on clicks"}
+    </Button>
   );
 }
 

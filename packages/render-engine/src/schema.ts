@@ -198,6 +198,7 @@ export const DEFAULT_EDIT: EditState = {
   assets: [],
   zooms: [],
   touch: { style: "ring", color: "#ffffff", size: 44 },
+  cursor: { visible: true, size: 28 },
   sound: { clicks: false, volume: 0.6 },
   layers: null,
   camera: {
@@ -402,6 +403,9 @@ const editSchema = z.object({
       size: z.number().min(12).max(160),
     })
     .catch(DEFAULT_EDIT.touch),
+  cursor: z
+    .object({ visible: z.boolean(), size: z.number().min(12).max(96) })
+    .catch(DEFAULT_EDIT.cursor),
   sound: z
     .object({ clicks: z.boolean(), volume: z.number().min(0).max(1) })
     .catch(DEFAULT_EDIT.sound),

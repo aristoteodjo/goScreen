@@ -203,7 +203,12 @@ n'en sait rien.
 - Export : seek frame par frame -> JPEG (q 0,98) -> `export_frame` (corps IPC brut) -> FFmpeg (x264 slow, CRF 15,
   conversion explicite en BT.709) ; second passage pour
   mixer les sons de tap synthétisés. Sortie `~/Movies/goScreen/<nom>-export-<stamp>.mp4`.
-- `buildAutoZooms` (render-engine) propose des zooms à la première ouverture ; tout reste éditable.
+- `buildAutoZooms` (render-engine) propose des zooms à la première ouverture : un segment par rafale de clics
+  (arrivée 0,6 s avant, départ 1,4 s après, ×1,8, caméra qui suit le pointeur) ; le scroll et les simples
+  mouvements ne zooment jamais. Bouton « Auto zoom on clicks » du panneau Zoom pour régénérer (annulable).
+- Curseur synthétique (`cursor.ts`, `edit.cursor`) : flèche dessinée depuis les mouvements enregistrés (survol
+  compris), lissée sur 120 ms, posée exactement sur chaque clic et réduite pendant l'appui. Visible par défaut ;
+  panneau « Cursor & clicks ».
 
 ### Montage (EditState v2)
 
@@ -334,7 +339,7 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 ## Prochaines tranches verticales
 
 0. Vidéos produit automatiques pilotées par la campagne : tranches A à E ci-dessus (oeufsdor = fixture de référence).
-1. Éditeur : curseur pour les sources web, motion blur, transitions entre clips, crop ; export plus rapide.
+1. Éditeur : motion blur, transitions entre clips, crop ; export plus rapide.
 2. Android : drag en direct, audio (`AndroidAudioProvider`), « Synchronize Interactions » multi-device.
 3. `project.json` versionné, avec migrations.
 4. Fichier HTML local, browser chrome (Safari / Chrome Android), status bar custom.

@@ -42,12 +42,10 @@ function addZoomAtPlayhead() {
   const slot = placeZoom(useEdit.getState().edit.zooms, s, duration);
   if (!slot) return;
   const id = `zoom-${Date.now().toString(36)}`;
-  useEdit
-    .getState()
-    .change((ed) => ({
-      ...ed,
-      zooms: [...ed.zooms, { id, ...slot, scale: 2, focus: null }],
-    }));
+  useEdit.getState().change((ed) => ({
+    ...ed,
+    zooms: [...ed.zooms, { id, ...slot, scale: 2, focus: null }],
+  }));
   selectZoom(id);
 }
 
@@ -55,12 +53,10 @@ function deleteSelected() {
   if (editActions.deleteSelection()) return;
   const { selectedZoom, selectZoom } = usePlayback.getState();
   if (!selectedZoom) return;
-  useEdit
-    .getState()
-    .change((ed) => ({
-      ...ed,
-      zooms: ed.zooms.filter((z) => z.id !== selectedZoom),
-    }));
+  useEdit.getState().change((ed) => ({
+    ...ed,
+    zooms: ed.zooms.filter((z) => z.id !== selectedZoom),
+  }));
   selectZoom(null);
 }
 

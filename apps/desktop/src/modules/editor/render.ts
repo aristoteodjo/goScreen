@@ -339,6 +339,7 @@ export function drawFrame(
       ctx.stroke();
     }
   }
+  if (frame.cursor) drawCursor(ctx, frame.cursor, edit.cursor.size * k);
   ctx.restore();
 
   // The webcam stays put while the camera zooms into the screens.
@@ -396,5 +397,44 @@ function drawWebcam(
   ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
   roundRect(ctx, r, radius);
   ctx.stroke();
+  ctx.restore();
+}
+
+// macOS-style arrow, tip at (0, 0), in a 1 x 1.5 box scaled to `size` (height).
+const ARROW: [number, number][] = [
+  [0, 0],
+  [0, 1.13],
+  [0.27, 0.87],
+  [0.45, 1.27],
+  [0.6, 1.2],
+  [0.42, 0.81],
+  [0.78, 0.81],
+];
+
+function drawCursor(
+  ctx: CanvasRenderingContext2D,
+  c: { x: number; y: number; pressed: number },
+  size: number,
+) {
+  const s = (size / 1.27) * (1 - 0.12 * c.pressed);
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(s, s);
+  ctx.beginPath();
+  for (const [i, [x, y]] of ARROW.entries()) {
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 2;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 0.1;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = "#000000";
+  ctx.fill();
   ctx.restore();
 }

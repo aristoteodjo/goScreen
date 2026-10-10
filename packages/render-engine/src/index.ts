@@ -1,4 +1,4 @@
-export { buildAutoZooms } from "./autoZoom";
+export { AUTO_SCALE, buildAutoZooms } from "./autoZoom";
 export {
   activeZoom,
   applyCamera,
@@ -14,6 +14,7 @@ export {
   type Timeline,
   timelineOf,
 } from "./compose";
+export { type CursorMark, cursorAt } from "./cursor";
 export { type Quad, quadMapper } from "./homography";
 export {
   arrangeLayers,

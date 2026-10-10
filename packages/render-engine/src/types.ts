@@ -249,6 +249,8 @@ export type EditState = {
   assets: Asset[];
   zooms: ZoomSegment[];
   touch: { style: TouchStyle; color: string; size: number };
+  // Synthetic mouse pointer drawn from the recorded moves (never burned in the capture).
+  cursor: { visible: boolean; size: number };
   sound: { clicks: boolean; volume: number };
   // null: the recording is shown as one flat video (older captures).
   layers: LayerEdit[] | null;
@@ -289,6 +291,7 @@ export type Frame = {
   layers: PlacedLayer[];
   camera: Camera;
   touches: TouchMark[];
+  cursor: (Point & { pressed: number }) | null;
   // Webcam overlay, in output px (drawn above the zoom).
   webcam: Rect | null;
 };
