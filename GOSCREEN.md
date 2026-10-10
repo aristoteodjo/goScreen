@@ -25,6 +25,7 @@ packages/
   android-source/     Modèle AndroidDevice, provider ADB (via transport injecté), gestes, choix de profil
   render-engine/      Éditeur, cœur pur : EditState, caméra/zoom, touch rings, timeline, composeFrame
   entitlements/       Plans -> droits. Seul endroit qui connaît les plans.
+  campaign/           Brief de campagne (zod), catalogue de recettes, choix des 8 propositions (pur)
 ```
 
 ## Règles
@@ -269,6 +270,10 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
   - `tone` règle rythme, transitions, animations de texte et tempo de musique.
 - `defaultCampaign(brand, sections)` propose un brief rempli depuis le site ; le client corrige.
 - Sauvé avec le projet (`<stem>.campaign.json`), parse champ par champ avec repli.
+- **Fait** : schéma, `defaultCampaign`, `formatsFor`, catalogue `RECIPES` (métadonnées : objectifs, formats, `needs`,
+  `needsAny`, `wants`, durée du genre) et `buildProposals` (score puis choix glouton avec pénalités de répétition ;
+  variantes quand il y a moins de couples que de cases). Le `build(ctx) -> EditState` de chaque recette reste à faire
+  dans render-engine (tranche C).
 
 ### Tranche A : lecture du site (Rust, pur + testé)
 - `modules/site/brand.rs` : `site_brand(url)` -> `{ name, tagline, description, lang, colors: { background,
@@ -278,6 +283,9 @@ variables (`--primary: var(--yolk)`) et `theme-color` qui n'est que le fond (la 
 - `site_sections(url)` : sections par page avec un **rôle** déduit génériquement (structure + mots-clés multilingues) :
   `hero | features | pricing | stats | how-it-works | testimonials | listing | faq | cta | other`.
 - Fixtures de chaque site de référence dans `tests/`.
+- **Fait** (`modules/site/brand.rs`) : `site_brand` / `site_sections`, testés sur la fixture oeufsdor et un SaaS sombre
+  synthétique. Réseau via `SiteClient` (partagé avec `site_pages`) : un site public ne joint jamais une adresse locale,
+  ni par DNS, ni par IP littérale, ni par redirection (même règle que `relay_target`).
 
 ### Tranche B : chapitres et repères dans la prise (journal v4, rétrocompatible)
 - `runTour` écrit `chapters: [{ url, title, start, end }]` : une page = un chapitre.
