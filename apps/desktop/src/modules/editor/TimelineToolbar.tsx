@@ -3,12 +3,12 @@ import {
   BlurIcon,
   Copy01Icon,
   Cursor01Icon,
-  HandGrabIcon,
-  Knife01Icon,
-  MagnetIcon,
   Delete02Icon,
   FitToScreenIcon,
+  HandGrabIcon,
   Image01Icon,
+  Knife01Icon,
+  MagnetIcon,
   MusicNote01Icon,
   PresentationBarChart01Icon,
   Scissor01Icon,
@@ -27,14 +27,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { editActions, TEXT_PRESETS } from "./actions";
 import { type Tool, usePlayback } from "./store";
 
-const TOOLS: { id: Tool; label: string; key: string; icon: typeof Cursor01Icon }[] = [
+const TOOLS: {
+  id: Tool;
+  label: string;
+  key: string;
+  icon: typeof Cursor01Icon;
+}[] = [
   { id: "select", label: "Selection", key: "V", icon: Cursor01Icon },
-  { id: "blade", label: "Blade: click a clip to cut it", key: "C", icon: Knife01Icon },
+  {
+    id: "blade",
+    label: "Blade: click a clip to cut it",
+    key: "C",
+    icon: Knife01Icon,
+  },
   { id: "hand", label: "Hand: drag to scroll", key: "H", icon: HandGrabIcon },
 ];
 
@@ -87,20 +101,30 @@ export function TimelineToolbar() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {TEXT_PRESETS.map((p) => (
-            <DropdownMenuItem key={p.id} onSelect={() => editActions.addText(p)}>
+            <DropdownMenuItem
+              key={p.id}
+              onSelect={() => editActions.addText(p)}
+            >
               {p.label}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      <ToolButton icon={Image01Icon} label="Media" onClick={() => void editActions.importMedia(["image", "video"])} />
+      <ToolButton
+        icon={Image01Icon}
+        label="Media"
+        onClick={() => void editActions.importMedia(["image", "video"])}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <ToolButton icon={ShapesIcon} label="Shape" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           {SHAPES.map((s) => (
-            <DropdownMenuItem key={s.id} onSelect={() => editActions.addShape(s.id)}>
+            <DropdownMenuItem
+              key={s.id}
+              onSelect={() => editActions.addShape(s.id)}
+            >
               {s.label}
             </DropdownMenuItem>
           ))}
@@ -111,16 +135,33 @@ export function TimelineToolbar() {
           <ToolButton icon={BlurIcon} label="Blur" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          <DropdownMenuItem onSelect={() => editActions.addBlur("blur")}>Blur</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => editActions.addBlur("pixelate")}>Pixelate</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => editActions.addBlur("blur")}>
+            Blur
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => editActions.addBlur("pixelate")}>
+            Pixelate
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ToolButton icon={PresentationBarChart01Icon} label="Slide" onClick={editActions.addSlide} />
-      <ToolButton icon={MusicNote01Icon} label="Music" onClick={() => void editActions.importMedia(["audio"])} />
+      <ToolButton
+        icon={PresentationBarChart01Icon}
+        label="Slide"
+        onClick={editActions.addSlide}
+      />
+      <ToolButton
+        icon={MusicNote01Icon}
+        label="Music"
+        onClick={() => void editActions.importMedia(["audio"])}
+      />
 
       <div className="mx-2 h-5 w-px bg-white/10" />
 
-      <IconTool icon={Scissor01Icon} label="Split at playhead" shortcut="S" onClick={editActions.splitAtPlayhead} />
+      <IconTool
+        icon={Scissor01Icon}
+        label="Split at playhead"
+        shortcut="S"
+        onClick={editActions.splitAtPlayhead}
+      />
       <IconTool
         icon={Copy01Icon}
         label="Duplicate"
@@ -137,8 +178,17 @@ export function TimelineToolbar() {
       />
 
       <div className="ml-auto flex items-center gap-1">
-        <IconTool icon={ZoomOutAreaIcon} label="Zoom out" disabled={scale === null} onClick={() => zoomBy(1 / 1.5)} />
-        <IconTool icon={ZoomInAreaIcon} label="Zoom in" onClick={() => zoomBy(1.5)} />
+        <IconTool
+          icon={ZoomOutAreaIcon}
+          label="Zoom out"
+          disabled={scale === null}
+          onClick={() => zoomBy(1 / 1.5)}
+        />
+        <IconTool
+          icon={ZoomInAreaIcon}
+          label="Zoom in"
+          onClick={() => zoomBy(1.5)}
+        />
         <IconTool
           icon={FitToScreenIcon}
           label="Fit timeline"
@@ -150,9 +200,22 @@ export function TimelineToolbar() {
   );
 }
 
-function ToolButton({ icon, label, ...props }: { icon: typeof TextIcon; label: string; onClick?: () => void }) {
+function ToolButton({
+  icon,
+  label,
+  ...props
+}: {
+  icon: typeof TextIcon;
+  label: string;
+  onClick?: () => void;
+}) {
   return (
-    <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2.5 text-[12px] text-muted-foreground hover:text-foreground" {...props}>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 gap-1.5 px-2.5 text-[12px] text-muted-foreground hover:text-foreground"
+      {...props}
+    >
       <HugeiconsIcon icon={icon} size={15} strokeWidth={1.75} />
       {label}
     </Button>
@@ -180,7 +243,10 @@ function IconTool({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("size-8 text-muted-foreground", active && "bg-violet-500/20 text-violet-200 hover:bg-violet-500/25")}
+          className={cn(
+            "size-8 text-muted-foreground",
+            active && "bg-violet-500/20 text-violet-200 hover:bg-violet-500/25",
+          )}
           aria-label={label}
           aria-pressed={active}
           disabled={disabled}

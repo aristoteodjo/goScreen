@@ -1,7 +1,14 @@
-import { MIC_ASSET } from "./soundtrack";
 import { z } from "zod";
 import { SOURCE_END } from "./sequence";
-import type { CameraEdit, CaptureMode, EditState, RecordingClip, RecordedLayer, RecordedPointer } from "./types";
+import { MIC_ASSET } from "./soundtrack";
+import type {
+  CameraEdit,
+  CaptureMode,
+  EditState,
+  RecordedLayer,
+  RecordedPointer,
+  RecordingClip,
+} from "./types";
 
 const pointerSchema = z.object({
   t: z.number(),
@@ -14,7 +21,10 @@ const pointerSchema = z.object({
   source: z.enum(["web", "android"]),
 });
 
-const size = z.object({ width: z.number().positive(), height: z.number().positive() });
+const size = z.object({
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
 
 const layerSchema = z.object({
   instanceId: z.string(),
@@ -25,7 +35,13 @@ const layerSchema = z.object({
   source: z.enum(["web", "android"]),
   rotation: z.number().catch(0),
   rects: z.array(
-    z.object({ t: z.number(), x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() }),
+    z.object({
+      t: z.number(),
+      x: z.number(),
+      y: z.number(),
+      width: z.number().positive(),
+      height: z.number().positive(),
+    }),
   ),
 });
 
@@ -56,9 +72,23 @@ const v3Schema = z.object({
   pointers: z.array(pointerSchema),
   media: mediaSchema.optional(),
   // Stretches recorded while paused (source seconds): cut out on first open.
-  pauses: z.array(z.object({ start: z.number(), end: z.number() })).optional().catch([]),
+  pauses: z
+    .array(z.object({ start: z.number(), end: z.number() }))
+    .optional()
+    .catch([]),
   // The webcam bubble as placed in the studio during the take.
   camera: cameraSchema.nullable().optional().catch(null),
+  // Site tour: one chapter per page, in source seconds.
+  chapters: z
+    .array(
+      z.object({
+        url: z.string(),
+        start: z.number().min(0),
+        end: z.number().min(0),
+      }),
+    )
+    .optional()
+    .catch([]),
 });
 
 // v1 files (before the editor existed) logged raw bridge events in iframe
@@ -67,7 +97,10 @@ const v1Schema = z.object({ version: z.literal(1) }).passthrough();
 
 const v2Schema = z.object({
   version: z.literal(2),
-  stage: z.object({ width: z.number().positive(), height: z.number().positive() }),
+  stage: z.object({
+    width: z.number().positive(),
+    height: z.number().positive(),
+  }),
   pointers: z.array(pointerSchema),
 });
 
@@ -80,6 +113,7 @@ export type RecordingFile = {
   mediaOffset: number;
   camera: CameraEdit | null;
   pauses: { start: number; end: number }[];
+  chapters: { url: string; start: number; end: number }[];
 };
 
 export const EMPTY_RECORDING: RecordingFile = {
@@ -90,14 +124,19 @@ export const EMPTY_RECORDING: RecordingFile = {
   mediaOffset: 0,
   camera: null,
   pauses: [],
+  chapters: [],
 };
 
-const ordered = (pointers: RecordedPointer[]) => pointers.filter((p) => p.t >= 0).sort((a, b) => a.t - b.t);
+const ordered = (pointers: RecordedPointer[]) =>
+  pointers.filter((p) => p.t >= 0).sort((a, b) => a.t - b.t);
 
 export function parseRecordingFile(json: unknown): RecordingFile {
   const v3 = v3Schema.safeParse(json);
   if (v3.success) {
-    const layers = v3.data.layers.map((l) => ({ ...l, rects: [...l.rects].sort((a, b) => a.t - b.t) }));
+    const layers = v3.data.layers.map((l) => ({
+      ...l,
+      rects: [...l.rects].sort((a, b) => a.t - b.t),
+    }));
     return {
       stage: v3.data.capture,
       mode: v3.data.mode,
@@ -106,6 +145,7 @@ export function parseRecordingFile(json: unknown): RecordingFile {
       mediaOffset: (v3.data.media?.offsetMs ?? 0) / 1000,
       camera: v3.data.camera ?? null,
       pauses: v3.data.pauses ?? [],
+      chapters: v3.data.chapters ?? [],
     };
   }
   const v2 = v2Schema.safeParse(json);
@@ -118,6 +158,7 @@ export function parseRecordingFile(json: unknown): RecordingFile {
       mediaOffset: 0,
       camera: null,
       pauses: [],
+      chapters: [],
     };
   }
   if (v1Schema.safeParse(json).success) return EMPTY_RECORDING;
@@ -127,8 +168,21 @@ export function parseRecordingFile(json: unknown): RecordingFile {
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 /** The whole recording as one clip: what a fresh edit starts from. */
-export function fullClip(id = "clip-1", start = 0, end = SOURCE_END): RecordingClip {
-  return { id, kind: "recording", in: start, out: end, speed: 1, muted: false, cameraHidden: false, transition: null };
+export function fullClip(
+  id = "clip-1",
+  start = 0,
+  end = SOURCE_END,
+): RecordingClip {
+  return {
+    id,
+    kind: "recording",
+    in: start,
+    out: end,
+    speed: 1,
+    muted: false,
+    cameraHidden: false,
+    transition: null,
+  };
 }
 
 export const DEFAULT_EDIT: EditState = {
@@ -146,7 +200,14 @@ export const DEFAULT_EDIT: EditState = {
   touch: { style: "ring", color: "#ffffff", size: 44 },
   sound: { clicks: false, volume: 0.6 },
   layers: null,
-  camera: { visible: true, layout: "overlay", corner: 8, size: 0.22, shape: "rounded", mirror: true },
+  camera: {
+    visible: true,
+    layout: "overlay",
+    corner: 8,
+    size: 0.22,
+    shape: "rounded",
+    mirror: true,
+  },
   mic: { volume: 1 },
   tracks: { hidden: [], muted: [], micMuted: false },
 };
@@ -167,10 +228,26 @@ function lenient<T extends z.ZodTypeAny>(item: T) {
 const backgroundSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
   z.object({ kind: z.literal("color"), value: color }),
-  z.object({ kind: z.literal("gradient"), from: color, to: color, angle: z.number() }),
+  z.object({
+    kind: z.literal("gradient"),
+    from: color,
+    to: color,
+    angle: z.number(),
+  }),
 ]);
 
-const animation = z.enum(["none", "fade", "slide-up", "slide-left", "pop", "typewriter", "words", "wipe"]).catch("fade");
+const animation = z
+  .enum([
+    "none",
+    "fade",
+    "slide-up",
+    "slide-left",
+    "pop",
+    "typewriter",
+    "words",
+    "wipe",
+  ])
+  .catch("fade");
 const id = z.string().min(1);
 const unit = z.number().min(0).max(1);
 
@@ -236,7 +313,12 @@ const overlaySchema = z.discriminatedUnion("kind", [
       background: color.nullable(),
     }),
   }),
-  z.object({ ...overlayBase, kind: z.literal("image"), asset: id, radius: z.number().min(0).catch(0) }),
+  z.object({
+    ...overlayBase,
+    kind: z.literal("image"),
+    asset: id,
+    radius: z.number().min(0).catch(0),
+  }),
   z.object({
     ...overlayBase,
     kind: z.literal("video"),
@@ -284,14 +366,21 @@ const assetSchema = z.object({
 
 const editSchema = z.object({
   version: z.union([z.literal(1), z.literal(2)]),
-  aspect: z.enum(["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"]).catch(DEFAULT_EDIT.aspect),
+  aspect: z
+    .enum(["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"])
+    .catch(DEFAULT_EDIT.aspect),
   background: backgroundSchema.catch(DEFAULT_EDIT.background),
   padding: z.number().min(0).max(0.4).catch(DEFAULT_EDIT.padding),
   radius: z.number().min(0).max(120).catch(DEFAULT_EDIT.radius),
   shadow: z.number().min(0).max(1).catch(DEFAULT_EDIT.shadow),
   // v1 kept one trimmed range; v2 has a clip sequence.
-  trim: z.object({ start: z.number().min(0), end: z.number().positive().nullable() }).optional().catch(undefined),
-  clips: lenient(z.discriminatedUnion("kind", [recordingClipSchema, slideClipSchema])).optional(),
+  trim: z
+    .object({ start: z.number().min(0), end: z.number().positive().nullable() })
+    .optional()
+    .catch(undefined),
+  clips: lenient(
+    z.discriminatedUnion("kind", [recordingClipSchema, slideClipSchema]),
+  ).optional(),
   overlays: lenient(overlaySchema).optional(),
   audio: lenient(audioClipSchema).optional(),
   assets: lenient(assetSchema).optional(),
@@ -307,9 +396,15 @@ const editSchema = z.object({
     )
     .catch([]),
   touch: z
-    .object({ style: z.enum(["ring", "solid", "none"]), color, size: z.number().min(12).max(160) })
+    .object({
+      style: z.enum(["ring", "solid", "none"]),
+      color,
+      size: z.number().min(12).max(160),
+    })
     .catch(DEFAULT_EDIT.touch),
-  sound: z.object({ clicks: z.boolean(), volume: z.number().min(0).max(1) }).catch(DEFAULT_EDIT.sound),
+  sound: z
+    .object({ clicks: z.boolean(), volume: z.number().min(0).max(1) })
+    .catch(DEFAULT_EDIT.sound),
   layers: z
     .array(
       z.object({
@@ -341,15 +436,30 @@ const editSchema = z.object({
 export function parseEditState(json: unknown): EditState | null {
   const parsed = editSchema.safeParse(json);
   if (!parsed.success) return null;
-  const { trim, clips, overlays, audio, assets, version: _version, ...rest } = parsed.data;
+  const {
+    trim,
+    clips,
+    overlays,
+    audio,
+    assets,
+    version: _version,
+    ...rest
+  } = parsed.data;
   const assetIds = new Set((assets ?? []).map((a) => a.id));
   return {
     ...rest,
     version: 2,
-    clips: clips && clips.length > 0 ? clips : [fullClip("clip-1", trim?.start ?? 0, trim?.end ?? SOURCE_END)],
+    clips:
+      clips && clips.length > 0
+        ? clips
+        : [fullClip("clip-1", trim?.start ?? 0, trim?.end ?? SOURCE_END)],
     // Media whose file entry is gone cannot be drawn.
-    overlays: (overlays ?? []).filter((o) => (o.kind === "image" || o.kind === "video" ? assetIds.has(o.asset) : true)),
-    audio: (audio ?? []).filter((a) => a.asset === MIC_ASSET || assetIds.has(a.asset)),
+    overlays: (overlays ?? []).filter((o) =>
+      o.kind === "image" || o.kind === "video" ? assetIds.has(o.asset) : true,
+    ),
+    audio: (audio ?? []).filter(
+      (a) => a.asset === MIC_ASSET || assetIds.has(a.asset),
+    ),
     assets: assets ?? [],
   };
 }

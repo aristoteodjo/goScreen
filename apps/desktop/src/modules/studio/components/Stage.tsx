@@ -1,15 +1,25 @@
-import { fitScale, instanceTransform, shadowToCss } from "@goscreen/device-engine";
+import {
+  fitScale,
+  instanceTransform,
+  shadowToCss,
+} from "@goscreen/device-engine";
 import { type PointerEvent, useLayoutEffect, useRef, useState } from "react";
 import { DeviceMockup } from "@/modules/device/DeviceMockup";
 import { useRecording } from "@/modules/recording/store";
 import { setStageElement } from "../stageRef";
-import { DeviceContextMenu, ViewContextMenu } from "./StudioContextMenus";
 import { ASPECTS } from "../store/aspect";
 import { backgroundToCss } from "../store/backgrounds";
 import { useEditor } from "../store/editor";
 import { deviceUrl, useProject } from "../store/project";
+import { DeviceContextMenu, ViewContextMenu } from "./StudioContextMenus";
 
-type Drag = { id: string; startX: number; startY: number; originX: number; originY: number };
+type Drag = {
+  id: string;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+};
 
 export function Stage() {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -29,7 +39,10 @@ export function Stage() {
     const el = hostRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
-      setBox({ width: entry.contentRect.width, height: entry.contentRect.height });
+      setBox({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -38,15 +51,22 @@ export function Stage() {
   const stage = ASPECTS[aspect];
   const zoom = box.width > 0 ? fitScale(stage, box, 32) : 0;
 
-  const onFramePointerDown = (id: string) => (e: PointerEvent<HTMLDivElement>) => {
-    if (recording || e.button !== 0) return;
-    e.stopPropagation();
-    const d = devices.find((x) => x.id === id);
-    if (!d) return;
-    select(id);
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDrag({ id, startX: e.clientX, startY: e.clientY, originX: d.x, originY: d.y });
-  };
+  const onFramePointerDown =
+    (id: string) => (e: PointerEvent<HTMLDivElement>) => {
+      if (recording || e.button !== 0) return;
+      e.stopPropagation();
+      const d = devices.find((x) => x.id === id);
+      if (!d) return;
+      select(id);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDrag({
+        id,
+        startX: e.clientX,
+        startY: e.clientY,
+        originX: d.x,
+        originY: d.y,
+      });
+    };
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag || zoom === 0) return;
@@ -58,58 +78,67 @@ export function Stage() {
 
   return (
     <ViewContextMenu>
-    <div
-      ref={hostRef}
-      className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-stage"
-      onPointerDown={() => !recording && select(null)}
-    >
-      {zoom > 0 ? (
-        <div
-          ref={setStageElement}
-          className="relative shrink-0 overflow-hidden"
-          style={{
-            width: stage.width * zoom,
-            height: stage.height * zoom,
-            background: backgroundToCss(background),
-          }}
-          onPointerMove={onPointerMove}
-          onPointerUp={() => setDrag(null)}
-          onPointerCancel={() => setDrag(null)}
-        >
+      <div
+        ref={hostRef}
+        className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-stage"
+        onPointerDown={() => !recording && select(null)}
+      >
+        {zoom > 0 ? (
           <div
-            className="absolute top-0 left-0 origin-top-left"
-            style={{ width: stage.width, height: stage.height, transform: `scale(${zoom})` }}
+            ref={setStageElement}
+            className="relative shrink-0 overflow-hidden"
+            style={{
+              width: stage.width * zoom,
+              height: stage.height * zoom,
+              background: backgroundToCss(background),
+            }}
+            onPointerMove={onPointerMove}
+            onPointerUp={() => setDrag(null)}
+            onPointerCancel={() => setDrag(null)}
           >
-            {devices.map((d) => (
-              <DeviceContextMenu key={d.id} id={d.id}>
-              <div
-                className="absolute top-0 left-0 will-change-transform"
-                style={
-                  recording
-                    ? // Captured flat: screens must be upright rectangles to be cut
-                      // out as layers. Rotation and tilt are re-applied in the editor.
-                      { transform: `translate(${d.x}px, ${d.y}px) translate(-50%, -50%) scale(${d.scale})` }
-                    : {
-                        transform: instanceTransform(d),
-                        filter: d.renderMode === "flat" ? undefined : shadowToCss(d.shadow),
-                      }
-                }
-              >
-                <DeviceMockup
-                  instance={d}
-                  url={deviceUrl(d, url)}
-                  selected={!recording && d.id === selectedId}
-                  framesInteractive={drag === null}
-                  onFramePointerDown={onFramePointerDown(d.id)}
-                />
-              </div>
-              </DeviceContextMenu>
-            ))}
+            <div
+              className="absolute top-0 left-0 origin-top-left"
+              style={{
+                width: stage.width,
+                height: stage.height,
+                transform: `scale(${zoom})`,
+              }}
+            >
+              {devices.map((d) => (
+                <DeviceContextMenu key={d.id} id={d.id}>
+                  <div
+                    className="absolute top-0 left-0 will-change-transform"
+                    style={
+                      recording
+                        ? // Captured flat: screens must be upright rectangles to be cut
+                          // out as layers. Rotation and tilt are re-applied in the editor.
+                          {
+                            transform: `translate(${d.x}px, ${d.y}px) translate(-50%, -50%) scale(${d.scale})`,
+                          }
+                        : {
+                            transform: instanceTransform(d),
+                            filter:
+                              d.renderMode === "flat"
+                                ? undefined
+                                : shadowToCss(d.shadow),
+                          }
+                    }
+                  >
+                    <DeviceMockup
+                      instance={d}
+                      url={deviceUrl(d, url)}
+                      selected={!recording && d.id === selectedId}
+                      framesInteractive={drag === null}
+                      onFramePointerDown={onFramePointerDown(d.id)}
+                    />
+                  </div>
+                </DeviceContextMenu>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
-      {devices.length === 0 ? <EmptyStage /> : null}
-    </div>
+        ) : null}
+        {devices.length === 0 ? <EmptyStage /> : null}
+      </div>
     </ViewContextMenu>
   );
 }
@@ -119,7 +148,9 @@ function EmptyStage() {
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
       <div className="rounded-xl border border-white/10 bg-black/40 px-5 py-4 text-center backdrop-blur">
         <p className="text-sm font-medium text-white">Add a device to start</p>
-        <p className="mt-1 text-xs text-white/60">Pick one in the left panel, or press Cmd K.</p>
+        <p className="mt-1 text-xs text-white/60">
+          Pick one in the left panel, or press Cmd K.
+        </p>
       </div>
     </div>
   );

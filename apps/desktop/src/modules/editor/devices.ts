@@ -14,25 +14,44 @@ import { registry } from "@/lib/registry";
 /** Recorded glass size in portrait terms, as the Device Engine expects. */
 function portraitViewport(recorded: RecordedLayer): Size {
   const { width, height } = recorded.screen;
-  return recorded.orientation === "portrait" ? { width, height } : { width: height, height: width };
+  return recorded.orientation === "portrait"
+    ? { width, height }
+    : { width: height, height: width };
 }
 
 /**
  * Frame geometry for a layer. The glass keeps the recorded size (the content
  * cannot change); the chosen model only changes the hardware around it.
  */
-export const geometryOf: GeometryOf = (edit: LayerEdit, recorded: RecordedLayer): FrameGeometry | null => {
+export const geometryOf: GeometryOf = (
+  edit: LayerEdit,
+  recorded: RecordedLayer,
+): FrameGeometry | null => {
   const device = registry.get(edit.deviceId) ?? registry.get(recorded.deviceId);
   if (!device) return null;
   if (!edit.frame) {
-    return { frame: recorded.screen, screen: { x: 0, y: 0, ...recorded.screen } };
+    return {
+      frame: recorded.screen,
+      screen: { x: 0, y: 0, ...recorded.screen },
+    };
   }
-  const layout = resolveScreenLayout(device, recorded.orientation, portraitViewport(recorded));
-  return { frame: layout.frame, screen: { x: layout.bezel, y: layout.bezel, ...layout.screen } };
+  const layout = resolveScreenLayout(
+    device,
+    recorded.orientation,
+    portraitViewport(recorded),
+  );
+  return {
+    frame: layout.frame,
+    screen: { x: layout.bezel, y: layout.bezel, ...layout.screen },
+  };
 };
 
 /** Starting presentation: the recorded models, side by side in the stage area. */
-export function initialLayers(recorded: RecordedLayer[], area: Size, previous: LayerEdit[] = []): LayerEdit[] {
+export function initialLayers(
+  recorded: RecordedLayer[],
+  area: Size,
+  previous: LayerEdit[] = [],
+): LayerEdit[] {
   const edits = recorded.map((r) => {
     const kept = previous.find((p) => p.instanceId === r.instanceId);
     return (
@@ -49,7 +68,9 @@ export function initialLayers(recorded: RecordedLayer[], area: Size, previous: L
       }
     );
   });
-  const frames = edits.map((e, i) => geometryOf(e, recorded[i])?.frame ?? recorded[i].screen);
+  const frames = edits.map(
+    (e, i) => geometryOf(e, recorded[i])?.frame ?? recorded[i].screen,
+  );
   const placed = arrangeLayers(frames, area);
   return edits.map((e, i) => ({ ...e, ...placed[i] }));
 }
@@ -58,9 +79,19 @@ export function deviceOf(edit: LayerEdit): DeviceDefinition | undefined {
   return registry.get(edit.deviceId);
 }
 
-type Source = { image: CanvasImageSource; crop: { x: number; y: number; width: number; height: number } } | null;
+type Source = {
+  image: CanvasImageSource;
+  crop: { x: number; y: number; width: number; height: number };
+} | null;
 
-function rounded(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number | number[]) {
+function rounded(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number | number[],
+) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
 }
@@ -81,9 +112,14 @@ export function drawDevice(
   const device = deviceOf(edit);
   const { frame, screen } = layer.geometry;
   const portrait = recorded.orientation === "portrait";
-  const color = device?.frame.colors.find((c) => c.id === edit.colorId) ?? device?.frame.colors[0];
-  const handheld = device?.category === "phone" || device?.category === "tablet";
-  const screenRadius = edit.frame ? (device?.frame.screenRadius ?? 0) : (device?.frame.screenRadius ?? 0) * 0.6;
+  const color =
+    device?.frame.colors.find((c) => c.id === edit.colorId) ??
+    device?.frame.colors[0];
+  const handheld =
+    device?.category === "phone" || device?.category === "tablet";
+  const screenRadius = edit.frame
+    ? (device?.frame.screenRadius ?? 0)
+    : (device?.frame.screenRadius ?? 0) * 0.6;
 
   // Body (and its shadow).
   ctx.save();
@@ -116,8 +152,10 @@ export function drawDevice(
     ctx.clip();
     ctx.stroke();
     ctx.restore();
-    if (device.category === "laptop") drawLaptopBase(ctx, frame.width, frame.height, color.body, color.edge);
-    if (device.category === "desktop") drawStand(ctx, frame.width, frame.height, color.body, color.edge);
+    if (device.category === "laptop")
+      drawLaptopBase(ctx, frame.width, frame.height, color.body, color.edge);
+    if (device.category === "desktop")
+      drawStand(ctx, frame.width, frame.height, color.body, color.edge);
   } else {
     ctx.fillStyle = "#000";
     rounded(ctx, 0, 0, frame.width, frame.height, screenRadius);
@@ -134,7 +172,17 @@ export function drawDevice(
   if (source && source.crop.width > 0 && source.crop.height > 0) {
     ctx.imageSmoothingQuality = "high";
     const c = source.crop;
-    ctx.drawImage(source.image, c.x, c.y, c.width, c.height, screen.x, screen.y, screen.width, screen.height);
+    ctx.drawImage(
+      source.image,
+      c.x,
+      c.y,
+      c.width,
+      c.height,
+      screen.x,
+      screen.y,
+      screen.width,
+      screen.height,
+    );
   }
 
   // Hardware drawn over the glass, from the chosen model.
@@ -142,25 +190,54 @@ export function drawDevice(
   if (edit.frame && cutout && cutout.type !== "none") {
     const w = portrait ? cutout.width : cutout.height;
     const h = portrait ? cutout.height : cutout.width;
-    const x = portrait ? screen.x + (screen.width - w) / 2 : screen.x + cutout.offsetTop;
-    const y = portrait ? screen.y + cutout.offsetTop : screen.y + (screen.height - h) / 2;
+    const x = portrait
+      ? screen.x + (screen.width - w) / 2
+      : screen.x + cutout.offsetTop;
+    const y = portrait
+      ? screen.y + cutout.offsetTop
+      : screen.y + (screen.height - h) / 2;
     ctx.fillStyle = "#000";
     if (cutout.type === "notch") {
-      rounded(ctx, x, portrait ? screen.y : y, w, portrait ? h + cutout.offsetTop : h, portrait ? [0, 0, 18, 18] : [0, 18, 18, 0]);
+      rounded(
+        ctx,
+        x,
+        portrait ? screen.y : y,
+        w,
+        portrait ? h + cutout.offsetTop : h,
+        portrait ? [0, 0, 18, 18] : [0, 18, 18, 0],
+      );
     } else {
       rounded(ctx, x, y, w, h, Math.min(w, h) / 2);
     }
     ctx.fill();
   }
-  if (edit.frame && device?.homeIndicator && portrait && recorded.source === "web") {
+  if (
+    edit.frame &&
+    device?.homeIndicator &&
+    portrait &&
+    recorded.source === "web"
+  ) {
     ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-    rounded(ctx, screen.x + (screen.width - 134) / 2, screen.y + screen.height - 13, 134, 5, 2.5);
+    rounded(
+      ctx,
+      screen.x + (screen.width - 134) / 2,
+      screen.y + screen.height - 13,
+      134,
+      5,
+      2.5,
+    );
     ctx.fill();
   }
   ctx.restore();
 }
 
-function drawLaptopBase(ctx: CanvasRenderingContext2D, width: number, height: number, body: string, edge: string) {
+function drawLaptopBase(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  body: string,
+  edge: string,
+) {
   const overhang = width * 0.07;
   const h = Math.max(14, width * 0.018);
   const g = ctx.createLinearGradient(0, height, 0, height + h);
@@ -172,7 +249,13 @@ function drawLaptopBase(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fill();
 }
 
-function drawStand(ctx: CanvasRenderingContext2D, width: number, height: number, body: string, edge: string) {
+function drawStand(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  body: string,
+  edge: string,
+) {
   const neckW = width * 0.16;
   const neckH = width * 0.12;
   ctx.fillStyle = body;

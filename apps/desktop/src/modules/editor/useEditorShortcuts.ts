@@ -12,7 +12,11 @@ export function useEditorShortcuts(openExport: () => void) {
         setPaletteOpen(!paletteOpen);
         return;
       }
-      if (usePlayback.getState().paletteOpen || document.querySelector("[role=dialog]")) return;
+      if (
+        usePlayback.getState().paletteOpen ||
+        document.querySelector("[role=dialog]")
+      )
+        return;
       const id = commandForKey(e);
       const command = id ? commands.find((c) => c.id === id) : null;
       if (!command) return;

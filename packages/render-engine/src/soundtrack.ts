@@ -57,7 +57,12 @@ export function audioPieces(edit: EditState, hasMic: boolean): AudioPiece[] {
     });
   }
   for (const o of edit.overlays) {
-    if (o.kind !== "video" || o.volume <= 0 || edit.tracks.hidden.includes(o.lane)) continue;
+    if (
+      o.kind !== "video" ||
+      o.volume <= 0 ||
+      edit.tracks.hidden.includes(o.lane)
+    )
+      continue;
     const file = fileOf(o.asset);
     if (!file) continue;
     out.push({

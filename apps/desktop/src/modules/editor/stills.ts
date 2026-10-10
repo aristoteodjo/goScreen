@@ -1,4 +1,9 @@
-import type { EditState, Placed, RecordingClip, Size } from "@goscreen/render-engine";
+import type {
+  EditState,
+  Placed,
+  RecordingClip,
+  Size,
+} from "@goscreen/render-engine";
 import { drawStill, stillTime } from "./render";
 import { currentTimeline, requestPaint, useSession } from "./session";
 
@@ -9,11 +14,26 @@ import { currentTimeline, requestPaint, useSession } from "./session";
 type Still = { key: string; canvas: HTMLCanvasElement };
 
 const stills = new Map<string, Still>();
-let decoder: { url: string; video: HTMLVideoElement; camera: HTMLVideoElement | null } | null = null;
-let queue: { p: Placed<RecordingClip>; edit: EditState; output: Size; pixelScale: number; key: string } | null = null;
+let decoder: {
+  url: string;
+  video: HTMLVideoElement;
+  camera: HTMLVideoElement | null;
+} | null = null;
+let queue: {
+  p: Placed<RecordingClip>;
+  edit: EditState;
+  output: Size;
+  pixelScale: number;
+  key: string;
+} | null = null;
 let busy = false;
 
-function keyOf(p: Placed<RecordingClip>, edit: EditState, output: Size, pixelScale: number) {
+function keyOf(
+  p: Placed<RecordingClip>,
+  edit: EditState,
+  output: Size,
+  pixelScale: number,
+) {
   // Anything that changes the composed frame: the clip span and the edit object.
   return `${p.clip.in}:${p.clip.out}:${p.clip.cameraHidden}:${output.width}x${output.height}@${pixelScale}:${editToken(edit)}`;
 }
@@ -43,7 +63,11 @@ function ensureDecoder() {
   const { videoUrl, cameraUrl } = useSession.getState();
   if (!videoUrl) return null;
   if (decoder?.url !== videoUrl) {
-    decoder = { url: videoUrl, video: media(videoUrl), camera: cameraUrl ? media(cameraUrl) : null };
+    decoder = {
+      url: videoUrl,
+      video: media(videoUrl),
+      camera: cameraUrl ? media(cameraUrl) : null,
+    };
     stills.clear();
   }
   return decoder;
@@ -52,7 +76,8 @@ function ensureDecoder() {
 function seekTo(v: HTMLVideoElement, t: number): Promise<void> {
   return new Promise((resolve) => {
     const done = () => resolve();
-    if (v.readyState >= 2 && Math.abs(v.currentTime - t) < 1e-3) return resolve();
+    if (v.readyState >= 2 && Math.abs(v.currentTime - t) < 1e-3)
+      return resolve();
     v.addEventListener("seeked", done, { once: true });
     v.addEventListener("error", done, { once: true });
     v.currentTime = Math.max(0, t);
@@ -71,11 +96,24 @@ async function pump() {
       if (!d || !timeline) continue;
       const s = stillTime(job.p);
       await seekTo(d.video, s);
-      if (d.camera) await seekTo(d.camera, s - useSession.getState().mediaOffset);
-      const canvas = stills.get(job.p.clip.id)?.canvas ?? document.createElement("canvas");
+      if (d.camera)
+        await seekTo(d.camera, s - useSession.getState().mediaOffset);
+      const canvas =
+        stills.get(job.p.clip.id)?.canvas ?? document.createElement("canvas");
       canvas.width = Math.max(2, Math.round(job.output.width * job.pixelScale));
-      canvas.height = Math.max(2, Math.round(job.output.height * job.pixelScale));
-      drawStill(canvas, { video: d.video, camera: d.camera }, job.edit, timeline, job.output, job.p, job.pixelScale);
+      canvas.height = Math.max(
+        2,
+        Math.round(job.output.height * job.pixelScale),
+      );
+      drawStill(
+        canvas,
+        { video: d.video, camera: d.camera },
+        job.edit,
+        timeline,
+        job.output,
+        job.p,
+        job.pixelScale,
+      );
       stills.set(job.p.clip.id, { key: job.key, canvas });
       requestPaint();
     }

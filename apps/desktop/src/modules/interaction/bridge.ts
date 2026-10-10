@@ -58,7 +58,9 @@ export function registerFrame(id: string, frame: HTMLIFrameElement | null) {
 }
 
 export function sendToFrame(id: string, command: BridgeCommand) {
-  frames.get(id)?.contentWindow?.postMessage({ __goscreen: 1, ...command }, "*");
+  frames
+    .get(id)
+    ?.contentWindow?.postMessage({ __goscreen: 1, ...command }, "*");
 }
 
 export function subscribeBridge(listener: Listener): () => void {

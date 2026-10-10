@@ -13,7 +13,9 @@ async function peaksOf(url: string): Promise<Float32Array> {
   const step = Math.max(1, Math.floor(audio.sampleRate / RATE));
   const count = Math.ceil(audio.length / step);
   const out = new Float32Array(count);
-  const channels = Array.from({ length: audio.numberOfChannels }, (_, c) => audio.getChannelData(c));
+  const channels = Array.from({ length: audio.numberOfChannels }, (_, c) =>
+    audio.getChannelData(c),
+  );
   for (let i = 0; i < count; i += 1) {
     let max = 0;
     const end = Math.min(audio.length, (i + 1) * step);
@@ -82,13 +84,23 @@ export function Waveform({
     const span = duration * speed;
     for (let x = 0; x < w; x += 2) {
       const a = Math.floor((from + (x / w) * span) * RATE);
-      const b = Math.max(a + 1, Math.floor((from + ((x + 2) / w) * span) * RATE));
+      const b = Math.max(
+        a + 1,
+        Math.floor((from + ((x + 2) / w) * span) * RATE),
+      );
       let v = 0;
-      for (let i = a; i < b && i < peaks.length; i += 1) v = Math.max(v, peaks[i] ?? 0);
+      for (let i = a; i < b && i < peaks.length; i += 1)
+        v = Math.max(v, peaks[i] ?? 0);
       const h = Math.max(1, v * mid * 0.95);
       ctx.fillRect(x, mid - h, 1.5, h * 2);
     }
   }, [peaks, from, duration, speed, width, height, color]);
 
-  return <canvas ref={ref} className="pointer-events-none absolute inset-0" style={{ width, height }} />;
+  return (
+    <canvas
+      ref={ref}
+      className="pointer-events-none absolute inset-0"
+      style={{ width, height }}
+    />
+  );
 }

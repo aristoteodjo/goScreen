@@ -11,7 +11,10 @@ import type { RecordedPointer, ZoomSegment } from "./types";
  * - `focus: null` lets the camera follow the taps inside the segment;
  * - ids must be unique (e.g. `auto-${index}`).
  */
-export function buildAutoZooms(pointers: RecordedPointer[], duration: number): ZoomSegment[] {
+export function buildAutoZooms(
+  pointers: RecordedPointer[],
+  duration: number,
+): ZoomSegment[] {
   // TODO(you): decide which taps deserve a zoom and how they are grouped.
   void pointers;
   void duration;

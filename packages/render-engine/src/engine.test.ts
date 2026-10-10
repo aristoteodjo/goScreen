@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  fullClip,
   autoFocus,
   cameraAt,
   composeFrame,
@@ -8,6 +7,7 @@ import {
   contentRect,
   DEFAULT_EDIT,
   formatTime,
+  fullClip,
   outputSize,
   parseEditState,
   parseRecordingFile,
@@ -21,7 +21,12 @@ import {
 } from "./index";
 import type { RecordedPointer, ZoomSegment } from "./types";
 
-const tap = (t: number, x: number, y: number, kind: RecordedPointer["kind"] = "down"): RecordedPointer => ({
+const tap = (
+  t: number,
+  x: number,
+  y: number,
+  kind: RecordedPointer["kind"] = "down",
+): RecordedPointer => ({
   t,
   kind,
   x,
@@ -30,7 +35,11 @@ const tap = (t: number, x: number, y: number, kind: RecordedPointer["kind"] = "d
   source: "web",
 });
 
-const zoom = (start: number, end: number, extra: Partial<ZoomSegment> = {}): ZoomSegment => ({
+const zoom = (
+  start: number,
+  end: number,
+  extra: Partial<ZoomSegment> = {},
+): ZoomSegment => ({
   id: `z${start}`,
   start,
   end,
@@ -69,13 +78,26 @@ describe("homography", () => {
 
 describe("layout", () => {
   it("keeps the source ratio on auto, with even sides", () => {
-    expect(outputSize("auto", { width: 1000, height: 1001 })).toEqual({ width: 1918, height: 1920 });
-    expect(outputSize("16:9", { width: 1, height: 1 })).toEqual({ width: 1920, height: 1080 });
-    expect(outputSize("9:16", { width: 1, height: 1 })).toEqual({ width: 1080, height: 1920 });
+    expect(outputSize("auto", { width: 1000, height: 1001 })).toEqual({
+      width: 1918,
+      height: 1920,
+    });
+    expect(outputSize("16:9", { width: 1, height: 1 })).toEqual({
+      width: 1920,
+      height: 1080,
+    });
+    expect(outputSize("9:16", { width: 1, height: 1 })).toEqual({
+      width: 1080,
+      height: 1920,
+    });
   });
 
   it("letterboxes the video inside the padding", () => {
-    const r = contentRect({ width: 1000, height: 1000 }, { width: 200, height: 100 }, 0.1);
+    const r = contentRect(
+      { width: 1000, height: 1000 },
+      { width: 200, height: 100 },
+      0.1,
+    );
     expect(r).toEqual({ x: 100, y: 300, width: 800, height: 400 });
   });
 });
@@ -125,7 +147,12 @@ describe("touches", () => {
     // 3s sits in the second clip, played at 2x after a 1s clip.
     const clips = [fullClip("a", 0, 1), { ...fullClip("b", 2, 10), speed: 2 }];
     expect(tapTimes(taps, clips)).toEqual([1.5, 4.5]);
-    expect(tapTimes(taps, [fullClip("a", 0, 1), { ...fullClip("b", 2, 10), muted: true }])).toEqual([]);
+    expect(
+      tapTimes(taps, [
+        fullClip("a", 0, 1),
+        { ...fullClip("b", 2, 10), muted: true },
+      ]),
+    ).toEqual([]);
   });
 });
 
@@ -144,8 +171,14 @@ describe("timeline", () => {
 
   it("stops a dragged segment at its neighbours", () => {
     const zooms = [zoom(0, 2), zoom(3, 4), zoom(6, 8)];
-    expect(constrainSegment(zooms, "z3", 1, 2, 10, "move")).toEqual({ start: 2, end: 3 });
-    expect(constrainSegment(zooms, "z3", 3, 7, 10, "end")).toEqual({ start: 3, end: 6 });
+    expect(constrainSegment(zooms, "z3", 1, 2, 10, "move")).toEqual({
+      start: 2,
+      end: 3,
+    });
+    expect(constrainSegment(zooms, "z3", 3, 7, 10, "end")).toEqual({
+      start: 3,
+      end: 6,
+    });
   });
 });
 
@@ -170,8 +203,15 @@ describe("files", () => {
 
 describe("compose", () => {
   it("projects touches through the padded content rect", () => {
-    const timeline = timelineOf({ width: 100, height: 100 }, [tap(1, 0.5, 0.5)]);
-    const frame = composeFrame({ ...DEFAULT_EDIT, padding: 0.1 }, timeline, { width: 1000, height: 1000 }, 1.05);
+    const timeline = timelineOf({ width: 100, height: 100 }, [
+      tap(1, 0.5, 0.5),
+    ]);
+    const frame = composeFrame(
+      { ...DEFAULT_EDIT, padding: 0.1 },
+      timeline,
+      { width: 1000, height: 1000 },
+      1.05,
+    );
     expect(frame.content).toEqual({ x: 100, y: 100, width: 800, height: 800 });
     expect(frame.touches[0]).toMatchObject({ x: 500, y: 500 });
     expect(frame.camera.scale).toBe(1);

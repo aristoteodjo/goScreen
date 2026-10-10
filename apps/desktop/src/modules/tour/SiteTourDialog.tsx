@@ -30,7 +30,9 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
   const [site, setSite] = useState("");
   const [pages, setPages] = useState<string[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [scrollSeconds, setScrollSeconds] = useState(DEFAULT_TOUR.scrollSeconds);
+  const [scrollSeconds, setScrollSeconds] = useState(
+    DEFAULT_TOUR.scrollSeconds,
+  );
   const [pauseSeconds, setPauseSeconds] = useState(DEFAULT_TOUR.pauseSeconds);
 
   const discover = useMutation({
@@ -43,12 +45,17 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
       setPages(found);
       setPicked(new Set(found));
     },
-    onError: (e) => toast.error("Could not read the site", { description: String(e) }),
+    onError: (e) =>
+      toast.error("Could not read the site", { description: String(e) }),
   });
 
   const tour = useMutation({
-    mutationFn: (selection: string[]) => runTour(selection, { scrollSeconds, pauseSeconds }, capture),
-    onError: (e) => toast.error("Site tour stopped", { description: e instanceof Error ? e.message : String(e) }),
+    mutationFn: (selection: string[]) =>
+      runTour(selection, { scrollSeconds, pauseSeconds }, capture),
+    onError: (e) =>
+      toast.error("Site tour stopped", {
+        description: e instanceof Error ? e.message : String(e),
+      }),
   });
 
   const onOpenChange = (next: boolean) => {
@@ -87,8 +94,9 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
         <DialogHeader>
           <DialogTitle>Site tour</DialogTitle>
           <DialogDescription>
-            Records every page in one take: each one opens on all synced devices, scrolls gently to the bottom, then the
-            next. Uses the capture settings of the bar (zone, camera, microphone).
+            Records every page in one take: each one opens on all synced
+            devices, scrolls gently to the bottom, then the next. Uses the
+            capture settings of the bar (zone, camera, microphone).
           </DialogDescription>
         </DialogHeader>
 
@@ -106,7 +114,11 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
             spellCheck={false}
             className="h-9 font-mono text-xs"
           />
-          <Button type="submit" variant="secondary" disabled={discover.isPending}>
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={discover.isPending}
+          >
             {discover.isPending ? <Spinner /> : null}
             Find pages
           </Button>
@@ -121,9 +133,17 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
               <button
                 type="button"
                 className="hover:text-foreground"
-                onClick={() => setPicked(selection.length === pages.length ? new Set() : new Set(pages))}
+                onClick={() =>
+                  setPicked(
+                    selection.length === pages.length
+                      ? new Set()
+                      : new Set(pages),
+                  )
+                }
               >
-                {selection.length === pages.length ? "Select none" : "Select all"}
+                {selection.length === pages.length
+                  ? "Select none"
+                  : "Select all"}
               </button>
             </div>
             <div className="max-h-56 overflow-y-auto rounded-md border">
@@ -133,7 +153,11 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
                   htmlFor={`tour-page-${i}`}
                   className="flex cursor-pointer items-center gap-2.5 border-b px-3 py-1.5 text-xs last:border-0 hover:bg-white/5"
                 >
-                  <Checkbox id={`tour-page-${i}`} checked={picked.has(page)} onCheckedChange={(v) => toggle(page, v === true)} />
+                  <Checkbox
+                    id={`tour-page-${i}`}
+                    checked={picked.has(page)}
+                    onCheckedChange={(v) => toggle(page, v === true)}
+                  />
                   <span className="truncate font-mono">{pageLabel(page)}</span>
                 </label>
               ))}
@@ -142,17 +166,34 @@ export function SiteTourDialog({ capture }: { capture: CaptureControls }) {
         ) : null}
 
         <div className="grid grid-cols-2 gap-4">
-          <Pace label="Scroll per page" value={scrollSeconds} min={2} max={20} onChange={setScrollSeconds} />
-          <Pace label="Pause top and bottom" value={pauseSeconds} min={0} max={5} step={0.5} onChange={setPauseSeconds} />
+          <Pace
+            label="Scroll per page"
+            value={scrollSeconds}
+            min={2}
+            max={20}
+            onChange={setScrollSeconds}
+          />
+          <Pace
+            label="Pause top and bottom"
+            value={pauseSeconds}
+            min={0}
+            max={5}
+            step={0.5}
+            onChange={setPauseSeconds}
+          />
         </div>
 
         <DialogFooter className="items-center sm:justify-between">
           <span className="text-xs text-muted-foreground">
-            {selection.length > 0 ? `About ${Math.round(tourSeconds(selection.length, { scrollSeconds, pauseSeconds }))} s of video` : ""}
+            {selection.length > 0
+              ? `About ${Math.round(tourSeconds(selection.length, { scrollSeconds, pauseSeconds }))} s of video`
+              : ""}
           </span>
           <Button
             onClick={start}
-            disabled={selection.length === 0 || tour.isPending || capture.recording}
+            disabled={
+              selection.length === 0 || tour.isPending || capture.recording
+            }
             className="bg-rec text-white hover:bg-rec/90"
           >
             Record tour
@@ -184,7 +225,13 @@ function Pace({
         <span className="text-muted-foreground">{label}</span>
         <span className="font-mono tabular-nums">{value}s</span>
       </div>
-      <Slider min={min} max={max} step={step} value={[value]} onValueChange={([v]) => onChange(v)} />
+      <Slider
+        min={min}
+        max={max}
+        step={step}
+        value={[value]}
+        onValueChange={([v]) => onChange(v)}
+      />
     </div>
   );
 }

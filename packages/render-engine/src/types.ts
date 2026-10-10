@@ -87,7 +87,13 @@ export type CameraEdit = {
   mirror: boolean;
 };
 
-export type TransitionKind = "fade" | "dip" | "slide-left" | "slide-up" | "zoom" | "wipe";
+export type TransitionKind =
+  | "fade"
+  | "dip"
+  | "slide-left"
+  | "slide-up"
+  | "zoom"
+  | "wipe";
 
 // How a clip comes in over the end of the one before it. It overlaps the
 // start of the clip (the sequence keeps its length); the outgoing side is
@@ -108,7 +114,15 @@ export type RecordingClip = {
 };
 
 /** Enter / exit motion of a text, an overlay or a slide. */
-export type Animation = "none" | "fade" | "slide-up" | "slide-left" | "pop" | "typewriter" | "words" | "wipe";
+export type Animation =
+  | "none"
+  | "fade"
+  | "slide-up"
+  | "slide-left"
+  | "pop"
+  | "typewriter"
+  | "words"
+  | "wipe";
 
 // A full-frame title card on the main track, in place of the recording.
 export type SlideClip = {
@@ -155,16 +169,45 @@ export type TextStyle = {
   background: string | null;
 };
 
-export type TextOverlay = OverlayBase & { kind: "text"; text: string; style: TextStyle };
-export type ImageOverlay = OverlayBase & { kind: "image"; asset: string; radius: number };
-export type VideoOverlay = OverlayBase & { kind: "video"; asset: string; in: number; volume: number; radius: number };
+export type TextOverlay = OverlayBase & {
+  kind: "text";
+  text: string;
+  style: TextStyle;
+};
+export type ImageOverlay = OverlayBase & {
+  kind: "image";
+  asset: string;
+  radius: number;
+};
+export type VideoOverlay = OverlayBase & {
+  kind: "video";
+  asset: string;
+  in: number;
+  volume: number;
+  radius: number;
+};
 export type ShapeKind = "arrow" | "rect" | "ellipse" | "highlight";
-export type ShapeOverlay = OverlayBase & { kind: "shape"; shape: ShapeKind; color: string; stroke: number };
+export type ShapeOverlay = OverlayBase & {
+  kind: "shape";
+  shape: ShapeKind;
+  color: string;
+  stroke: number;
+};
 // Hides what is under it: sensitive data in a recording. Strength is a
 // fraction of the output's short side (blur radius or pixel block size).
 export type BlurMode = "blur" | "pixelate";
-export type BlurOverlay = OverlayBase & { kind: "blur"; mode: BlurMode; strength: number; radius: number };
-export type Overlay = TextOverlay | ImageOverlay | VideoOverlay | ShapeOverlay | BlurOverlay;
+export type BlurOverlay = OverlayBase & {
+  kind: "blur";
+  mode: BlurMode;
+  strength: number;
+  radius: number;
+};
+export type Overlay =
+  | TextOverlay
+  | ImageOverlay
+  | VideoOverlay
+  | ShapeOverlay
+  | BlurOverlay;
 
 export type AudioClip = {
   id: string;
@@ -179,7 +222,13 @@ export type AudioClip = {
 };
 
 // A file added to the edit, copied next to the recording (`<stem>.assets/`).
-export type Asset = { id: string; name: string; kind: "image" | "video" | "audio"; file: string; duration: number | null };
+export type Asset = {
+  id: string;
+  name: string;
+  kind: "image" | "video" | "audio";
+  file: string;
+  duration: number | null;
+};
 
 // Everything the editor adds on top of the recording. Source files are
 // never modified, so every effect stays editable.
@@ -211,7 +260,12 @@ export type EditState = {
 
 export type Camera = { scale: number; center: Point };
 
-export type TouchMark = { x: number; y: number; scale: number; opacity: number };
+export type TouchMark = {
+  x: number;
+  y: number;
+  scale: number;
+  opacity: number;
+};
 
 /** Geometry of a device frame at its natural size (from the Device Engine). */
 export type FrameGeometry = { frame: Size; screen: Rect };

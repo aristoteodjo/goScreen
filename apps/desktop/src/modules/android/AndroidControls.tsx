@@ -1,4 +1,8 @@
-import { type AndroidKey, describeAndroidError, toAndroidError } from "@goscreen/android-source";
+import {
+  type AndroidKey,
+  describeAndroidError,
+  toAndroidError,
+} from "@goscreen/android-source";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,10 +19,13 @@ const KEYS: { key: AndroidKey; label: string }[] = [
 export function AndroidControls({ serial }: { serial: string }) {
   const live = useAndroidDevices().data?.find((d) => d.serial === serial);
   const press = useMutation({
-    mutationFn: (key: AndroidKey) => android.input(serial, { kind: "key", key }),
+    mutationFn: (key: AndroidKey) =>
+      android.input(serial, { kind: "key", key }),
     onError: (e) => {
       const err = toAndroidError(e);
-      toast.error(err.message, { description: describeAndroidError(err.code).hints.join(" ") });
+      toast.error(err.message, {
+        description: describeAndroidError(err.code).hints.join(" "),
+      });
     },
   });
 
@@ -26,7 +33,9 @@ export function AndroidControls({ serial }: { serial: string }) {
     <div className="flex flex-col gap-2 rounded-md border bg-background/40 p-3 text-xs">
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground">Android source</span>
-        <span className={live?.connected ? "text-emerald-400" : "text-amber-400"}>
+        <span
+          className={live?.connected ? "text-emerald-400" : "text-amber-400"}
+        >
           {live?.connected ? "Connected" : "Not connected"}
         </span>
       </div>
@@ -52,7 +61,8 @@ export function AndroidControls({ serial }: { serial: string }) {
         ))}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Rotate the emulator itself; the frame follows. Pick any frame above, the app stays the same.
+        Rotate the emulator itself; the frame follows. Pick any frame above, the
+        app stays the same.
       </p>
     </div>
   );

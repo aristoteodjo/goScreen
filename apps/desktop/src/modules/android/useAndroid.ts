@@ -34,7 +34,9 @@ export function useAndroidDevices(enabled = true) {
  * the real screen ratio and follows rotations done on the device.
  */
 export function useAndroidSync() {
-  const hasAndroid = useProject((s) => s.devices.some((d) => d.source.kind === "android"));
+  const hasAndroid = useProject((s) =>
+    s.devices.some((d) => d.source.kind === "android"),
+  );
   const live = useAndroidDevices(hasAndroid);
 
   useEffect(() => {
@@ -45,12 +47,16 @@ export function useAndroidSync() {
       const serial = d.source.serial;
       const device = live.data.find((x) => x.serial === serial);
       if (!device?.resolution) continue;
-      const viewport = viewportFor({ ...device.resolution, density: device.density });
+      const viewport = viewportFor({
+        ...device.resolution,
+        density: device.density,
+      });
       const same =
         d.viewport?.width === viewport.width &&
         d.viewport?.height === viewport.height &&
         d.orientation === device.orientation;
-      if (!same) updateDevice(d.id, { viewport, orientation: device.orientation });
+      if (!same)
+        updateDevice(d.id, { viewport, orientation: device.orientation });
     }
   }, [live.data]);
 }

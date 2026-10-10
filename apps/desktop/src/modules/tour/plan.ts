@@ -7,7 +7,10 @@ export type TourOptions = {
   pauseSeconds: number;
 };
 
-export const DEFAULT_TOUR: TourOptions = { scrollSeconds: 6, pauseSeconds: 1.5 };
+export const DEFAULT_TOUR: TourOptions = {
+  scrollSeconds: 6,
+  pauseSeconds: 1.5,
+};
 
 /** Gentle start and stop, like a hand on a trackpad. */
 export function scrollRatioAt(elapsed: number, duration: number): number {
@@ -27,7 +30,9 @@ export function samePage(a: string, b: string): boolean {
     const x = new URL(a);
     const y = new URL(b);
     const path = (u: URL) => u.pathname.replace(/\/+$/, "") || "/";
-    return x.origin === y.origin && path(x) === path(y) && x.search === y.search;
+    return (
+      x.origin === y.origin && path(x) === path(y) && x.search === y.search
+    );
   } catch {
     return false;
   }

@@ -1,11 +1,20 @@
-import { type AndroidDevice, describeAndroidError, suggestProfile, toAndroidError } from "@goscreen/android-source";
+import {
+  type AndroidDevice,
+  describeAndroidError,
+  suggestProfile,
+  toAndroidError,
+} from "@goscreen/android-source";
 import { viewportFor } from "@goscreen/content-source";
 import { Settings02Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -36,7 +45,9 @@ export function AndroidPanel() {
         ) : status.isError ? (
           <Problem error={status.error} />
         ) : !status.data.available ? (
-          <Problem error={toAndroidError({ code: "adb_missing", detail: "" })} />
+          <Problem
+            error={toAndroidError({ code: "adb_missing", detail: "" })}
+          />
         ) : devices.isError ? (
           <Problem error={devices.error} />
         ) : devices.data === undefined ? (
@@ -44,7 +55,9 @@ export function AndroidPanel() {
             <Spinner className="size-3" /> Detecting devices…
           </Hint>
         ) : devices.data.length === 0 ? (
-          <Hint>No emulator or device detected. Start one from Android Studio.</Hint>
+          <Hint>
+            No emulator or device detected. Start one from Android Studio.
+          </Hint>
         ) : (
           devices.data.map((d) => <DeviceCard key={d.serial} device={d} />)
         )}
@@ -54,7 +67,11 @@ export function AndroidPanel() {
 }
 
 function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground">{children}</p>;
+  return (
+    <p className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground">
+      {children}
+    </p>
+  );
 }
 
 function Problem({ error }: { error: unknown }) {
@@ -73,7 +90,9 @@ function Problem({ error }: { error: unknown }) {
 
 function DeviceCard({ device }: { device: AndroidDevice }) {
   const inScene = useProject((s) =>
-    s.devices.find((d) => d.source.kind === "android" && d.source.serial === device.serial),
+    s.devices.find(
+      (d) => d.source.kind === "android" && d.source.serial === device.serial,
+    ),
   );
   const select = useEditor((s) => s.select);
   const ready = device.state === "device";
@@ -81,47 +100,67 @@ function DeviceCard({ device }: { device: AndroidDevice }) {
   const connect = () => {
     if (inScene) {
       select(inScene.id);
-      if (useEditor.getState().view === "canvas") canvasCommands.focus(inScene.id);
+      if (useEditor.getState().view === "canvas")
+        canvasCommands.focus(inScene.id);
       return;
     }
     const profile = suggestProfile(device, registry.list());
     if (!profile) return;
     const id = useProject.getState().addDevice(profile, {
       source: { kind: "android", serial: device.serial },
-      viewport: device.resolution ? viewportFor({ ...device.resolution, density: device.density }) : null,
+      viewport: device.resolution
+        ? viewportFor({ ...device.resolution, density: device.density })
+        : null,
       orientation: device.orientation,
     });
     if (!id) return;
     select(id);
-    if (useEditor.getState().view === "canvas") requestAnimationFrame(() => canvasCommands.focus(id));
+    if (useEditor.getState().view === "canvas")
+      requestAnimationFrame(() => canvasCommands.focus(id));
   };
 
   return (
     <div className="rounded-md border bg-background/40 px-2.5 py-2">
       <div className="flex items-start gap-2">
         <span
-          className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", ready ? "bg-emerald-400" : "bg-amber-400")}
+          className={cn(
+            "mt-1.5 size-1.5 shrink-0 rounded-full",
+            ready ? "bg-emerald-400" : "bg-amber-400",
+          )}
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-medium">{device.name}</p>
-          <p className="truncate font-mono text-[11px] text-muted-foreground">{device.serial}</p>
+          <p className="truncate font-mono text-[11px] text-muted-foreground">
+            {device.serial}
+          </p>
           {device.resolution ? (
             <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
               {device.resolution.width} × {device.resolution.height}
-              {device.androidVersion ? ` · Android ${device.androidVersion}` : ""}
+              {device.androidVersion
+                ? ` · Android ${device.androidVersion}`
+                : ""}
             </p>
           ) : null}
         </div>
       </div>
       {ready ? (
-        <Button size="sm" variant={inScene ? "ghost" : "secondary"} className="mt-2 h-7 w-full gap-1.5 text-xs" onClick={connect}>
+        <Button
+          size="sm"
+          variant={inScene ? "ghost" : "secondary"}
+          className="mt-2 h-7 w-full gap-1.5 text-xs"
+          onClick={connect}
+        >
           <HugeiconsIcon icon={SmartPhone01Icon} strokeWidth={1.75} />
           {inScene ? "Show in scene" : "Connect"}
         </Button>
       ) : (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          {describeAndroidError(device.state === "device" ? "unknown" : device.state).hints[0]}
+          {
+            describeAndroidError(
+              device.state === "device" ? "unknown" : device.state,
+            ).hints[0]
+          }
         </p>
       )}
     </div>
@@ -141,12 +180,16 @@ function AdbPathAction() {
           <HugeiconsIcon icon={Settings02Icon} strokeWidth={1.75} />
         </SidebarGroupAction>
       </PopoverTrigger>
-      <PopoverContent side="right" align="start" className="w-80 space-y-3 text-xs">
+      <PopoverContent
+        side="right"
+        align="start"
+        className="w-80 space-y-3 text-xs"
+      >
         <div className="space-y-1">
           <p className="font-medium text-foreground">ADB location</p>
           <p className="text-muted-foreground">
-            Detected automatically from ANDROID_HOME, PATH and the default SDK folder. Set a path only if detection
-            fails.
+            Detected automatically from ANDROID_HOME, PATH and the default SDK
+            folder. Set a path only if detection fails.
           </p>
         </div>
         <form

@@ -1,6 +1,12 @@
 import { activeZoom, autoFocus, cameraAt } from "./camera";
+import {
+  layerPoint,
+  placeLayer,
+  rectAt,
+  stageArea,
+  webcamRect,
+} from "./layers";
 import { contentRect } from "./layout";
-import { layerPoint, placeLayer, rectAt, stageArea, webcamRect } from "./layers";
 import { type Press, presses, touchesAt } from "./touches";
 import type {
   EditState,
@@ -16,7 +22,10 @@ import type {
 } from "./types";
 
 /** Resolves a device frame's geometry (the Device Engine, injected). */
-export type GeometryOf = (edit: LayerEdit, recorded: RecordedLayer) => FrameGeometry | null;
+export type GeometryOf = (
+  edit: LayerEdit,
+  recorded: RecordedLayer,
+) => FrameGeometry | null;
 
 export type Timeline = {
   source: Size;
@@ -42,11 +51,18 @@ export function timelineOf(
   };
 }
 
-function placeLayers(edit: EditState, timeline: Timeline, area: Rect, t: number): PlacedLayer[] {
+function placeLayers(
+  edit: EditState,
+  timeline: Timeline,
+  area: Rect,
+  t: number,
+): PlacedLayer[] {
   const out: PlacedLayer[] = [];
   for (const le of edit.layers ?? []) {
     if (le.hidden) continue;
-    const recorded = timeline.layers.find((l) => l.instanceId === le.instanceId);
+    const recorded = timeline.layers.find(
+      (l) => l.instanceId === le.instanceId,
+    );
     if (!recorded) continue;
     const geometry = timeline.geometry(le, recorded);
     const r = rectAt(recorded.rects, t);
@@ -66,7 +82,12 @@ function placeLayers(edit: EditState, timeline: Timeline, area: Rect, t: number)
  * The single description of an output frame at source time t. Preview and
  * export both draw from this, so what you see is what gets exported.
  */
-export function composeFrame(edit: EditState, timeline: Timeline, output: Size, t: number): Frame {
+export function composeFrame(
+  edit: EditState,
+  timeline: Timeline,
+  output: Size,
+  t: number,
+): Frame {
   const area = stageArea(output, edit.camera, timeline.hasCamera);
   const webcam = webcamRect(output, edit.camera, timeline.hasCamera);
   const layered = edit.layers !== null && timeline.layers.length > 0;
@@ -83,9 +104,16 @@ export function composeFrame(edit: EditState, timeline: Timeline, output: Size, 
       return layerPoint(layer, p.u, p.v);
     };
   } else {
-    const inner = contentRect(area, timeline.source, edit.background.kind === "none" ? 0 : edit.padding);
+    const inner = contentRect(
+      area,
+      timeline.source,
+      edit.background.kind === "none" ? 0 : edit.padding,
+    );
     content = { ...inner, x: inner.x + area.x, y: inner.y + area.y };
-    toOutput = (p) => ({ x: content.x + p.x * content.width, y: content.y + p.y * content.height });
+    toOutput = (p) => ({
+      x: content.x + p.x * content.width,
+      y: content.y + p.y * content.height,
+    });
   }
 
   const seg = activeZoom(edit.zooms, t);
@@ -96,7 +124,8 @@ export function composeFrame(edit: EditState, timeline: Timeline, output: Size, 
     : null;
   const camera = cameraAt(seg, t, output, focus);
 
-  const touches = edit.touch.style === "none" ? [] : touchesAt(timeline.presses, t, toOutput);
+  const touches =
+    edit.touch.style === "none" ? [] : touchesAt(timeline.presses, t, toOutput);
 
   return { output, content, layers, camera, touches, webcam };
 }

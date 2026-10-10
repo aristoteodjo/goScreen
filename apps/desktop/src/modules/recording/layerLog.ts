@@ -13,7 +13,12 @@ let entries = new Map<string, Entry>();
 let timer: ReturnType<typeof setInterval> | null = null;
 
 function overlaps(r: CaptureRegion, region: CaptureRegion) {
-  return r.x < region.x + region.width && r.x + r.width > region.x && r.y < region.y + region.height && r.y + r.height > region.y;
+  return (
+    r.x < region.x + region.width &&
+    r.x + r.width > region.x &&
+    r.y < region.y + region.height &&
+    r.y + r.height > region.y
+  );
 }
 
 const same = (a: LayerRect, b: Omit<LayerRect, "t">) =>
@@ -51,7 +56,8 @@ function sample(t: number) {
       entries.set(id, entry);
     }
     const last = entry.rects[entry.rects.length - 1];
-    if (!last || !same(last, rect)) entry.rects.push({ t: Math.max(0, t), ...rect });
+    if (!last || !same(last, rect))
+      entry.rects.push({ t: Math.max(0, t), ...rect });
   }
 }
 

@@ -4,36 +4,52 @@ import {
   clipAt,
   DEFAULT_EDIT,
   type EditState,
+  type LayerEdit,
   type MainClip,
+  MIC_ASSET,
   moveClip,
   type Overlay,
   type OverlayBase,
+  placeClips,
   removeClip,
-  setSpeed,
   type ShapeKind,
   type SlideClip,
+  setSpeed,
   splitAt,
   type TextOverlay,
   type Transition,
-  type LayerEdit,
-  MIC_ASSET,
-  placeClips,
 } from "@goscreen/render-engine";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { ipc } from "@/lib/ipc";
 import { probeDuration } from "./media";
 import { player, useSession } from "./session";
-import { newId, type Selection, timelineEnd, useEdit, usePlayback } from "./store";
+import {
+  newId,
+  type Selection,
+  timelineEnd,
+  useEdit,
+  usePlayback,
+} from "./store";
 
-const change = (fn: (ed: EditState) => EditState, key?: string) => useEdit.getState().change(fn, key);
+const change = (fn: (ed: EditState) => EditState, key?: string) =>
+  useEdit.getState().change(fn, key);
 const now = () => usePlayback.getState().time;
 const selection = () => usePlayback.getState().selection;
 
 /** First lane where [start, start + duration) is free. */
-function freeLane(items: { lane: number; start: number; duration: number }[], start: number, duration: number) {
+function freeLane(
+  items: { lane: number; start: number; duration: number }[],
+  start: number,
+  duration: number,
+) {
   for (let lane = 0; lane < 20; lane += 1) {
-    const busy = items.some((o) => o.lane === lane && o.start < start + duration && start < o.start + o.duration);
+    const busy = items.some(
+      (o) =>
+        o.lane === lane &&
+        o.start < start + duration &&
+        start < o.start + o.duration,
+    );
     if (!busy) return lane;
   }
   return 0;
@@ -68,10 +84,30 @@ function addOverlay(o: Overlay) {
   player.seek(Math.max(now(), o.start + Math.min(o.motion, o.duration / 2)));
 }
 
-export const TEXT_PRESETS: { id: string; label: string; enter: Animation; patch: Partial<TextOverlay> }[] = [
-  { id: "title", label: "Title", enter: "words", patch: { y: 0.18, width: 0.8, height: 0.14 } },
-  { id: "caption", label: "Caption", enter: "slide-up", patch: { y: 0.86, width: 0.7, height: 0.08 } },
-  { id: "typewriter", label: "Typewriter", enter: "typewriter", patch: { y: 0.5, width: 0.6, height: 0.1 } },
+export const TEXT_PRESETS: {
+  id: string;
+  label: string;
+  enter: Animation;
+  patch: Partial<TextOverlay>;
+}[] = [
+  {
+    id: "title",
+    label: "Title",
+    enter: "words",
+    patch: { y: 0.18, width: 0.8, height: 0.14 },
+  },
+  {
+    id: "caption",
+    label: "Caption",
+    enter: "slide-up",
+    patch: { y: 0.86, width: 0.7, height: 0.08 },
+  },
+  {
+    id: "typewriter",
+    label: "Typewriter",
+    enter: "typewriter",
+    patch: { y: 0.5, width: 0.6, height: 0.1 },
+  },
 ];
 
 export const editActions = {
@@ -79,9 +115,18 @@ export const editActions = {
   addText(preset = TEXT_PRESETS[0], at?: { x: number; y: number }) {
     const big = preset.id === "title";
     addOverlay({
-      ...overlayAt(3, { ...preset.patch, ...at, enter: preset.enter, motion: big ? 0.9 : 0.5 }),
+      ...overlayAt(3, {
+        ...preset.patch,
+        ...at,
+        enter: preset.enter,
+        motion: big ? 0.9 : 0.5,
+      }),
       kind: "text",
-      text: big ? "Your headline" : preset.id === "caption" ? "Add a caption" : "Type something…",
+      text: big
+        ? "Your headline"
+        : preset.id === "caption"
+          ? "Add a caption"
+          : "Type something…",
       style: {
         font: "Inter",
         size: big ? 0.075 : 0.045,
@@ -112,7 +157,14 @@ export const editActions = {
   /** A blur box at the playhead, to hide sensitive data; drag it over the spot. */
   addBlur(mode: "blur" | "pixelate" = "blur", at?: { x: number; y: number }) {
     addOverlay({
-      ...overlayAt(4, { width: 0.25, height: 0.08, ...at, enter: "fade", exit: "fade", motion: 0.2 }),
+      ...overlayAt(4, {
+        width: 0.25,
+        height: 0.08,
+        ...at,
+        enter: "fade",
+        exit: "fade",
+        motion: 0.2,
+      }),
       kind: "blur",
       mode,
       strength: mode === "blur" ? 0.02 : 0.018,
@@ -127,7 +179,10 @@ export const editActions = {
       id: newId("slide"),
       kind: "slide",
       duration: 3,
-      background: edit.background.kind === "none" ? DEFAULT_EDIT.background : edit.background,
+      background:
+        edit.background.kind === "none"
+          ? DEFAULT_EDIT.background
+          : edit.background,
       title: "Introducing our app",
       subtitle: "Faster, simpler, yours",
       color: "#ffffff",
@@ -148,7 +203,13 @@ export const editActions = {
     }
     // The clip after the slide fades back in: the slide reads as a transition.
     const after = clips[index];
-    const rest = after && !after.transition ? [{ ...after, transition: { kind: "fade" as const, duration: 0.6 } }, ...clips.slice(index + 1)] : clips.slice(index);
+    const rest =
+      after && !after.transition
+        ? [
+            { ...after, transition: { kind: "fade" as const, duration: 0.6 } },
+            ...clips.slice(index + 1),
+          ]
+        : clips.slice(index);
     const next = [...clips.slice(0, index), slide, ...rest];
     change((ed) => ({ ...ed, clips: next }));
     usePlayback.getState().select({ kind: "clip", id: slide.id });
@@ -165,15 +226,27 @@ export const editActions = {
     if (sel?.kind === "overlay" || sel?.kind === "audio") {
       const list = sel.kind === "overlay" ? edit.overlays : edit.audio;
       const item = list.find((o) => o.id === sel.id);
-      if (!item || t <= item.start + 0.1 || t >= item.start + item.duration - 0.1) return;
+      if (
+        !item ||
+        t <= item.start + 0.1 ||
+        t >= item.start + item.duration - 0.1
+      )
+        return;
       const cut = t - item.start;
       const left = { ...item, duration: cut };
-      const right = { ...item, id: newId(sel.kind === "overlay" ? "ovl" : "aud"), start: t, duration: item.duration - cut };
+      const right = {
+        ...item,
+        id: newId(sel.kind === "overlay" ? "ovl" : "aud"),
+        start: t,
+        duration: item.duration - cut,
+      };
       if ("in" in right) (right as { in: number }).in += cut;
       const key = sel.kind === "overlay" ? "overlays" : "audio";
       change((ed) => ({
         ...ed,
-        [key]: (ed[key] as (Overlay | AudioClip)[]).flatMap((o) => (o.id === item.id ? [left, right] : [o])),
+        [key]: (ed[key] as (Overlay | AudioClip)[]).flatMap((o) =>
+          o.id === item.id ? [left, right] : [o],
+        ),
       }));
       return;
     }
@@ -194,9 +267,15 @@ export const editActions = {
       change((ed) => ({ ...ed, clips: removeClip(ed.clips, sel.id) }));
       player.seek(Math.min(now(), timelineEnd(useEdit.getState().edit)));
     } else if (sel.kind === "overlay") {
-      change((ed) => ({ ...ed, overlays: ed.overlays.filter((o) => o.id !== sel.id) }));
+      change((ed) => ({
+        ...ed,
+        overlays: ed.overlays.filter((o) => o.id !== sel.id),
+      }));
     } else {
-      change((ed) => ({ ...ed, audio: ed.audio.filter((a) => a.id !== sel.id) }));
+      change((ed) => ({
+        ...ed,
+        audio: ed.audio.filter((a) => a.id !== sel.id),
+      }));
     }
     usePlayback.getState().select(null);
     return true;
@@ -209,21 +288,33 @@ export const editActions = {
       const i = edit.clips.findIndex((c) => c.id === sel.id);
       if (i < 0) return;
       const copy: MainClip = { ...edit.clips[i], id: newId("clip") };
-      change((ed) => ({ ...ed, clips: [...ed.clips.slice(0, i + 1), copy, ...ed.clips.slice(i + 1)] }));
+      change((ed) => ({
+        ...ed,
+        clips: [...ed.clips.slice(0, i + 1), copy, ...ed.clips.slice(i + 1)],
+      }));
       return;
     }
     const list = sel.kind === "overlay" ? edit.overlays : edit.audio;
     const item = list.find((o) => o.id === sel.id);
     if (!item) return;
     const start = item.start + item.duration;
-    const copy = { ...item, id: newId("dup"), start, lane: freeLane(list, start, item.duration) };
-    if (sel.kind === "overlay") change((ed) => ({ ...ed, overlays: [...ed.overlays, copy as Overlay] }));
+    const copy = {
+      ...item,
+      id: newId("dup"),
+      start,
+      lane: freeLane(list, start, item.duration),
+    };
+    if (sel.kind === "overlay")
+      change((ed) => ({ ...ed, overlays: [...ed.overlays, copy as Overlay] }));
     else change((ed) => ({ ...ed, audio: [...ed.audio, copy as AudioClip] }));
   },
 
   /** Sets (or clears, with null) how a clip comes in over the one before it. */
   setTransition(id: string, transition: Transition | null) {
-    change((ed) => ({ ...ed, clips: ed.clips.map((c) => (c.id === id ? { ...c, transition } : c)) }));
+    change((ed) => ({
+      ...ed,
+      clips: ed.clips.map((c) => (c.id === id ? { ...c, transition } : c)),
+    }));
   },
 
   /**
@@ -235,9 +326,12 @@ export const editActions = {
     const edit = useEdit.getState().edit;
     const clips: AudioClip[] = [];
     // The voice gets a new lane below any music, so lane switches keep their meaning.
-    const lane = edit.audio.length ? Math.max(...edit.audio.map((a) => a.lane)) + 1 : 0;
+    const lane = edit.audio.length
+      ? Math.max(...edit.audio.map((a) => a.lane)) + 1
+      : 0;
     for (const p of placeClips(edit.clips)) {
-      if (p.clip.kind !== "recording" || p.clip.speed !== 1 || p.clip.muted) continue;
+      if (p.clip.kind !== "recording" || p.clip.speed !== 1 || p.clip.muted)
+        continue;
       clips.push({
         id: newId("voice"),
         lane,
@@ -251,7 +345,9 @@ export const editActions = {
       });
     }
     if (clips.length === 0) {
-      toast.info("Nothing to detach: no clip plays the microphone at normal speed.");
+      toast.info(
+        "Nothing to detach: no clip plays the microphone at normal speed.",
+      );
       return;
     }
     change((ed) => ({
@@ -273,29 +369,53 @@ export const editActions = {
 
   /** Changes one recorded device (model, finish, frame...) from anywhere. */
   setLayer(instanceId: string, patch: Partial<LayerEdit>) {
-    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => (l.instanceId === instanceId ? { ...l, ...patch } : l)) ?? null }));
+    change((ed) => ({
+      ...ed,
+      layers:
+        ed.layers?.map((l) =>
+          l.instanceId === instanceId ? { ...l, ...patch } : l,
+        ) ?? null,
+    }));
   },
 
   /** Moves an overlay one lane up (in front) or down (behind). */
   moveOverlayLane(id: string, by: 1 | -1) {
     change((ed) => ({
       ...ed,
-      overlays: ed.overlays.map((o) => (o.id === id ? { ...o, lane: Math.max(0, o.lane + by) } : o)),
+      overlays: ed.overlays.map((o) =>
+        o.id === id ? { ...o, lane: Math.max(0, o.lane + by) } : o,
+      ),
     }));
   },
 
   /** Switches a device track on or off. */
   setLayerHidden(instanceId: string, hidden: boolean) {
-    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => (l.instanceId === instanceId ? { ...l, hidden } : l)) ?? null }));
+    change((ed) => ({
+      ...ed,
+      layers:
+        ed.layers?.map((l) =>
+          l.instanceId === instanceId ? { ...l, hidden } : l,
+        ) ?? null,
+    }));
   },
 
   /** Only this device shows: for a close-up or a user test of one device. */
   soloLayer(instanceId: string) {
-    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => ({ ...l, hidden: l.instanceId !== instanceId })) ?? null }));
+    change((ed) => ({
+      ...ed,
+      layers:
+        ed.layers?.map((l) => ({
+          ...l,
+          hidden: l.instanceId !== instanceId,
+        })) ?? null,
+    }));
   },
 
   showAllLayers() {
-    change((ed) => ({ ...ed, layers: ed.layers?.map((l) => ({ ...l, hidden: false })) ?? null }));
+    change((ed) => ({
+      ...ed,
+      layers: ed.layers?.map((l) => ({ ...l, hidden: false })) ?? null,
+    }));
   },
 
   setClipSpeed(id: string, speed: number) {
@@ -305,7 +425,11 @@ export const editActions = {
   toggleClip(id: string, field: "muted" | "cameraHidden") {
     change((ed) => ({
       ...ed,
-      clips: ed.clips.map((c) => (c.id === id && c.kind === "recording" ? { ...c, [field]: !c[field] } : c)),
+      clips: ed.clips.map((c) =>
+        c.id === id && c.kind === "recording"
+          ? { ...c, [field]: !c[field] }
+          : c,
+      ),
     }));
   },
 
@@ -322,7 +446,9 @@ export const editActions = {
     };
     const picked = await open({
       multiple: true,
-      filters: [{ name: "Media", extensions: kinds.flatMap((k) => extensions[k]) }],
+      filters: [
+        { name: "Media", extensions: kinds.flatMap((k) => extensions[k]) },
+      ],
     });
     const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
     const { videoPath } = useSession.getState();
@@ -332,21 +458,41 @@ export const editActions = {
         useSession.getState().addAssetUrl(asset.file, asset.url);
         await addAsset(asset);
       } catch (e) {
-        toast.error("Could not add this file", { description: e instanceof Error ? e.message : String(e) });
+        toast.error("Could not add this file", {
+          description: e instanceof Error ? e.message : String(e),
+        });
       }
     }
   },
 };
 
-async function addAsset(asset: { id: string; name: string; kind: "image" | "video" | "audio"; file: string; url: string }) {
-  const duration = asset.kind === "image" ? null : await probeDuration(asset.kind, asset.url).catch(() => null);
-  const record = { id: asset.id, name: asset.name, kind: asset.kind, file: asset.file, duration };
+async function addAsset(asset: {
+  id: string;
+  name: string;
+  kind: "image" | "video" | "audio";
+  file: string;
+  url: string;
+}) {
+  const duration =
+    asset.kind === "image"
+      ? null
+      : await probeDuration(asset.kind, asset.url).catch(() => null);
+  const record = {
+    id: asset.id,
+    name: asset.name,
+    kind: asset.kind,
+    file: asset.file,
+    duration,
+  };
   change((ed) => ({ ...ed, assets: [...ed.assets, record] }));
 
   if (asset.kind === "audio") {
     const edit = useEdit.getState().edit;
     const start = now();
-    const length = Math.max(0.5, Math.min(duration ?? 10, Math.max(1, timelineEnd(edit) - start)));
+    const length = Math.max(
+      0.5,
+      Math.min(duration ?? 10, Math.max(1, timelineEnd(edit) - start)),
+    );
     const clip: AudioClip = {
       id: newId("aud"),
       lane: freeLane(edit.audio, start, length),
@@ -366,19 +512,46 @@ async function addAsset(asset: { id: string; name: string; kind: "image" | "vide
   // Media keep their own aspect; the box is sized against the output.
   const { source } = useSession.getState();
   const out = source ?? { width: 16, height: 9 };
-  const natural = await naturalSize(asset.kind, asset.url).catch(() => ({ width: 16, height: 9 }));
+  const natural = await naturalSize(asset.kind, asset.url).catch(() => ({
+    width: 16,
+    height: 9,
+  }));
   const width = 0.35;
-  const height = Math.min(0.9, (width * out.width * natural.height) / natural.width / out.height);
-  const base = overlayAt(asset.kind === "video" ? (duration ?? 5) : 4, { width, height, enter: "pop", motion: 0.35 });
-  if (asset.kind === "image") addOverlay({ ...base, kind: "image", asset: asset.id, radius: 0.02 });
-  else addOverlay({ ...base, kind: "video", asset: asset.id, in: 0, volume: 1, radius: 0.02 });
+  const height = Math.min(
+    0.9,
+    (width * out.width * natural.height) / natural.width / out.height,
+  );
+  const base = overlayAt(asset.kind === "video" ? (duration ?? 5) : 4, {
+    width,
+    height,
+    enter: "pop",
+    motion: 0.35,
+  });
+  if (asset.kind === "image")
+    addOverlay({ ...base, kind: "image", asset: asset.id, radius: 0.02 });
+  else
+    addOverlay({
+      ...base,
+      kind: "video",
+      asset: asset.id,
+      in: 0,
+      volume: 1,
+      radius: 0.02,
+    });
 }
 
-function naturalSize(kind: "image" | "video", url: string): Promise<{ width: number; height: number }> {
+function naturalSize(
+  kind: "image" | "video",
+  url: string,
+): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     if (kind === "image") {
       const img = new Image();
-      img.onload = () => resolve({ width: img.naturalWidth || 16, height: img.naturalHeight || 9 });
+      img.onload = () =>
+        resolve({
+          width: img.naturalWidth || 16,
+          height: img.naturalHeight || 9,
+        });
       img.onerror = reject;
       img.src = url;
       return;
@@ -387,7 +560,8 @@ function naturalSize(kind: "image" | "video", url: string): Promise<{ width: num
     v.crossOrigin = "anonymous";
     v.muted = true;
     v.preload = "metadata";
-    v.onloadedmetadata = () => resolve({ width: v.videoWidth || 16, height: v.videoHeight || 9 });
+    v.onloadedmetadata = () =>
+      resolve({ width: v.videoWidth || 16, height: v.videoHeight || 9 });
     v.onerror = reject;
     v.src = url;
   });

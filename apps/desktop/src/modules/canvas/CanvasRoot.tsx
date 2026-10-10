@@ -1,13 +1,19 @@
-import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { deviceUrl, useProject } from "@/modules/studio/store/project";
+import {
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRecording } from "@/modules/recording/store";
+import { ViewContextMenu } from "@/modules/studio/components/StudioContextMenus";
 import { useEditor } from "@/modules/studio/store/editor";
+import { deviceUrl, useProject } from "@/modules/studio/store/project";
 import { CanvasFrame } from "./CanvasFrame";
 import { attachCanvas, canvasCommands } from "./commands";
 import { type View, zoomAt } from "./math";
 import { useCanvasView } from "./view";
 import { ZoomControls } from "./ZoomControls";
-import { ViewContextMenu } from "@/modules/studio/components/StudioContextMenus";
 
 // Dot grid spacing stays between 12 and 48 screen px at any zoom.
 function gridSize(zoom: number) {
@@ -18,7 +24,11 @@ function gridSize(zoom: number) {
 }
 
 function isTyping(target: EventTarget | null) {
-  return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+  );
 }
 
 export function CanvasRoot() {
@@ -66,7 +76,14 @@ export function CanvasRoot() {
       if (e.ctrlKey || e.metaKey) {
         const r = host.getBoundingClientRect();
         const delta = Math.max(-60, Math.min(60, e.deltaY));
-        v.setView(zoomAt(v, v.zoom * Math.exp(-delta * 0.01), e.clientX - r.left, e.clientY - r.top));
+        v.setView(
+          zoomAt(
+            v,
+            v.zoom * Math.exp(-delta * 0.01),
+            e.clientX - r.left,
+            e.clientY - r.top,
+          ),
+        );
       } else {
         const dx = e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX;
         const dy = e.shiftKey ? 0 : e.deltaY;
@@ -120,8 +137,10 @@ export function CanvasRoot() {
 
   const startPan = (e: PointerEvent<HTMLDivElement>) => {
     if (useRecording.getState().active) return;
-    const onBackground = e.target === hostRef.current || e.target === layerRef.current;
-    if (!(e.button === 1 || (e.button === 0 && (onBackground || spaceHeld)))) return;
+    const onBackground =
+      e.target === hostRef.current || e.target === layerRef.current;
+    if (!(e.button === 1 || (e.button === 0 && (onBackground || spaceHeld))))
+      return;
     e.preventDefault();
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
@@ -133,7 +152,13 @@ export function CanvasRoot() {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-      useCanvasView.getState().setView({ zoom: from.zoom, panX: from.panX + dx, panY: from.panY + dy });
+      useCanvasView
+        .getState()
+        .setView({
+          zoom: from.zoom,
+          panX: from.panX + dx,
+          panY: from.panY + dy,
+        });
     };
     const onUp = () => {
       el.removeEventListener("pointermove", onMove);
@@ -147,37 +172,43 @@ export function CanvasRoot() {
 
   return (
     <ViewContextMenu>
-    <div
-      ref={hostRef}
-      onPointerDown={startPan}
-      className="relative min-h-0 flex-1 overflow-hidden bg-stage"
-      style={{
-        backgroundImage: "radial-gradient(circle, oklch(1 0 0 / 8%) 1px, transparent 1.2px)",
-        cursor: spaceHeld ? "grab" : undefined,
-      }}
-    >
       <div
-        ref={layerRef}
-        className="absolute top-0 left-0 origin-top-left data-[animating=true]:transition-transform data-[animating=true]:duration-200 data-[animating=true]:ease-out motion-reduce:transition-none"
+        ref={hostRef}
+        onPointerDown={startPan}
+        className="relative min-h-0 flex-1 overflow-hidden bg-stage"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, oklch(1 0 0 / 8%) 1px, transparent 1.2px)",
+          cursor: spaceHeld ? "grab" : undefined,
+        }}
       >
-        {devices.map((d) => {
-          const p = positions[d.id];
-          if (!p) return null;
-          return (
-            <CanvasFrame
-              key={d.id}
-              device={d}
-              position={p}
-              url={deviceUrl(d, url)}
-              selected={d.id === selectedId}
-              framesInteractive={!interacting && !spaceHeld}
-            />
-          );
-        })}
+        <div
+          ref={layerRef}
+          className="absolute top-0 left-0 origin-top-left data-[animating=true]:transition-transform data-[animating=true]:duration-200 data-[animating=true]:ease-out motion-reduce:transition-none"
+        >
+          {devices.map((d) => {
+            const p = positions[d.id];
+            if (!p) return null;
+            return (
+              <CanvasFrame
+                key={d.id}
+                device={d}
+                position={p}
+                url={deviceUrl(d, url)}
+                selected={d.id === selectedId}
+                framesInteractive={!interacting && !spaceHeld}
+              />
+            );
+          })}
+        </div>
+        {spaceHeld ? (
+          <div
+            className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing"
+            onPointerDown={startPan}
+          />
+        ) : null}
+        {hasDevices ? <ZoomControls /> : <EmptyCanvas />}
       </div>
-      {spaceHeld ? <div className="absolute inset-0 z-20 cursor-grab active:cursor-grabbing" onPointerDown={startPan} /> : null}
-      {hasDevices ? <ZoomControls /> : <EmptyCanvas />}
-    </div>
     </ViewContextMenu>
   );
 }
@@ -186,9 +217,12 @@ function EmptyCanvas() {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
       <div className="text-center">
-        <p className="text-sm font-medium">Add devices to compare them side by side</p>
+        <p className="text-sm font-medium">
+          Add devices to compare them side by side
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Pick one in the left panel, or press <kbd className="font-mono">Cmd K</kbd>.
+          Pick one in the left panel, or press{" "}
+          <kbd className="font-mono">Cmd K</kbd>.
         </p>
       </div>
     </div>

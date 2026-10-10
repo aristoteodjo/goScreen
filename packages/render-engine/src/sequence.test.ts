@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   audioPieces,
   clampToSource,
-  clipsWithout,
   clipAt,
+  clipsWithout,
   DEFAULT_EDIT,
   dropIndex,
   fullClip,
@@ -11,10 +11,10 @@ import {
   moveClip,
   parseEditState,
   removeClip,
+  type SlideClip,
   SOURCE_END,
   sequenceDuration,
   setSpeed,
-  type SlideClip,
   sourceTimeAt,
   splitAt,
   timelineTimesOf,
@@ -35,7 +35,11 @@ const slide = (id: string, duration: number): SlideClip => ({
 });
 
 describe("sequence", () => {
-  const clips: MainClip[] = [fullClip("a", 0, 4), slide("s", 2), { ...fullClip("b", 6, 10), speed: 2 }];
+  const clips: MainClip[] = [
+    fullClip("a", 0, 4),
+    slide("s", 2),
+    { ...fullClip("b", 6, 10), speed: 2 },
+  ];
 
   it("plays clips back to back", () => {
     expect(sequenceDuration(clips)).toBe(8);
@@ -85,7 +89,9 @@ describe("sequence", () => {
     const shorter = trimClip(clips, "a", "start", 10, 12);
     expect((shorter[0] as { in: number }).in).toBeCloseTo(3.8);
     expect(trimClip(clips, "a", "start", -3, 12)[0]).toMatchObject({ in: 0 });
-    expect(trimClip(clips, "s", "end", 1, 12)[1]).toMatchObject({ duration: 3 });
+    expect(trimClip(clips, "s", "end", 1, 12)[1]).toMatchObject({
+      duration: 3,
+    });
   });
 
   it("changes speed and duration together", () => {
@@ -103,10 +109,20 @@ describe("sequence", () => {
 
 describe("edit files", () => {
   it("upgrades a v1 trim into one clip", () => {
-    const edit = parseEditState({ ...DEFAULT_EDIT, version: 1, clips: undefined, trim: { start: 2, end: 9 } });
+    const edit = parseEditState({
+      ...DEFAULT_EDIT,
+      version: 1,
+      clips: undefined,
+      trim: { start: 2, end: 9 },
+    });
     expect(edit?.version).toBe(2);
     expect(edit?.clips).toEqual([fullClip("clip-1", 2, 9)]);
-    const open = parseEditState({ ...DEFAULT_EDIT, version: 1, clips: undefined, trim: { start: 1, end: null } });
+    const open = parseEditState({
+      ...DEFAULT_EDIT,
+      version: 1,
+      clips: undefined,
+      trim: { start: 1, end: null },
+    });
     expect(open?.clips[0]).toMatchObject({ in: 1, out: SOURCE_END });
   });
 
@@ -114,7 +130,18 @@ describe("edit files", () => {
     const edit = parseEditState({
       ...DEFAULT_EDIT,
       overlays: [
-        { kind: "image", id: "i", asset: "gone", lane: 0, start: 0, duration: 1, x: 0.5, y: 0.5, width: 0.2, height: 0.2 },
+        {
+          kind: "image",
+          id: "i",
+          asset: "gone",
+          lane: 0,
+          start: 0,
+          duration: 1,
+          x: 0.5,
+          y: 0.5,
+          width: 0.2,
+          height: 0.2,
+        },
         { kind: "shape", id: "bad" },
         {
           kind: "shape",
@@ -132,15 +159,31 @@ describe("edit files", () => {
       ],
     });
     expect(edit?.overlays.map((o) => o.id)).toEqual(["arrow"]);
-    expect(edit?.overlays[0]).toMatchObject({ enter: "fade", motion: 0.4, opacity: 1 });
+    expect(edit?.overlays[0]).toMatchObject({
+      enter: "fade",
+      motion: 0.4,
+      opacity: 1,
+    });
   });
 
   it("refuses asset files that are paths", () => {
     const edit = parseEditState({
       ...DEFAULT_EDIT,
       assets: [
-        { id: "a", name: "x", kind: "image", file: "../secret.png", duration: null },
-        { id: "b", name: "logo", kind: "image", file: "logo.png", duration: null },
+        {
+          id: "a",
+          name: "x",
+          kind: "image",
+          file: "../secret.png",
+          duration: null,
+        },
+        {
+          id: "b",
+          name: "logo",
+          kind: "image",
+          file: "logo.png",
+          duration: null,
+        },
       ],
     });
     expect(edit?.assets.map((a) => a.id)).toEqual(["b"]);
@@ -151,17 +194,52 @@ describe("soundtrack", () => {
   it("cuts the mic along the clips and adds music", () => {
     const edit = {
       ...DEFAULT_EDIT,
-      clips: [fullClip("a", 1, 3), { ...fullClip("b", 5, 9), speed: 2 }, { ...fullClip("c", 9, 10), muted: true }],
-      assets: [{ id: "m", name: "song", kind: "audio" as const, file: "m.mp3", duration: 60 }],
-      audio: [{ id: "x", lane: 0, start: 1, duration: 4, asset: "m", in: 10, volume: 0.5, fadeIn: 1, fadeOut: 1 }],
+      clips: [
+        fullClip("a", 1, 3),
+        { ...fullClip("b", 5, 9), speed: 2 },
+        { ...fullClip("c", 9, 10), muted: true },
+      ],
+      assets: [
+        {
+          id: "m",
+          name: "song",
+          kind: "audio" as const,
+          file: "m.mp3",
+          duration: 60,
+        },
+      ],
+      audio: [
+        {
+          id: "x",
+          lane: 0,
+          start: 1,
+          duration: 4,
+          asset: "m",
+          in: 10,
+          volume: 0.5,
+          fadeIn: 1,
+          fadeOut: 1,
+        },
+      ],
     };
     const pieces = audioPieces(edit, true);
-    expect(pieces.filter((p) => p.source.kind === "mic").map((p) => [p.from, p.duration, p.at, p.speed])).toEqual([
+    expect(
+      pieces
+        .filter((p) => p.source.kind === "mic")
+        .map((p) => [p.from, p.duration, p.at, p.speed]),
+    ).toEqual([
       [1, 2, 0, 1],
       [5, 4, 2, 2],
     ]);
-    expect(pieces.find((p) => p.source.kind === "asset")).toMatchObject({ from: 10, duration: 4, at: 1, volume: 0.5 });
-    expect(audioPieces(edit, false).every((p) => p.source.kind === "asset")).toBe(true);
+    expect(pieces.find((p) => p.source.kind === "asset")).toMatchObject({
+      from: 10,
+      duration: 4,
+      at: 1,
+      volume: 0.5,
+    });
+    expect(
+      audioPieces(edit, false).every((p) => p.source.kind === "asset"),
+    ).toBe(true);
   });
 });
 
@@ -169,7 +247,13 @@ describe("clipsWithout", () => {
   const id = (i: number) => `c${i}`;
 
   it("cuts the paused stretches out of the take", () => {
-    const clips = clipsWithout([{ start: 4, end: 9 }, { start: 15, end: 16 }], id);
+    const clips = clipsWithout(
+      [
+        { start: 4, end: 9 },
+        { start: 15, end: 16 },
+      ],
+      id,
+    );
     expect(clips.map((c) => [c.in, c.out])).toEqual([
       [0, 4],
       [9, 15],
@@ -179,7 +263,15 @@ describe("clipsWithout", () => {
   });
 
   it("merges overlapping pauses and skips slivers", () => {
-    const clips = clipsWithout([{ start: 3, end: 6 }, { start: 5, end: 8 }, { start: 8.1, end: 10 }, { start: 1, end: 1.01 }], id);
+    const clips = clipsWithout(
+      [
+        { start: 3, end: 6 },
+        { start: 5, end: 8 },
+        { start: 8.1, end: 10 },
+        { start: 1, end: 1.01 },
+      ],
+      id,
+    );
     expect(clips.map((c) => [c.in, c.out])).toEqual([
       [0, 3],
       [10, SOURCE_END],
@@ -187,7 +279,11 @@ describe("clipsWithout", () => {
   });
 
   it("is one full clip without pauses, and starts later after a pause at 0", () => {
-    expect(clipsWithout([], id).map((c) => [c.in, c.out])).toEqual([[0, SOURCE_END]]);
-    expect(clipsWithout([{ start: 0, end: 2 }], id).map((c) => [c.in, c.out])).toEqual([[2, SOURCE_END]]);
+    expect(clipsWithout([], id).map((c) => [c.in, c.out])).toEqual([
+      [0, SOURCE_END],
+    ]);
+    expect(
+      clipsWithout([{ start: 0, end: 2 }], id).map((c) => [c.in, c.out]),
+    ).toEqual([[2, SOURCE_END]]);
   });
 });

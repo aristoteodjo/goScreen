@@ -39,7 +39,9 @@ export function screenRect(instanceId: string): CaptureRegion | null {
   const el = glasses.get(instanceId);
   if (!el) return null;
   const r = el.getBoundingClientRect();
-  return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+  return r.width > 0 && r.height > 0
+    ? { x: r.left, y: r.top, width: r.width, height: r.height }
+    : null;
 }
 
 function contentUV(instanceId: string, x: number, y: number): Point | null {
@@ -52,24 +54,40 @@ function contentUV(instanceId: string, x: number, y: number): Point | null {
  * A point of the page (CSS px, as the iframe or Android view reports it)
  * -> 0..1 inside the whole glass, the space of a recorded layer.
  */
-export function screenUV(instanceId: string, x: number, y: number): Point | null {
+export function screenUV(
+  instanceId: string,
+  x: number,
+  y: number,
+): Point | null {
   const content = screens.get(instanceId);
   const glass = glasses.get(instanceId);
-  if (!content || !glass || glass.offsetWidth === 0 || glass.offsetHeight === 0) return null;
+  if (!content || !glass || glass.offsetWidth === 0 || glass.offsetHeight === 0)
+    return null;
   // The glass is the content's offsetParent: offsets are layout px, untransformed.
-  return { x: (x + content.offsetLeft) / glass.offsetWidth, y: (y + content.offsetTop) / glass.offsetHeight };
+  return {
+    x: (x + content.offsetLeft) / glass.offsetWidth,
+    y: (y + content.offsetTop) / glass.offsetHeight,
+  };
 }
 
 /**
  * A point in a device screen -> normalized coordinates (0..1) of the
  * captured region, the space of the recorded video.
  */
-export function toRegionPoint(instanceId: string, x: number, y: number, region: CaptureRegion): Point | null {
+export function toRegionPoint(
+  instanceId: string,
+  x: number,
+  y: number,
+  region: CaptureRegion,
+): Point | null {
   const el = screens.get(instanceId);
   const uv = contentUV(instanceId, x, y);
   if (!el || !uv || region.width === 0 || region.height === 0) return null;
   const quad = projectedQuad(el);
   if (!quad) return null;
   const p = quadMapper(quad)(uv.x, uv.y);
-  return { x: (p.x - region.x) / region.width, y: (p.y - region.y) / region.height };
+  return {
+    x: (p.x - region.x) / region.width,
+    y: (p.y - region.y) / region.height,
+  };
 }

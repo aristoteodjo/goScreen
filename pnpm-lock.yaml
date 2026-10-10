@@ -29,6 +29,9 @@ importers:
       '@goscreen/android-source':
         specifier: workspace:*
         version: link:../../packages/android-source
+      '@goscreen/campaign':
+        specifier: workspace:*
+        version: link:../../packages/campaign
       '@goscreen/content-source':
         specifier: workspace:*
         version: link:../../packages/content-source

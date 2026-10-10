@@ -56,35 +56,54 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
             Fit all devices
             <CommandShortcut>Shift 1</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={run(project.arrangeCanvas)}>Arrange devices in a row</CommandItem>
+          <CommandItem onSelect={run(project.arrangeCanvas)}>
+            Arrange devices in a row
+          </CommandItem>
         </CommandGroup>
         <CommandGroup heading="Capture">
           <CommandItem onSelect={run(capture.toggleRecording)}>
             {capture.recording ? "Stop recording" : "Start recording"}
             <CommandShortcut>Cmd Shift R</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={run(capture.screenshot)}>Take screenshot</CommandItem>
+          <CommandItem onSelect={run(capture.screenshot)}>
+            Take screenshot
+          </CommandItem>
         </CommandGroup>
         {selected ? (
           <CommandGroup heading="Selected device">
             <CommandItem
               onSelect={run(() =>
                 project.updateDevice(selected.id, {
-                  orientation: selected.orientation === "portrait" ? "landscape" : "portrait",
+                  orientation:
+                    selected.orientation === "portrait"
+                      ? "landscape"
+                      : "portrait",
                 }),
               )}
             >
               Rotate device
             </CommandItem>
-            <CommandItem onSelect={run(() => project.setSynced(selected.id, !selected.synced))}>
+            <CommandItem
+              onSelect={run(() =>
+                project.setSynced(selected.id, !selected.synced),
+              )}
+            >
               {selected.synced ? "Unsync" : "Sync"} this device
             </CommandItem>
             {selected.viewport ? (
-              <CommandItem onSelect={run(() => project.updateDevice(selected.id, { viewport: null }))}>
+              <CommandItem
+                onSelect={run(() =>
+                  project.updateDevice(selected.id, { viewport: null }),
+                )}
+              >
                 Reset to native size
               </CommandItem>
             ) : null}
-            <CommandItem onSelect={run(() => project.removeDevice(selected.id))}>Remove device</CommandItem>
+            <CommandItem
+              onSelect={run(() => project.removeDevice(selected.id))}
+            >
+              Remove device
+            </CommandItem>
           </CommandGroup>
         ) : null}
         <CommandGroup heading="Add device">
@@ -102,11 +121,21 @@ export function CommandPalette({ capture }: { capture: CaptureControls }) {
           ))}
         </CommandGroup>
         <CommandGroup heading="Scene">
-          <CommandItem onSelect={run(project.autoLayout)}>Auto layout devices</CommandItem>
-          <CommandItem onSelect={run(() => project.setAllSynced(true))}>Sync all devices</CommandItem>
-          <CommandItem onSelect={run(() => project.setAllSynced(false))}>Unsync all devices</CommandItem>
+          <CommandItem onSelect={run(project.autoLayout)}>
+            Auto layout devices
+          </CommandItem>
+          <CommandItem onSelect={run(() => project.setAllSynced(true))}>
+            Sync all devices
+          </CommandItem>
+          <CommandItem onSelect={run(() => project.setAllSynced(false))}>
+            Unsync all devices
+          </CommandItem>
           {(Object.keys(ASPECTS) as AspectId[]).map((id) => (
-            <CommandItem key={id} value={`aspect ratio ${id}`} onSelect={run(() => project.setAspect(id))}>
+            <CommandItem
+              key={id}
+              value={`aspect ratio ${id}`}
+              onSelect={run(() => project.setAspect(id))}
+            >
               Aspect ratio {id}
             </CommandItem>
           ))}

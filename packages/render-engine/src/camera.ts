@@ -1,4 +1,10 @@
-import type { Camera, Point, RecordedPointer, Size, ZoomSegment } from "./types";
+import type {
+  Camera,
+  Point,
+  RecordedPointer,
+  Size,
+  ZoomSegment,
+} from "./types";
 
 /** Seconds spent easing into and out of a zoom. */
 export const ZOOM_RAMP = 0.7;
@@ -16,10 +22,16 @@ const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 export function zoomAmount(seg: ZoomSegment, t: number): number {
   if (t <= seg.start || t >= seg.end) return 0;
   const ramp = Math.min(ZOOM_RAMP, (seg.end - seg.start) / 2);
-  return Math.min(easeInOut((t - seg.start) / ramp), easeInOut((seg.end - t) / ramp));
+  return Math.min(
+    easeInOut((t - seg.start) / ramp),
+    easeInOut((seg.end - t) / ramp),
+  );
 }
 
-export function activeZoom(zooms: ZoomSegment[], t: number): ZoomSegment | null {
+export function activeZoom(
+  zooms: ZoomSegment[],
+  t: number,
+): ZoomSegment | null {
   return zooms.find((z) => t > z.start && t < z.end) ?? null;
 }
 
@@ -37,7 +49,10 @@ export function autoFocus(
   map: (p: RecordedPointer) => Point | null = identity,
 ): Point | null {
   const downs = pointers
-    .filter((p) => p.kind === "down" && p.t >= seg.start - ZOOM_RAMP && p.t <= seg.end)
+    .filter(
+      (p) =>
+        p.kind === "down" && p.t >= seg.start - ZOOM_RAMP && p.t <= seg.end,
+    )
     .flatMap((p) => {
       const at = map(p);
       return at ? [{ t: p.t, ...at }] : [];
@@ -56,7 +71,12 @@ export function autoFocus(
  * Camera over the output frame. `focus` is in output pixels; the visible
  * window is clamped so the camera never shows outside the frame.
  */
-export function cameraAt(seg: ZoomSegment | null, t: number, output: Size, focus: Point | null): Camera {
+export function cameraAt(
+  seg: ZoomSegment | null,
+  t: number,
+  output: Size,
+  focus: Point | null,
+): Camera {
   const middle = { x: output.width / 2, y: output.height / 2 };
   if (!seg) return { scale: 1, center: middle };
   const amount = zoomAmount(seg, t);
@@ -65,8 +85,14 @@ export function cameraAt(seg: ZoomSegment | null, t: number, output: Size, focus
   const halfW = output.width / (2 * scale);
   const halfH = output.height / (2 * scale);
   const center = {
-    x: Math.min(output.width - halfW, Math.max(halfW, lerp(middle.x, target.x, amount))),
-    y: Math.min(output.height - halfH, Math.max(halfH, lerp(middle.y, target.y, amount))),
+    x: Math.min(
+      output.width - halfW,
+      Math.max(halfW, lerp(middle.x, target.x, amount)),
+    ),
+    y: Math.min(
+      output.height - halfH,
+      Math.max(halfH, lerp(middle.y, target.y, amount)),
+    ),
   };
   return { scale, center };
 }

@@ -11,14 +11,21 @@ export const SPEEDS = [0.25, 0.5, 1, 1.5, 2, 3, 4] as const;
 export const SOURCE_END = 1e9;
 
 export function clipDuration(c: MainClip): number {
-  return c.kind === "recording" ? Math.max(0, c.out - c.in) / c.speed : c.duration;
+  return c.kind === "recording"
+    ? Math.max(0, c.out - c.in) / c.speed
+    : c.duration;
 }
 
 export function sequenceDuration(clips: MainClip[]): number {
   return clips.reduce((s, c) => s + clipDuration(c), 0);
 }
 
-export type Placed<C extends MainClip = MainClip> = { clip: C; index: number; start: number; end: number };
+export type Placed<C extends MainClip = MainClip> = {
+  clip: C;
+  index: number;
+  start: number;
+  end: number;
+};
 
 export function placeClips(clips: MainClip[]): Placed[] {
   let start = 0;
@@ -50,18 +57,25 @@ export function timelineTimesOf(clips: MainClip[], s: number): number[] {
   const out: number[] = [];
   for (const p of placeClips(clips)) {
     if (p.clip.kind !== "recording") continue;
-    if (s >= p.clip.in && s < p.clip.out) out.push(p.start + (s - p.clip.in) / p.clip.speed);
+    if (s >= p.clip.in && s < p.clip.out)
+      out.push(p.start + (s - p.clip.in) / p.clip.speed);
   }
   return out;
 }
 
 /** Recording clips with their timeline position, for audio and drawing. */
 export function recordingSpans(clips: MainClip[]): Placed<RecordingClip>[] {
-  return placeClips(clips).filter((p): p is Placed<RecordingClip> => p.clip.kind === "recording");
+  return placeClips(clips).filter(
+    (p): p is Placed<RecordingClip> => p.clip.kind === "recording",
+  );
 }
 
 /** Cuts the clip under T in two. Returns the same array when T is too close to an edge. */
-export function splitAt(clips: MainClip[], t: number, newId: string): MainClip[] {
+export function splitAt(
+  clips: MainClip[],
+  t: number,
+  newId: string,
+): MainClip[] {
   const p = clipAt(clips, t);
   if (!p || t - p.start < MIN_CLIP || p.end - t < MIN_CLIP) return clips;
   const local = t - p.start;
@@ -85,7 +99,11 @@ export function removeClip(clips: MainClip[], id: string): MainClip[] {
   return clips.filter((c) => c.id !== id);
 }
 
-export function moveClip(clips: MainClip[], id: string, toIndex: number): MainClip[] {
+export function moveClip(
+  clips: MainClip[],
+  id: string,
+  toIndex: number,
+): MainClip[] {
   const from = clips.findIndex((c) => c.id === id);
   if (from < 0) return clips;
   const next = clips.filter((c) => c.id !== id);
@@ -115,16 +133,32 @@ export function trimClip(
   return clips.map((c) => {
     if (c.id !== id) return c;
     if (c.kind === "slide") {
-      return { ...c, duration: Math.max(MIN_CLIP, c.duration + (edge === "end" ? dt : -dt)) };
+      return {
+        ...c,
+        duration: Math.max(MIN_CLIP, c.duration + (edge === "end" ? dt : -dt)),
+      };
     }
     const min = MIN_CLIP * c.speed;
-    if (edge === "start") return { ...c, in: Math.min(Math.max(0, c.in + dt * c.speed), c.out - min) };
-    return { ...c, out: Math.max(Math.min(sourceDuration, c.out + dt * c.speed), c.in + min) };
+    if (edge === "start")
+      return {
+        ...c,
+        in: Math.min(Math.max(0, c.in + dt * c.speed), c.out - min),
+      };
+    return {
+      ...c,
+      out: Math.max(Math.min(sourceDuration, c.out + dt * c.speed), c.in + min),
+    };
   });
 }
 
-export function setSpeed(clips: MainClip[], id: string, speed: number): MainClip[] {
-  return clips.map((c) => (c.id === id && c.kind === "recording" ? { ...c, speed } : c));
+export function setSpeed(
+  clips: MainClip[],
+  id: string,
+  speed: number,
+): MainClip[] {
+  return clips.map((c) =>
+    c.id === id && c.kind === "recording" ? { ...c, speed } : c,
+  );
 }
 
 /** A stretch of the take recorded while paused, in source seconds. */
@@ -135,7 +169,10 @@ export type Pause = { start: number; end: number };
  * pauses, so the paused parts are cut out (and can be brought back by
  * dragging a clip edge). The last clip runs to the end of the source.
  */
-export function clipsWithout(pauses: Pause[], id: (i: number) => string): RecordingClip[] {
+export function clipsWithout(
+  pauses: Pause[],
+  id: (i: number) => string,
+): RecordingClip[] {
   const sorted = pauses
     .filter((p) => p.end - p.start > 0.05)
     .sort((a, b) => a.start - b.start)
@@ -148,7 +185,8 @@ export function clipsWithout(pauses: Pause[], id: (i: number) => string): Record
   const clips: RecordingClip[] = [];
   let from = 0;
   for (const p of sorted) {
-    if (p.start - from >= MIN_CLIP) clips.push(recording(id(clips.length), from, p.start));
+    if (p.start - from >= MIN_CLIP)
+      clips.push(recording(id(clips.length), from, p.start));
     from = Math.max(from, p.end);
   }
   clips.push(recording(id(clips.length), from, SOURCE_END));
@@ -156,16 +194,32 @@ export function clipsWithout(pauses: Pause[], id: (i: number) => string): Record
 }
 
 function recording(id: string, start: number, end: number): RecordingClip {
-  return { id, kind: "recording", in: start, out: end, speed: 1, muted: false, cameraHidden: false, transition: null };
+  return {
+    id,
+    kind: "recording",
+    in: start,
+    out: end,
+    speed: 1,
+    muted: false,
+    cameraHidden: false,
+    transition: null,
+  };
 }
 
 /** Once the source duration is known, no clip may reach past it. */
-export function clampToSource(clips: MainClip[], sourceDuration: number): MainClip[] {
+export function clampToSource(
+  clips: MainClip[],
+  sourceDuration: number,
+): MainClip[] {
   let changed = false;
   const next = clips.map((c) => {
     if (c.kind !== "recording" || c.out <= sourceDuration) return c;
     changed = true;
-    return { ...c, out: sourceDuration, in: Math.min(c.in, Math.max(0, sourceDuration - MIN_CLIP)) };
+    return {
+      ...c,
+      out: sourceDuration,
+      in: Math.min(c.in, Math.max(0, sourceDuration - MIN_CLIP)),
+    };
   });
   return changed ? next : clips;
 }

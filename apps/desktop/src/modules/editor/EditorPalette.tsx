@@ -10,7 +10,14 @@ import {
 import { type EditorCommand, editorCommands } from "./commands";
 import { usePlayback } from "./store";
 
-const GROUPS: EditorCommand["group"][] = ["Playback", "Edit", "Tools", "View", "Add", "Zoom"];
+const GROUPS: EditorCommand["group"][] = [
+  "Playback",
+  "Edit",
+  "Tools",
+  "View",
+  "Add",
+  "Zoom",
+];
 
 export function EditorPalette({ openExport }: { openExport: () => void }) {
   const open = usePlayback((s) => s.paletteOpen);
@@ -35,7 +42,9 @@ export function EditorPalette({ openExport }: { openExport: () => void }) {
                   }}
                 >
                   {c.label}
-                  {c.shortcut ? <CommandShortcut>{c.shortcut}</CommandShortcut> : null}
+                  {c.shortcut ? (
+                    <CommandShortcut>{c.shortcut}</CommandShortcut>
+                  ) : null}
                 </CommandItem>
               ))}
           </CommandGroup>

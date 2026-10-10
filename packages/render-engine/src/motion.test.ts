@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { activeOverlays, animate, motionAt, type Overlay, slideMotion, typedText, wordOpacities } from "./index";
+import {
+  activeOverlays,
+  animate,
+  motionAt,
+  type Overlay,
+  slideMotion,
+  typedText,
+  wordOpacities,
+} from "./index";
 
-const shape = (id: string, lane: number, start: number, duration: number): Overlay => ({
+const shape = (
+  id: string,
+  lane: number,
+  start: number,
+  duration: number,
+): Overlay => ({
   id,
   kind: "shape",
   shape: "arrow",
@@ -36,7 +49,9 @@ describe("motion", () => {
     expect(motionAt("fade", "fade", 0.5, 4, 0.25).opacity).toBeCloseTo(0.5);
     expect(motionAt("fade", "fade", 0.5, 4, 2).opacity).toBe(1);
     expect(motionAt("fade", "fade", 0.5, 4, 3.75).opacity).toBeCloseTo(0.5);
-    expect(motionAt("typewriter", "none", 0.5, 4, 0.25).reveal).toBeCloseTo(0.5);
+    expect(motionAt("typewriter", "none", 0.5, 4, 0.25).reveal).toBeCloseTo(
+      0.5,
+    );
   });
 
   it("types text and reveals words in order", () => {
@@ -54,7 +69,14 @@ describe("motion", () => {
   });
 
   it("lists active overlays bottom lane first", () => {
-    const list = [shape("top", 2, 0, 5), shape("bottom", 0, 1, 2), shape("later", 1, 6, 1)];
-    expect(activeOverlays(list, 1.5).map((o) => o.id)).toEqual(["bottom", "top"]);
+    const list = [
+      shape("top", 2, 0, 5),
+      shape("bottom", 0, 1, 2),
+      shape("later", 1, 6, 1),
+    ];
+    expect(activeOverlays(list, 1.5).map((o) => o.id)).toEqual([
+      "bottom",
+      "top",
+    ]);
   });
 });

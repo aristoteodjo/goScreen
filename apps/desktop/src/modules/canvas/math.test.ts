@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { boundsOf, clampZoom, fitView, screenToCanvas, stepZoom, zoomAt } from "./math";
+import {
+  boundsOf,
+  clampZoom,
+  fitView,
+  screenToCanvas,
+  stepZoom,
+  zoomAt,
+} from "./math";
 
 describe("canvas math", () => {
   it("keeps the point under the cursor fixed when zooming", () => {

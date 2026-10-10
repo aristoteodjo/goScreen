@@ -15,7 +15,12 @@ import {
 /** The decoded pixels of an image or video overlay, when ready. */
 export type MediaOf = (o: Overlay) => CanvasImageSource | null;
 
-export function fillBackground(ctx: CanvasRenderingContext2D, bg: EditBackground, w: number, h: number) {
+export function fillBackground(
+  ctx: CanvasRenderingContext2D,
+  bg: EditBackground,
+  w: number,
+  h: number,
+) {
   if (bg.kind === "none") {
     ctx.fillStyle = "#000";
   } else if (bg.kind === "color") {
@@ -40,7 +45,11 @@ export function fillBackground(ctx: CanvasRenderingContext2D, bg: EditBackground
 }
 
 /** Greedy word wrap; explicit line breaks are kept. */
-export function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+export function wrapLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
   const out: string[] = [];
   for (const paragraph of text.split("\n")) {
     let line = "";
@@ -74,32 +83,57 @@ type TextBlock = {
 };
 
 /** Draws a text block with its reveal (typewriter, words or wipe). */
-function drawText(ctx: CanvasRenderingContext2D, b: TextBlock, m: Motion, mode: "typewriter" | "words" | "wipe" | null) {
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  b: TextBlock,
+  m: Motion,
+  mode: "typewriter" | "words" | "wipe" | null,
+) {
   ctx.font = `${b.weight} ${b.size * 0.8}px ${b.font}, -apple-system, system-ui, sans-serif`;
   ctx.textBaseline = "middle";
   const lines = wrapLines(ctx, b.text, b.width);
   const height = lines.length * b.size;
   const top = b.y - height / 2;
   const widest = Math.max(1, ...lines.map((l) => ctx.measureText(l).width));
-  const left = b.align === "left" ? b.x - b.width / 2 : b.align === "right" ? b.x + b.width / 2 - widest : b.x - widest / 2;
+  const left =
+    b.align === "left"
+      ? b.x - b.width / 2
+      : b.align === "right"
+        ? b.x + b.width / 2 - widest
+        : b.x - widest / 2;
 
   if (b.background) {
     const pad = b.size * 0.35;
     ctx.fillStyle = b.background;
     ctx.beginPath();
-    ctx.roundRect(left - pad, top - pad * 0.6, widest + pad * 2, height + pad * 1.2, b.size * 0.3);
+    ctx.roundRect(
+      left - pad,
+      top - pad * 0.6,
+      widest + pad * 2,
+      height + pad * 1.2,
+      b.size * 0.3,
+    );
     ctx.fill();
   }
   if (mode === "wipe") {
     ctx.beginPath();
-    ctx.rect(left - b.size, top - b.size, (widest + b.size * 2) * m.reveal, height + b.size * 2);
+    ctx.rect(
+      left - b.size,
+      top - b.size,
+      (widest + b.size * 2) * m.reveal,
+      height + b.size * 2,
+    );
     ctx.clip();
   }
 
   ctx.fillStyle = b.color;
   const lineX = (line: string) => {
     const w = ctx.measureText(line).width;
-    return b.align === "left" ? b.x - b.width / 2 : b.align === "right" ? b.x + b.width / 2 - w : b.x - w / 2;
+    return b.align === "left"
+      ? b.x - b.width / 2
+      : b.align === "right"
+        ? b.x + b.width / 2 - w
+        : b.x - w / 2;
   };
 
   if (mode === "words") {
@@ -123,7 +157,10 @@ function drawText(ctx: CanvasRenderingContext2D, b: TextBlock, m: Motion, mode: 
     return;
   }
 
-  let budget = mode === "typewriter" ? Array.from(typedText(lines.join("\n"), m.reveal)).length : Number.POSITIVE_INFINITY;
+  let budget =
+    mode === "typewriter"
+      ? Array.from(typedText(lines.join("\n"), m.reveal)).length
+      : Number.POSITIVE_INFINITY;
   lines.forEach((line, row) => {
     if (budget <= 0) return;
     const chars = Array.from(line);
@@ -133,10 +170,18 @@ function drawText(ctx: CanvasRenderingContext2D, b: TextBlock, m: Motion, mode: 
   });
 }
 
-const reveals = (a: string) => (a === "typewriter" || a === "words" || a === "wipe" ? a : null);
+const reveals = (a: string) =>
+  a === "typewriter" || a === "words" || a === "wipe" ? a : null;
 
 /** Applies a motion around a center point; the caller restores. */
-function applyMotion(ctx: CanvasRenderingContext2D, m: Motion, cx: number, cy: number, out: Size, rotation = 0) {
+function applyMotion(
+  ctx: CanvasRenderingContext2D,
+  m: Motion,
+  cx: number,
+  cy: number,
+  out: Size,
+  rotation = 0,
+) {
   ctx.globalAlpha *= m.opacity;
   ctx.translate(cx + m.dx * out.width, cy + m.dy * out.height);
   if (rotation) ctx.rotate((rotation * Math.PI) / 180);
@@ -145,14 +190,32 @@ function applyMotion(ctx: CanvasRenderingContext2D, m: Motion, cx: number, cy: n
 }
 
 /** A title card on the main track. */
-export function drawSlide(ctx: CanvasRenderingContext2D, slide: SlideClip, local: number, out: Size) {
+export function drawSlide(
+  ctx: CanvasRenderingContext2D,
+  slide: SlideClip,
+  local: number,
+  out: Size,
+) {
   fillBackground(ctx, slide.background, out.width, out.height);
   const m = slideMotion(slide.animation, slide.duration, local);
   const mode = reveals(slide.animation);
-  const base = { font: slide.font, color: slide.color, align: "center" as const, background: null, x: out.width / 2, width: out.width * 0.8 };
+  const base = {
+    font: slide.font,
+    color: slide.color,
+    align: "center" as const,
+    background: null,
+    x: out.width / 2,
+    width: out.width * 0.8,
+  };
   const hasSub = slide.subtitle.trim().length > 0;
   for (const [text, motion, y, size, weight] of [
-    [slide.title, m.title, hasSub ? out.height * 0.44 : out.height / 2, out.height * 0.1, 700],
+    [
+      slide.title,
+      m.title,
+      hasSub ? out.height * 0.44 : out.height / 2,
+      out.height * 0.1,
+      700,
+    ],
     [slide.subtitle, m.subtitle, out.height * 0.6, out.height * 0.045, 500],
   ] as const) {
     if (!text.trim()) continue;
@@ -163,7 +226,13 @@ export function drawSlide(ctx: CanvasRenderingContext2D, slide: SlideClip, local
   }
 }
 
-function drawShape(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "shape" }>, m: Motion, r: DOMRectLike, out: Size) {
+function drawShape(
+  ctx: CanvasRenderingContext2D,
+  o: Extract<Overlay, { kind: "shape" }>,
+  m: Motion,
+  r: DOMRectLike,
+  out: Size,
+) {
   const stroke = Math.max(1, o.stroke * Math.min(out.width, out.height) * 2);
   ctx.strokeStyle = o.color;
   ctx.fillStyle = o.color;
@@ -173,7 +242,13 @@ function drawShape(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "s
   if (o.shape === "highlight") {
     ctx.globalAlpha *= 0.35;
     ctx.beginPath();
-    ctx.roundRect(r.x, r.y, r.width * m.reveal, r.height, Math.min(r.height / 4, 12));
+    ctx.roundRect(
+      r.x,
+      r.y,
+      r.width * m.reveal,
+      r.height,
+      Math.min(r.height / 4, 12),
+    );
     ctx.fill();
     return;
   }
@@ -199,9 +274,23 @@ function drawShape(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "s
   }
   ctx.beginPath();
   if (o.shape === "ellipse") {
-    ctx.ellipse(r.x + r.width / 2, r.y + r.height / 2, r.width / 2, r.height / 2, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * m.reveal);
+    ctx.ellipse(
+      r.x + r.width / 2,
+      r.y + r.height / 2,
+      r.width / 2,
+      r.height / 2,
+      0,
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * m.reveal,
+    );
   } else if (m.reveal >= 1) {
-    ctx.roundRect(r.x, r.y, r.width, r.height, Math.min(r.width, r.height) * 0.08);
+    ctx.roundRect(
+      r.x,
+      r.y,
+      r.width,
+      r.height,
+      Math.min(r.width, r.height) * 0.08,
+    );
   } else {
     // Rectangle outline drawn on clockwise.
     const total = 2 * (r.width + r.height);
@@ -232,10 +321,20 @@ type DOMRectLike = { x: number; y: number; width: number; height: number };
 export function overlayBox(o: Overlay, out: Size): DOMRectLike {
   const width = o.width * out.width;
   const height = o.height * out.height;
-  return { x: o.x * out.width - width / 2, y: o.y * out.height - height / 2, width, height };
+  return {
+    x: o.x * out.width - width / 2,
+    y: o.y * out.height - height / 2,
+    width,
+    height,
+  };
 }
 
-function drawMedia(ctx: CanvasRenderingContext2D, image: CanvasImageSource | null, r: DOMRectLike, radius: number) {
+function drawMedia(
+  ctx: CanvasRenderingContext2D,
+  image: CanvasImageSource | null,
+  r: DOMRectLike,
+  radius: number,
+) {
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.width, r.height, radius);
   if (!image) {
@@ -256,7 +355,12 @@ let pixelScratch: HTMLCanvasElement | null = null;
  * drawn back onto itself, clipped to the box. Overlays on lower lanes are
  * hidden too; those above stay sharp.
  */
-function drawBlur(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "blur" }>, r: DOMRectLike, out: Size) {
+function drawBlur(
+  ctx: CanvasRenderingContext2D,
+  o: Extract<Overlay, { kind: "blur" }>,
+  r: DOMRectLike,
+  out: Size,
+) {
   const short = Math.min(out.width, out.height);
   const source = ctx.canvas;
   // Output px -> canvas px (the context is scaled by the preview density).
@@ -270,7 +374,17 @@ function drawBlur(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "bl
   if (o.mode === "blur") {
     // Bleeding in from outside the box keeps edges blurred, not sharp.
     ctx.filter = `blur(${Math.max(1, o.strength * short * k)}px)`;
-    ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, out.width, out.height);
+    ctx.drawImage(
+      source,
+      0,
+      0,
+      source.width,
+      source.height,
+      0,
+      0,
+      out.width,
+      out.height,
+    );
   } else {
     const block = Math.max(2, o.strength * short);
     const w = Math.max(1, Math.round(r.width / block));
@@ -281,7 +395,17 @@ function drawBlur(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "bl
     const p = pixelScratch.getContext("2d");
     if (p) {
       p.imageSmoothingEnabled = true;
-      p.drawImage(source, r.x * k, r.y * k, r.width * k, r.height * k, 0, 0, w, h);
+      p.drawImage(
+        source,
+        r.x * k,
+        r.y * k,
+        r.width * k,
+        r.height * k,
+        0,
+        0,
+        w,
+        h,
+      );
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(pixelScratch, 0, 0, w, h, r.x, r.y, r.width, r.height);
     }
@@ -290,7 +414,13 @@ function drawBlur(ctx: CanvasRenderingContext2D, o: Extract<Overlay, { kind: "bl
 }
 
 /** Every overlay showing at timeline time t, above the composed video, in output px. */
-export function drawOverlays(ctx: CanvasRenderingContext2D, overlays: Overlay[], t: number, out: Size, mediaOf: MediaOf) {
+export function drawOverlays(
+  ctx: CanvasRenderingContext2D,
+  overlays: Overlay[],
+  t: number,
+  out: Size,
+  mediaOf: MediaOf,
+) {
   for (const o of activeOverlays(overlays, t)) {
     const m = overlayMotion(o, t);
     if (m.opacity <= 0.001) continue;
@@ -307,8 +437,14 @@ export function drawOverlays(ctx: CanvasRenderingContext2D, overlays: Overlay[],
   }
 }
 
-function drawTextOverlay(ctx: CanvasRenderingContext2D, o: TextOverlay, m: Motion, r: DOMRectLike, out: Size) {
-  const mode = m.reveal < 1 ? reveals(o.enter) ?? reveals(o.exit) : null;
+function drawTextOverlay(
+  ctx: CanvasRenderingContext2D,
+  o: TextOverlay,
+  m: Motion,
+  r: DOMRectLike,
+  out: Size,
+) {
+  const mode = m.reveal < 1 ? (reveals(o.enter) ?? reveals(o.exit)) : null;
   drawText(
     ctx,
     {

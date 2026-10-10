@@ -1,5 +1,5 @@
-import type { DeviceCutout } from "@goscreen/device-registry";
 import type { Orientation } from "@goscreen/device-engine";
+import type { DeviceCutout } from "@goscreen/device-registry";
 
 type Props = { cutout: DeviceCutout; orientation: Orientation };
 

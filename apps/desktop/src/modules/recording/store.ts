@@ -19,6 +19,11 @@ type RecordingState = {
   // are cut out when the take opens in the editor.
   pausedAt: number | null;
   pauses: { start: number; end: number }[];
+  // Site tour: when each page came on screen (seconds from the first frame).
+  chapters: { url: string; start: number }[];
+  markChapter: (url: string) => void;
+  /** Chapters so far, each ending where the next starts (the last one now). */
+  closedChapters: () => { url: string; start: number; end: number }[];
   setActive: (active: boolean) => void;
   togglePause: () => void;
   /** Pauses so far, the running one closed now. */
@@ -27,7 +32,8 @@ type RecordingState = {
   setCapture: (mode: CaptureMode | null, region: CaptureRegion | null) => void;
 };
 
-const takeTime = (clockZero: number | null) => (clockZero === null ? 0 : (performance.now() - clockZero) / 1000);
+const takeTime = (clockZero: number | null) =>
+  clockZero === null ? 0 : (performance.now() - clockZero) / 1000;
 
 export const useRecording = create<RecordingState>((set, get) => ({
   active: false,
@@ -37,22 +43,54 @@ export const useRecording = create<RecordingState>((set, get) => ({
   region: null,
   pausedAt: null,
   pauses: [],
+  chapters: [],
   setActive: (active) =>
     set(
       active
-        ? { active, startedAt: Date.now(), clockZero: null, pausedAt: null, pauses: [] }
-        : { active, startedAt: null, clockZero: null, region: null, pausedAt: null },
+        ? {
+            active,
+            startedAt: Date.now(),
+            clockZero: null,
+            pausedAt: null,
+            pauses: [],
+            chapters: [],
+          }
+        : {
+            active,
+            startedAt: null,
+            clockZero: null,
+            region: null,
+            pausedAt: null,
+          },
     ),
   togglePause: () => {
     const { active, clockZero, pausedAt, pauses } = get();
     if (!active || clockZero === null) return;
     const now = takeTime(clockZero);
     if (pausedAt === null) set({ pausedAt: now });
-    else set({ pausedAt: null, pauses: [...pauses, { start: pausedAt, end: now }] });
+    else
+      set({
+        pausedAt: null,
+        pauses: [...pauses, { start: pausedAt, end: now }],
+      });
   },
   closedPauses: () => {
     const { clockZero, pausedAt, pauses } = get();
-    return pausedAt === null ? pauses : [...pauses, { start: pausedAt, end: takeTime(clockZero) }];
+    return pausedAt === null
+      ? pauses
+      : [...pauses, { start: pausedAt, end: takeTime(clockZero) }];
+  },
+  markChapter: (url) =>
+    set({
+      chapters: [...get().chapters, { url, start: takeTime(get().clockZero) }],
+    }),
+  closedChapters: () => {
+    const { chapters, clockZero } = get();
+    const now = takeTime(clockZero);
+    return chapters.map((c, i) => ({
+      ...c,
+      end: chapters[i + 1]?.start ?? now,
+    }));
   },
   setClockZero: (clockZero) => set({ clockZero }),
   setCapture: (mode, region) => set({ mode, region }),

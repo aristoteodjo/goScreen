@@ -65,11 +65,17 @@ export function AndroidScreen({ instanceId, serial, interactive }: Props) {
     mutationFn: (action: AndroidInput) => android.input(serial, action),
     onError: (e) => {
       const err = toAndroidError(e);
-      toast.error(err.message, { description: describeAndroidError(err.code).hints.join(" ") });
+      toast.error(err.message, {
+        description: describeAndroidError(err.code).hints.join(" "),
+      });
     },
   });
 
-  const local = (e: PointerEvent<HTMLDivElement>) => ({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, t: Date.now() });
+  const local = (e: PointerEvent<HTMLDivElement>) => ({
+    x: e.nativeEvent.offsetX,
+    y: e.nativeEvent.offsetY,
+    t: Date.now(),
+  });
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -92,14 +98,24 @@ export function AndroidScreen({ instanceId, serial, interactive }: Props) {
     emitLocal(instanceId, { type: "up", ...up });
     if (!live?.resolution) return;
     const el = e.currentTarget;
-    input.mutate(gestureFrom(down, up, { width: el.clientWidth, height: el.clientHeight }, live.resolution));
+    input.mutate(
+      gestureFrom(
+        down,
+        up,
+        { width: el.clientWidth, height: el.clientHeight },
+        live.resolution,
+      ),
+    );
   };
 
   const gone = live === undefined || !live.connected;
 
   return (
     <div
-      className={cn("relative h-full w-full bg-black", !interactive && "pointer-events-none")}
+      className={cn(
+        "relative h-full w-full bg-black",
+        !interactive && "pointer-events-none",
+      )}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -118,19 +134,37 @@ export function AndroidScreen({ instanceId, serial, interactive }: Props) {
       ) : null}
       {stream === null ? <Overlay message="Connecting to Android" /> : null}
       {stream && "error" in stream ? (
-        <Overlay error={stream.error} onRetry={() => setAttempt((n) => n + 1)} />
+        <Overlay
+          error={stream.error}
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       ) : gone && stream ? (
-        <Overlay error={toAndroidError({ code: "disconnected", detail: serial })} onRetry={() => setAttempt((n) => n + 1)} />
+        <Overlay
+          error={toAndroidError({ code: "disconnected", detail: serial })}
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       ) : null}
     </div>
   );
 }
 
-function Overlay({ message, error, onRetry }: { message?: string; error?: AndroidSourceError; onRetry?: () => void }) {
+function Overlay({
+  message,
+  error,
+  onRetry,
+}: {
+  message?: string;
+  error?: AndroidSourceError;
+  onRetry?: () => void;
+}) {
   const info = error ? describeAndroidError(error.code) : null;
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-950/90 px-8 text-center text-neutral-300">
-      {error ? <HugeiconsIcon icon={Alert02Icon} size={28} strokeWidth={1.5} /> : <Spinner className="size-6" />}
+      {error ? (
+        <HugeiconsIcon icon={Alert02Icon} size={28} strokeWidth={1.5} />
+      ) : (
+        <Spinner className="size-6" />
+      )}
       <p className="text-[15px] leading-snug">{info?.title ?? message}</p>
       {info && info.hints.length > 0 ? (
         <ul className="space-y-1 text-[13px] text-neutral-400">
@@ -140,7 +174,12 @@ function Overlay({ message, error, onRetry }: { message?: string; error?: Androi
         </ul>
       ) : null}
       {onRetry ? (
-        <Button size="sm" variant="secondary" onPointerDown={(e) => e.stopPropagation()} onClick={onRetry}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onRetry}
+        >
           Retry
         </Button>
       ) : null}

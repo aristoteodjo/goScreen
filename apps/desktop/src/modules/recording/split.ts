@@ -1,4 +1,8 @@
-import type { LayerRect, RecordedLayer, RecordedPointer } from "@goscreen/render-engine";
+import type {
+  LayerRect,
+  RecordedLayer,
+  RecordedPointer,
+} from "@goscreen/render-engine";
 
 // "Devices separately": one take is cut into one recording per device. Each
 // part is the device glass cropped out of the capture, with a journal of its
@@ -16,6 +20,7 @@ export type TakeJournal = {
   events: unknown[];
   camera: unknown;
   pauses?: { start: number; end: number }[];
+  chapters?: { url: string; start: number; end: number }[];
 };
 
 export type SplitPart = {
@@ -33,7 +38,9 @@ export function glassBounds(rects: LayerRect[]): SplitPart["rect"] | null {
   const y = Math.max(0, Math.min(...rects.map((r) => r.y)));
   const right = Math.min(1, Math.max(...rects.map((r) => r.x + r.width)));
   const bottom = Math.min(1, Math.max(...rects.map((r) => r.y + r.height)));
-  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
+  return right > x && bottom > y
+    ? { x, y, width: right - x, height: bottom - y }
+    : null;
 }
 
 export const slug = (s: string) =>
@@ -51,7 +58,12 @@ export function splitParts(journal: TakeJournal): SplitPart[] {
     if (!rect) return [];
     // Touches are already known in glass coordinates (u, v).
     const pointers = journal.pointers
-      .filter((p) => p.instanceId === layer.instanceId && p.u !== undefined && p.v !== undefined)
+      .filter(
+        (p) =>
+          p.instanceId === layer.instanceId &&
+          p.u !== undefined &&
+          p.v !== undefined,
+      )
       .map((p) => ({ ...p, x: p.u as number, y: p.v as number }));
     return [
       {

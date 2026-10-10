@@ -3,7 +3,11 @@ import { fullClip } from "./schema";
 import { transitionAt, transitionLength, transitionMix } from "./transitions";
 import type { MainClip, SlideClip } from "./types";
 
-const slide = (id: string, duration: number, transition: SlideClip["transition"] = null): SlideClip => ({
+const slide = (
+  id: string,
+  duration: number,
+  transition: SlideClip["transition"] = null,
+): SlideClip => ({
   id,
   kind: "slide",
   duration,
@@ -17,7 +21,10 @@ const slide = (id: string, duration: number, transition: SlideClip["transition"]
 });
 
 describe("transitions", () => {
-  const clips: MainClip[] = [slide("a", 2), { ...fullClip("b", 0, 4), transition: { kind: "fade", duration: 0.5 } }];
+  const clips: MainClip[] = [
+    slide("a", 2),
+    { ...fullClip("b", 0, 4), transition: { kind: "fade", duration: 0.5 } },
+  ];
 
   it("runs over the start of the incoming clip", () => {
     expect(transitionAt(clips, 1.9)).toBeNull();
@@ -30,16 +37,30 @@ describe("transitions", () => {
 
   it("never takes more than half of either clip", () => {
     const short = slide("s", 0.4);
-    expect(transitionLength(short, { ...fullClip("b", 0, 4), transition: { kind: "fade", duration: 2 } })).toBeCloseTo(0.2);
+    expect(
+      transitionLength(short, {
+        ...fullClip("b", 0, 4),
+        transition: { kind: "fade", duration: 2 },
+      }),
+    ).toBeCloseTo(0.2);
   });
 
   it("has no transition on the first clip", () => {
-    const first: MainClip[] = [{ ...fullClip("b", 0, 4), transition: { kind: "fade", duration: 1 } }];
+    const first: MainClip[] = [
+      { ...fullClip("b", 0, 4), transition: { kind: "fade", duration: 1 } },
+    ];
     expect(transitionAt(first, 0.2)).toBeNull();
   });
 
   it("ends with the incoming clip fully in place", () => {
-    for (const kind of ["fade", "dip", "slide-left", "slide-up", "zoom", "wipe"] as const) {
+    for (const kind of [
+      "fade",
+      "dip",
+      "slide-left",
+      "slide-up",
+      "zoom",
+      "wipe",
+    ] as const) {
       const m = transitionMix(kind, 1);
       expect(m.to.alpha).toBe(1);
       expect(m.to.dx).toBeCloseTo(0);

@@ -19,10 +19,15 @@ export function rulerStep(pxPerSecond: number, minPx = 72): number {
   return STEPS.find((s) => s * pxPerSecond >= minPx) ?? STEPS[STEPS.length - 1];
 }
 
-const sorted = (zooms: ZoomSegment[]) => [...zooms].sort((a, b) => a.start - b.start);
+const sorted = (zooms: ZoomSegment[]) =>
+  [...zooms].sort((a, b) => a.start - b.start);
 
 /** Free gap around t on the zoom track, or null when t sits on a segment. */
-export function freeGap(zooms: ZoomSegment[], t: number, duration: number): { start: number; end: number } | null {
+export function freeGap(
+  zooms: ZoomSegment[],
+  t: number,
+  duration: number,
+): { start: number; end: number } | null {
   let start = 0;
   let end = duration;
   for (const z of sorted(zooms)) {
@@ -62,8 +67,14 @@ export function constrainSegment(
   const others = sorted(zooms.filter((z) => z.id !== id));
   const self = zooms.find((z) => z.id === id);
   const anchor = self ? (self.start + self.end) / 2 : (start + end) / 2;
-  const lo = Math.max(0, ...others.filter((z) => z.end <= anchor).map((z) => z.end));
-  const hi = Math.min(duration, ...others.filter((z) => z.start >= anchor).map((z) => z.start));
+  const lo = Math.max(
+    0,
+    ...others.filter((z) => z.end <= anchor).map((z) => z.end),
+  );
+  const hi = Math.min(
+    duration,
+    ...others.filter((z) => z.start >= anchor).map((z) => z.start),
+  );
   if (mode === "move") {
     const len = Math.min(end - start, hi - lo);
     const s = Math.min(Math.max(lo, start), hi - len);

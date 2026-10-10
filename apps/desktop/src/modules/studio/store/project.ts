@@ -1,3 +1,4 @@
+import { type ContentSourceRef, WEB_SOURCE } from "@goscreen/content-source";
 import {
   arrangeDevices,
   type DeviceInstance,
@@ -5,7 +6,6 @@ import {
   SHADOW_PRESETS,
   type Size,
 } from "@goscreen/device-engine";
-import { type ContentSourceRef, WEB_SOURCE } from "@goscreen/content-source";
 import { create } from "zustand";
 import { registry } from "@/lib/registry";
 import { ASPECTS, type AspectId } from "./aspect";
@@ -61,7 +61,9 @@ type ProjectActions = {
 
 export const CANVAS_GAP = 120;
 
-export function frameSizeOf(d: Pick<DeviceInstance, "deviceId" | "orientation" | "viewport">): Size {
+export function frameSizeOf(
+  d: Pick<DeviceInstance, "deviceId" | "orientation" | "viewport">,
+): Size {
   const device = registry.get(d.deviceId);
   if (!device) return { width: 0, height: 0 };
   return resolveScreenLayout(device, d.orientation, d.viewport).frame;
@@ -71,22 +73,42 @@ export function deviceUrl(d: ProjectDevice, sharedUrl: string): string {
   return d.synced ? sharedUrl : (d.url ?? sharedUrl);
 }
 
-function fitScaleFor(d: Pick<DeviceInstance, "deviceId" | "orientation" | "viewport">, aspect: AspectId) {
+function fitScaleFor(
+  d: Pick<DeviceInstance, "deviceId" | "orientation" | "viewport">,
+  aspect: AspectId,
+) {
   const frame = frameSizeOf(d);
   if (frame.width === 0) return 1;
   const stage = ASPECTS[aspect];
-  return Math.min((stage.height * 0.78) / frame.height, (stage.width * 0.42) / frame.width);
+  return Math.min(
+    (stage.height * 0.78) / frame.height,
+    (stage.width * 0.42) / frame.width,
+  );
 }
 
 // The scene follows the device count. All devices share one scale, so a
 // laptop stays bigger than a phone (CSS px track real size); it starts at the
 // smallest "alone" size, then shrinks (and wraps to rows) until all fit.
-function relayout(state: Pick<ProjectState, "aspect" | "devices">): ProjectDevice[] {
+function relayout(
+  state: Pick<ProjectState, "aspect" | "devices">,
+): ProjectDevice[] {
   const stage = ASPECTS[state.aspect];
-  const shared = Math.min(...state.devices.map((d) => fitScaleFor(d, state.aspect)));
+  const shared = Math.min(
+    ...state.devices.map((d) => fitScaleFor(d, state.aspect)),
+  );
   const items = state.devices.flatMap((d) => {
     const device = registry.get(d.deviceId);
-    return device ? [{ id: d.id, orientation: d.orientation, scale: shared, viewport: d.viewport, device }] : [];
+    return device
+      ? [
+          {
+            id: d.id,
+            orientation: d.orientation,
+            scale: shared,
+            viewport: d.viewport,
+            device,
+          },
+        ]
+      : [];
   });
   const placements = arrangeDevices(items, stage, 90);
   return state.devices.map((d) => ({ ...d, ...placements.get(d.id) }));
@@ -131,13 +153,17 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
   setSynced: (id, synced) =>
     set((s) => ({
       devices: s.devices.map((d) =>
-        d.id === id && followsUrl(d) ? { ...d, synced, url: synced ? null : (d.url ?? s.url) } : d,
+        d.id === id && followsUrl(d)
+          ? { ...d, synced, url: synced ? null : (d.url ?? s.url) }
+          : d,
       ),
     })),
   setAllSynced: (synced) =>
     set((s) => ({
       devices: s.devices.map((d) =>
-        followsUrl(d) ? { ...d, synced, url: synced ? null : (d.url ?? s.url) } : d,
+        followsUrl(d)
+          ? { ...d, synced, url: synced ? null : (d.url ?? s.url) }
+          : d,
       ),
     })),
 
@@ -147,7 +173,11 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
     counter += 1;
     const id = `dev-${Date.now().toString(36)}-${counter}`;
     const source = init.source ?? WEB_SOURCE;
-    const base = { deviceId, orientation: init.orientation ?? ("portrait" as const), viewport: init.viewport ?? null };
+    const base = {
+      deviceId,
+      orientation: init.orientation ?? ("portrait" as const),
+      viewport: init.viewport ?? null,
+    };
     const instance: ProjectDevice = {
       id,
       ...base,
@@ -191,7 +221,10 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
     set((s) => {
       const { [id]: _removed, ...canvas } = s.canvas;
       return {
-        devices: relayout({ aspect: s.aspect, devices: s.devices.filter((d) => d.id !== id) }),
+        devices: relayout({
+          aspect: s.aspect,
+          devices: s.devices.filter((d) => d.id !== id),
+        }),
         canvas,
       };
     }),
@@ -211,23 +244,36 @@ export const useProject = create<ProjectState & ProjectActions>((set, get) => ({
         const next = { ...d, ...patch };
         if (patch.deviceId) {
           const device = registry.get(next.deviceId);
-          if (device && !device.frame.colors.some((c) => c.id === next.colorId)) {
+          if (
+            device &&
+            !device.frame.colors.some((c) => c.id === next.colorId)
+          ) {
             next.colorId = device.frame.colors[0].id;
           }
           // Another model has another native size; a custom size would lie.
           // A live source keeps its real size whatever frame shows it.
-          if (patch.viewport === undefined && followsUrl(next)) next.viewport = null;
+          if (patch.viewport === undefined && followsUrl(next))
+            next.viewport = null;
         }
-        if ((patch.deviceId || patch.orientation) && patch.scale === undefined) {
+        if (
+          (patch.deviceId || patch.orientation) &&
+          patch.scale === undefined
+        ) {
           next.scale = fitScaleFor(next, s.aspect);
         }
         return next;
       });
       // A new model or orientation changes its footprint: the scene re-fits.
-      return { devices: patch.deviceId || patch.orientation ? relayout({ aspect: s.aspect, devices }) : devices };
+      return {
+        devices:
+          patch.deviceId || patch.orientation
+            ? relayout({ aspect: s.aspect, devices })
+            : devices,
+      };
     }),
 
-  moveOnCanvas: (id, point) => set((s) => ({ canvas: { ...s.canvas, [id]: point } })),
+  moveOnCanvas: (id, point) =>
+    set((s) => ({ canvas: { ...s.canvas, [id]: point } })),
   arrangeCanvas: () => set((s) => ({ canvas: canvasRow(s.devices) })),
   autoLayout: () => set((s) => ({ devices: relayout(s) })),
 }));

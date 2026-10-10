@@ -42,7 +42,13 @@ import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
 import { assetUrl, player, useSession } from "./session";
-import { newId, type Selection, timelineEnd, useEdit, usePlayback } from "./store";
+import {
+  newId,
+  type Selection,
+  timelineEnd,
+  useEdit,
+  usePlayback,
+} from "./store";
 import { DeviceMenu, TimelineItemMenu } from "./TimelineMenus";
 import { TimelineToolbar } from "./TimelineToolbar";
 import { Waveform } from "./Waveform";
@@ -58,14 +64,19 @@ const HEADER = 92;
 type Move = (dx: number, dy: number, e: globalThis.PointerEvent) => void;
 
 /** Pointer-captured drag; `onMove` gets the pixel offset from the press. */
-function startDrag(e: PointerEvent<HTMLElement>, onMove: Move, onEnd?: () => void) {
+function startDrag(
+  e: PointerEvent<HTMLElement>,
+  onMove: Move,
+  onEnd?: () => void,
+) {
   if (e.button !== 0) return;
   e.stopPropagation();
   const el = e.currentTarget;
   el.setPointerCapture(e.pointerId);
   const x0 = e.clientX;
   const y0 = e.clientY;
-  const move = (ev: globalThis.PointerEvent) => onMove(ev.clientX - x0, ev.clientY - y0, ev);
+  const move = (ev: globalThis.PointerEvent) =>
+    onMove(ev.clientX - x0, ev.clientY - y0, ev);
   const stop = () => {
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", stop);
@@ -82,7 +93,11 @@ function startDrag(e: PointerEvent<HTMLElement>, onMove: Move, onEnd?: () => voi
  * edges of other items makes cuts line up without pixel hunting.
  * `candidates` are timeline times, `threshold` is in seconds.
  */
-export function snapTime(t: number, candidates: number[], threshold: number): number {
+export function snapTime(
+  t: number,
+  candidates: number[],
+  threshold: number,
+): number {
   let best = t;
   let gap = threshold;
   for (const c of candidates) {
@@ -139,7 +154,9 @@ export function Timeline() {
   };
 
   const placed = useMemo(() => placeClips(edit.clips), [edit.clips]);
-  const spans = placed.filter((p): p is Placed<RecordingClip> => p.clip.kind === "recording");
+  const spans = placed.filter(
+    (p): p is Placed<RecordingClip> => p.clip.kind === "recording",
+  );
 
   // Edges an item can snap to: playhead, clip cuts, other items.
   const snapPoints = (exclude: string) => {
@@ -151,12 +168,15 @@ export function Timeline() {
     return pts;
   };
   const snap = (t: number, exclude: string) =>
-    usePlayback.getState().snapping ? snapTime(t, snapPoints(exclude), 8 / Math.max(pps, 1e-6)) : t;
+    usePlayback.getState().snapping
+      ? snapTime(t, snapPoints(exclude), 8 / Math.max(pps, 1e-6))
+      : t;
 
   const step = pps > 0 ? rulerStep(pps) : 1;
   const ticks = useMemo(() => {
     const out: number[] = [];
-    for (let t = 0; t <= end + 1e-6 && out.length < 2000; t += step / 2) out.push(t);
+    for (let t = 0; t <= end + 1e-6 && out.length < 2000; t += step / 2)
+      out.push(t);
     return out;
   }, [end, step]);
 
@@ -164,7 +184,9 @@ export function Timeline() {
   const taps = useMemo(() => {
     const downs = pointers.filter((p) => p.kind === "down").map((p) => p.t);
     return spans.flatMap((p) =>
-      downs.filter((s) => s >= p.clip.in && s < p.clip.out).map((s) => p.start + (s - p.clip.in) / p.clip.speed),
+      downs
+        .filter((s) => s >= p.clip.in && s < p.clip.out)
+        .map((s) => p.start + (s - p.clip.in) / p.clip.speed),
     );
   }, [pointers, spans]);
 
@@ -177,8 +199,12 @@ export function Timeline() {
           .map((z) => ({
             zoom: z,
             span: p,
-            start: p.start + (Math.max(z.start, p.clip.in) - p.clip.in) / p.clip.speed,
-            end: p.start + (Math.min(z.end, p.clip.out) - p.clip.in) / p.clip.speed,
+            start:
+              p.start +
+              (Math.max(z.start, p.clip.in) - p.clip.in) / p.clip.speed,
+            end:
+              p.start +
+              (Math.min(z.end, p.clip.out) - p.clip.in) / p.clip.speed,
           })),
       ),
     [spans, edit.zooms],
@@ -187,7 +213,9 @@ export function Timeline() {
   const seekDrag = (e: PointerEvent<HTMLElement>) => {
     const t0 = toTime(e.clientX);
     player.seek(t0);
-    startDrag(e, (dx) => player.seek(Math.max(0, Math.min(end, t0 + dx / pps))));
+    startDrag(e, (dx) =>
+      player.seek(Math.max(0, Math.min(end, t0 + dx / pps))),
+    );
   };
 
   const onWheel = (e: WheelEvent<HTMLDivElement>) => {
@@ -205,7 +233,12 @@ export function Timeline() {
     e.stopPropagation();
     const target = e.currentTarget;
     target.setPointerCapture(e.pointerId);
-    const from = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+    const from = {
+      x: e.clientX,
+      y: e.clientY,
+      left: el.scrollLeft,
+      top: el.scrollTop,
+    };
     const move = (ev: globalThis.PointerEvent) => {
       el.scrollLeft = from.left - (ev.clientX - from.x);
       el.scrollTop = from.top - (ev.clientY - from.y);
@@ -222,7 +255,10 @@ export function Timeline() {
    * Tools that act on any item before its own handler: the hand pans, the
    * blade cuts the item under the pointer. Returns true when it took the press.
    */
-  const toolPress = (e: PointerEvent<HTMLElement>, target: Selection | null) => {
+  const toolPress = (
+    e: PointerEvent<HTMLElement>,
+    target: Selection | null,
+  ) => {
     if (e.button === 1 || (e.button === 0 && tool === "hand")) {
       panDrag(e);
       return true;
@@ -230,8 +266,11 @@ export function Timeline() {
     if (e.button === 0 && tool === "blade") {
       e.stopPropagation();
       const raw = toTime(e.clientX);
-      const t = usePlayback.getState().snapping ? snapTime(raw, [usePlayback.getState().time], 6 / Math.max(pps, 1e-6)) : raw;
-      if (target && target.kind !== "clip") usePlayback.getState().select(target);
+      const t = usePlayback.getState().snapping
+        ? snapTime(raw, [usePlayback.getState().time], 6 / Math.max(pps, 1e-6))
+        : raw;
+      if (target && target.kind !== "clip")
+        usePlayback.getState().select(target);
       editActions.splitAt(t, target && target.kind !== "clip" ? target : null);
       return true;
     }
@@ -268,23 +307,35 @@ export function Timeline() {
     );
   };
 
-  const trimMain = (p: Placed, edge: "start" | "end") => (e: PointerEvent<HTMLElement>) => {
-    if (tool !== "select") return;
-    select({ kind: "clip", id: p.clip.id });
-    const orig = useEdit.getState().edit.clips;
-    const key = `clip-${edge}-${p.clip.id}-${Date.now()}`;
-    startDrag(e, (dx) => {
-      const dt = dx / pps;
-      change((ed) => ({ ...ed, clips: trimClip(orig, p.clip.id, edge, dt, sourceDuration) }), key);
-    });
-  };
+  const trimMain =
+    (p: Placed, edge: "start" | "end") => (e: PointerEvent<HTMLElement>) => {
+      if (tool !== "select") return;
+      select({ kind: "clip", id: p.clip.id });
+      const orig = useEdit.getState().edit.clips;
+      const key = `clip-${edge}-${p.clip.id}-${Date.now()}`;
+      startDrag(e, (dx) => {
+        const dt = dx / pps;
+        change(
+          (ed) => ({
+            ...ed,
+            clips: trimClip(orig, p.clip.id, edge, dt, sourceDuration),
+          }),
+          key,
+        );
+      });
+    };
 
   // --- Overlays and audio ----------------------------------------------
 
   type Free = Overlay | AudioClip;
 
   const dragFree =
-    (kind: "overlay" | "audio", item: Free, mode: "move" | "start" | "end", lanes: number) =>
+    (
+      kind: "overlay" | "audio",
+      item: Free,
+      mode: "move" | "start" | "end",
+      lanes: number,
+    ) =>
     (e: PointerEvent<HTMLElement>) => {
       if (toolPress(e, { kind, id: item.id })) return;
       select({ kind, id: item.id });
@@ -293,7 +344,10 @@ export function Timeline() {
       // Overlay lanes stack upwards (lane 0 nearest the video), audio downwards.
       const laneDir = kind === "overlay" ? -1 : 1;
       const assetDuration =
-        "asset" in item ? (useEdit.getState().edit.assets.find((a) => a.id === item.asset)?.duration ?? null) : null;
+        "asset" in item
+          ? (useEdit.getState().edit.assets.find((a) => a.id === item.asset)
+              ?.duration ?? null)
+          : null;
       const hasIn = "in" in item;
       startDrag(e, (dx, dy) => {
         const dt = dx / pps;
@@ -302,24 +356,43 @@ export function Timeline() {
           const raw = Math.max(0, item.start + dt);
           const s1 = snap(raw, item.id);
           const s2 = snap(raw + item.duration, item.id) - item.duration;
-          const start = Math.max(0, Math.abs(s1 - raw) <= Math.abs(s2 - raw) ? s1 : s2);
-          const lane = Math.max(0, Math.min(lanes, item.lane + Math.round((dy / LANE) * laneDir)));
+          const start = Math.max(
+            0,
+            Math.abs(s1 - raw) <= Math.abs(s2 - raw) ? s1 : s2,
+          );
+          const lane = Math.max(
+            0,
+            Math.min(lanes, item.lane + Math.round((dy / LANE) * laneDir)),
+          );
           patch = { start, lane };
         } else if (mode === "start") {
           const itemEnd = item.start + item.duration;
           const minStart = hasIn ? item.start - (item as { in: number }).in : 0;
-          const start = Math.max(0, minStart, Math.min(snap(item.start + dt, item.id), itemEnd - MIN_ITEM));
+          const start = Math.max(
+            0,
+            minStart,
+            Math.min(snap(item.start + dt, item.id), itemEnd - MIN_ITEM),
+          );
           patch = { start, duration: itemEnd - start };
-          if (hasIn) (patch as { in: number }).in = (item as { in: number }).in + (start - item.start);
+          if (hasIn)
+            (patch as { in: number }).in =
+              (item as { in: number }).in + (start - item.start);
         } else {
-          const maxDur = assetDuration !== null && hasIn ? assetDuration - (item as { in: number }).in : Infinity;
+          const maxDur =
+            assetDuration !== null && hasIn
+              ? assetDuration - (item as { in: number }).in
+              : Infinity;
           const endT = snap(item.start + item.duration + dt, item.id);
-          patch = { duration: Math.max(MIN_ITEM, Math.min(maxDur, endT - item.start)) };
+          patch = {
+            duration: Math.max(MIN_ITEM, Math.min(maxDur, endT - item.start)),
+          };
         }
         change(
           (ed) => ({
             ...ed,
-            [field]: (ed[field] as Free[]).map((o) => (o.id === item.id ? { ...o, ...patch } : o)),
+            [field]: (ed[field] as Free[]).map((o) =>
+              o.id === item.id ? { ...o, ...patch } : o,
+            ),
           }),
           key,
         );
@@ -329,7 +402,12 @@ export function Timeline() {
   // --- Zooms (source time) ---------------------------------------------
 
   const dragZoom =
-    (z: ZoomSegment, span: Placed<RecordingClip>, mode: "move" | "start" | "end") => (e: PointerEvent<HTMLElement>) => {
+    (
+      z: ZoomSegment,
+      span: Placed<RecordingClip>,
+      mode: "move" | "start" | "end",
+    ) =>
+    (e: PointerEvent<HTMLElement>) => {
       if (toolPress(e, null)) return;
       selectZoom(z.id);
       const key = `zoom-${mode}-${z.id}-${Date.now()}`;
@@ -342,8 +420,18 @@ export function Timeline() {
               ? { start: z.start + ds, end: z.end }
               : { start: z.start, end: z.end + ds };
         change((ed) => {
-          const next = constrainSegment(ed.zooms, z.id, raw.start, raw.end, sourceDuration, mode);
-          return { ...ed, zooms: ed.zooms.map((s) => (s.id === z.id ? { ...s, ...next } : s)) };
+          const next = constrainSegment(
+            ed.zooms,
+            z.id,
+            raw.start,
+            raw.end,
+            sourceDuration,
+            mode,
+          );
+          return {
+            ...ed,
+            zooms: ed.zooms.map((s) => (s.id === z.id ? { ...s, ...next } : s)),
+          };
         }, key);
       });
     };
@@ -354,7 +442,10 @@ export function Timeline() {
     const slot = placeZoom(edit.zooms, s, sourceDuration);
     if (!slot) return;
     const id = newId("zoom");
-    change((ed) => ({ ...ed, zooms: [...ed.zooms, { id, ...slot, scale: 2, focus: null }] }));
+    change((ed) => ({
+      ...ed,
+      zooms: [...ed.zooms, { id, ...slot, scale: 2, focus: null }],
+    }));
     selectZoom(id);
   };
   const canZoomAt = (t: number) => {
@@ -367,18 +458,32 @@ export function Timeline() {
   const toggleLane = (field: "hidden" | "muted", lane: number) =>
     change((ed) => {
       const list = ed.tracks[field];
-      const next = list.includes(lane) ? list.filter((l) => l !== lane) : [...list, lane];
+      const next = list.includes(lane)
+        ? list.filter((l) => l !== lane)
+        : [...list, lane];
       return { ...ed, tracks: { ...ed.tracks, [field]: next } };
     });
 
-  const overlayLanes = edit.overlays.length ? Math.max(...edit.overlays.map((o) => o.lane)) + 1 : 0;
-  const audioLanes = edit.audio.length ? Math.max(...edit.audio.map((a) => a.lane)) + 1 : 0;
-  const isSel = (kind: Selection["kind"], id: string) => selection?.kind === kind && selection.id === id;
+  const overlayLanes = edit.overlays.length
+    ? Math.max(...edit.overlays.map((o) => o.lane)) + 1
+    : 0;
+  const audioLanes = edit.audio.length
+    ? Math.max(...edit.audio.map((a) => a.lane)) + 1
+    : 0;
+  const isSel = (kind: Selection["kind"], id: string) =>
+    selection?.kind === kind && selection.id === id;
   const assetName = (id: string) =>
-    id === MIC_ASSET ? "Voice" : (edit.assets.find((a) => a.id === id)?.name ?? "Media");
+    id === MIC_ASSET
+      ? "Voice"
+      : (edit.assets.find((a) => a.id === id)?.name ?? "Media");
   const trackWidth = x(end);
 
-  const toolCursor = tool === "blade" ? "cursor-crosshair" : tool === "hand" ? "cursor-grab active:cursor-grabbing" : "";
+  const toolCursor =
+    tool === "blade"
+      ? "cursor-crosshair"
+      : tool === "hand"
+        ? "cursor-grab active:cursor-grabbing"
+        : "";
 
   return (
     <div className="flex h-full min-h-0 select-none flex-col">
@@ -388,7 +493,9 @@ export function Timeline() {
         className={cn("relative min-h-0 flex-1 overflow-auto pb-3", toolCursor)}
         data-timeline-pps={pps}
         onWheel={onWheel}
-        onPointerMove={(e) => setBlade(tool === "blade" ? toTime(e.clientX) : null)}
+        onPointerMove={(e) =>
+          setBlade(tool === "blade" ? toTime(e.clientX) : null)
+        }
         onPointerLeave={() => setBlade(null)}
         onPointerDown={(e) => {
           if (e.button === 1 || (e.button === 0 && tool === "hand")) {
@@ -398,7 +505,10 @@ export function Timeline() {
           if (e.target === e.currentTarget) select(null);
         }}
       >
-        <div className="relative" style={{ width: HEADER + trackWidth + GUTTER * 2 }}>
+        <div
+          className="relative"
+          style={{ width: HEADER + trackWidth + GUTTER * 2 }}
+        >
           {/* Ruler */}
           <Row header={<Timecode />} sticky height={28}>
             <div
@@ -410,13 +520,24 @@ export function Timeline() {
               {ticks.map((t) => {
                 const major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
                 return (
-                  <div key={t} className="absolute bottom-1 -translate-x-1/2" style={{ left: x(t) }}>
+                  <div
+                    key={t}
+                    className="absolute bottom-1 -translate-x-1/2"
+                    style={{ left: x(t) }}
+                  >
                     {major && t > 0 ? (
                       <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 font-mono text-[10.5px] text-muted-foreground tabular-nums">
                         {formatTime(t)}
                       </span>
                     ) : null}
-                    <div className={cn("size-[3px] rounded-full", major ? "bg-muted-foreground" : "bg-muted-foreground/40")} />
+                    <div
+                      className={cn(
+                        "size-[3px] rounded-full",
+                        major
+                          ? "bg-muted-foreground"
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
                   </div>
                 );
               })}
@@ -425,7 +546,10 @@ export function Timeline() {
           </Row>
 
           {/* Overlay lanes, highest on top */}
-          {Array.from({ length: overlayLanes }, (_, i) => overlayLanes - 1 - i).map((lane) => {
+          {Array.from(
+            { length: overlayLanes },
+            (_, i) => overlayLanes - 1 - i,
+          ).map((lane) => {
             const hidden = edit.tracks.hidden.includes(lane);
             return (
               <Row
@@ -449,17 +573,36 @@ export function Timeline() {
                   {edit.overlays
                     .filter((o) => o.lane === lane)
                     .map((o) => (
-                      <TimelineItemMenu key={o.id} selection={{ kind: "overlay", id: o.id }}>
+                      <TimelineItemMenu
+                        key={o.id}
+                        selection={{ kind: "overlay", id: o.id }}
+                      >
                         <Block
                           left={x(o.start)}
                           width={x(o.duration)}
                           selected={isSel("overlay", o.id)}
                           className={OVERLAY_COLOR[o.kind]}
-                          onPointerDown={dragFree("overlay", o, "move", overlayLanes)}
-                          onStart={dragFree("overlay", o, "start", overlayLanes)}
+                          onPointerDown={dragFree(
+                            "overlay",
+                            o,
+                            "move",
+                            overlayLanes,
+                          )}
+                          onStart={dragFree(
+                            "overlay",
+                            o,
+                            "start",
+                            overlayLanes,
+                          )}
                           onEnd={dragFree("overlay", o, "end", overlayLanes)}
                         >
-                          {o.kind === "text" ? o.text : o.kind === "shape" ? o.shape : o.kind === "blur" ? `Blur · ${o.mode}` : assetName(o.asset)}
+                          {o.kind === "text"
+                            ? o.text
+                            : o.kind === "shape"
+                              ? o.shape
+                              : o.kind === "blur"
+                                ? `Blur · ${o.mode}`
+                                : assetName(o.asset)}
                         </Block>
                       </TimelineItemMenu>
                     ))}
@@ -469,10 +612,16 @@ export function Timeline() {
           })}
 
           {/* Main track */}
-          <Row height={MAIN} header={<TrackHeader name="V1" hint="Video" color="bg-amber-500" />}>
+          <Row
+            height={MAIN}
+            header={<TrackHeader name="V1" hint="Video" color="bg-amber-500" />}
+          >
             <Track width={trackWidth}>
               {placed.map((p) => (
-                <TimelineItemMenu key={p.clip.id} selection={{ kind: "clip", id: p.clip.id }}>
+                <TimelineItemMenu
+                  key={p.clip.id}
+                  selection={{ kind: "clip", id: p.clip.id }}
+                >
                   <div
                     className={cn(
                       "absolute inset-y-0 flex flex-col items-center justify-center overflow-hidden rounded-lg border border-black/20 shadow-inner",
@@ -480,18 +629,25 @@ export function Timeline() {
                       p.clip.kind === "recording"
                         ? "bg-gradient-to-b from-amber-500 to-amber-600 text-amber-950"
                         : "bg-gradient-to-b from-indigo-500 to-indigo-700 text-white",
-                      isSel("clip", p.clip.id) && "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
+                      isSel("clip", p.clip.id) &&
+                        "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
                       moving?.id === p.clip.id && "z-10 opacity-80 shadow-xl",
                     )}
                     style={{
                       left: x(p.start),
                       width: Math.max(4, x(p.end - p.start)),
-                      transform: moving?.id === p.clip.id ? `translateX(${moving.dx}px)` : undefined,
+                      transform:
+                        moving?.id === p.clip.id
+                          ? `translateX(${moving.dx}px)`
+                          : undefined,
                     }}
                     onPointerDown={dragClip(p)}
                   >
                     <ClipLabel clip={p.clip} />
-                    <TrimHandle side="start" onPointerDown={trimMain(p, "start")} />
+                    <TrimHandle
+                      side="start"
+                      onPointerDown={trimMain(p, "start")}
+                    />
                     <TrimHandle side="end" onPointerDown={trimMain(p, "end")} />
                   </div>
                 </TimelineItemMenu>
@@ -531,23 +687,32 @@ export function Timeline() {
                         on: !le.hidden,
                         label: le.hidden ? "Show device" : "Hide device",
                         icon: le.hidden ? ViewOffSlashIcon : ViewIcon,
-                        onClick: () => editActions.setLayerHidden(le.instanceId, !le.hidden),
+                        onClick: () =>
+                          editActions.setLayerHidden(le.instanceId, !le.hidden),
                       }}
                     />
                   }
                 >
                   <Track width={trackWidth} dim={le.hidden}>
                     {spans.map((p) => (
-                      <DeviceMenu key={`${le.instanceId}-${p.clip.id}`} instanceId={le.instanceId}>
+                      <DeviceMenu
+                        key={`${le.instanceId}-${p.clip.id}`}
+                        instanceId={le.instanceId}
+                      >
                         <div
                           className={cn(
                             "absolute inset-y-1 cursor-pointer rounded-md opacity-80 ring-1 ring-white/10 hover:opacity-100",
                             DEVICE_COLORS[i % DEVICE_COLORS.length],
-                            selectedLayer === le.instanceId && "opacity-100 ring-2 ring-white/80",
+                            selectedLayer === le.instanceId &&
+                              "opacity-100 ring-2 ring-white/80",
                           )}
-                          style={{ left: x(p.start), width: Math.max(2, x(p.end - p.start)) }}
+                          style={{
+                            left: x(p.start),
+                            width: Math.max(2, x(p.end - p.start)),
+                          }}
                           onPointerDown={(e) => {
-                            if (toolPress(e, { kind: "clip", id: p.clip.id })) return;
+                            if (toolPress(e, { kind: "clip", id: p.clip.id }))
+                              return;
                             usePlayback.getState().selectLayer(le.instanceId);
                             seekDrag(e);
                           }}
@@ -560,10 +725,16 @@ export function Timeline() {
             : null}
 
           {/* Zoom track */}
-          <Row height={ZOOM} header={<TrackHeader name="Zoom" color="bg-violet-500" />}>
+          <Row
+            height={ZOOM}
+            header={<TrackHeader name="Zoom" color="bg-violet-500" />}
+          >
             <Track width={trackWidth}>
               <div
-                className={cn("group/zooms absolute inset-0 rounded-lg", tool === "select" && "cursor-copy")}
+                className={cn(
+                  "group/zooms absolute inset-0 rounded-lg",
+                  tool === "select" && "cursor-copy",
+                )}
                 onPointerMove={(e) => setHover(toTime(e.clientX))}
                 onPointerLeave={() => setHover(null)}
                 onPointerDown={(e) => {
@@ -591,18 +762,36 @@ export function Timeline() {
                     className={cn(
                       "absolute inset-y-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-b from-violet-500 to-violet-700 text-[12px] text-white",
                       tool === "select" && "cursor-grab active:cursor-grabbing",
-                      selectedZoom === z.id && "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
+                      selectedZoom === z.id &&
+                        "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
                     )}
-                    style={{ left: x(start), width: Math.max(4, x(zEnd - start)) }}
+                    style={{
+                      left: x(start),
+                      width: Math.max(4, x(zEnd - start)),
+                    }}
                     onPointerDown={dragZoom(z, span, "move")}
                     onPointerMove={(e) => e.stopPropagation()}
                     onPointerEnter={() => setHover(null)}
                   >
-                    <HugeiconsIcon icon={Search01Icon} size={12} strokeWidth={2} />
-                    <span className="font-mono tabular-nums">{z.scale.toFixed(1)}×</span>
-                    <span className="opacity-70">{z.focus ? "Manual" : "Auto"}</span>
-                    <EdgeHandle side="start" onPointerDown={dragZoom(z, span, "start")} />
-                    <EdgeHandle side="end" onPointerDown={dragZoom(z, span, "end")} />
+                    <HugeiconsIcon
+                      icon={Search01Icon}
+                      size={12}
+                      strokeWidth={2}
+                    />
+                    <span className="font-mono tabular-nums">
+                      {z.scale.toFixed(1)}×
+                    </span>
+                    <span className="opacity-70">
+                      {z.focus ? "Manual" : "Auto"}
+                    </span>
+                    <EdgeHandle
+                      side="start"
+                      onPointerDown={dragZoom(z, span, "start")}
+                    />
+                    <EdgeHandle
+                      side="end"
+                      onPointerDown={dragZoom(z, span, "end")}
+                    />
                   </div>
                 ))}
               </div>
@@ -621,8 +810,14 @@ export function Timeline() {
                   toggle={{
                     on: !edit.tracks.micMuted,
                     label: edit.tracks.micMuted ? "Unmute mic" : "Mute mic",
-                    icon: edit.tracks.micMuted ? VolumeMute01Icon : VolumeHighIcon,
-                    onClick: () => change((ed) => ({ ...ed, tracks: { ...ed.tracks, micMuted: !ed.tracks.micMuted } })),
+                    icon: edit.tracks.micMuted
+                      ? VolumeMute01Icon
+                      : VolumeHighIcon,
+                    onClick: () =>
+                      change((ed) => ({
+                        ...ed,
+                        tracks: { ...ed.tracks, micMuted: !ed.tracks.micMuted },
+                      })),
                   }}
                 />
               }
@@ -635,8 +830,14 @@ export function Timeline() {
                       "absolute inset-y-0 overflow-hidden rounded-md bg-emerald-900/60 ring-1 ring-emerald-500/30",
                       p.clip.muted && "opacity-30",
                     )}
-                    style={{ left: x(p.start), width: Math.max(2, x(p.end - p.start)) }}
-                    onPointerDown={(e) => toolPress(e, { kind: "clip", id: p.clip.id }) || seekDrag(e)}
+                    style={{
+                      left: x(p.start),
+                      width: Math.max(2, x(p.end - p.start)),
+                    }}
+                    onPointerDown={(e) =>
+                      toolPress(e, { kind: "clip", id: p.clip.id }) ||
+                      seekDrag(e)
+                    }
                   >
                     <Waveform
                       url={micUrl}
@@ -679,19 +880,31 @@ export function Timeline() {
                   {edit.audio
                     .filter((a) => a.lane === lane)
                     .map((a) => (
-                      <TimelineItemMenu key={a.id} selection={{ kind: "audio", id: a.id }}>
+                      <TimelineItemMenu
+                        key={a.id}
+                        selection={{ kind: "audio", id: a.id }}
+                      >
                         <Block
                           left={x(a.start)}
                           width={x(a.duration)}
                           selected={isSel("audio", a.id)}
                           className="bg-teal-800/80 text-white ring-1 ring-teal-400/40"
-                          onPointerDown={dragFree("audio", a, "move", audioLanes)}
+                          onPointerDown={dragFree(
+                            "audio",
+                            a,
+                            "move",
+                            audioLanes,
+                          )}
                           onStart={dragFree("audio", a, "start", audioLanes)}
                           onEnd={dragFree("audio", a, "end", audioLanes)}
                           background={
                             <Waveform
                               url={assetUrl(edit, a.asset)}
-                              from={a.asset === MIC_ASSET ? a.in - mediaOffset : a.in}
+                              from={
+                                a.asset === MIC_ASSET
+                                  ? a.in - mediaOffset
+                                  : a.in
+                              }
                               duration={a.duration}
                               width={Math.max(6, x(a.duration))}
                               height={LANE + 2}
@@ -722,7 +935,13 @@ export function Timeline() {
 }
 
 const DEVICE = 22;
-const DEVICE_COLORS = ["bg-cyan-500/70", "bg-fuchsia-500/70", "bg-lime-500/70", "bg-orange-500/70", "bg-blue-500/70"];
+const DEVICE_COLORS = [
+  "bg-cyan-500/70",
+  "bg-fuchsia-500/70",
+  "bg-lime-500/70",
+  "bg-orange-500/70",
+  "bg-blue-500/70",
+];
 
 const OVERLAY_COLOR: Record<Overlay["kind"], string> = {
   text: "bg-gradient-to-b from-sky-500 to-sky-700 text-white",
@@ -745,7 +964,13 @@ function Row({
   children: ReactNode;
 }) {
   return (
-    <div className={cn("flex", sticky ? "sticky top-0 z-30 bg-background" : "mt-1")} style={{ height }}>
+    <div
+      className={cn(
+        "flex",
+        sticky ? "sticky top-0 z-30 bg-background" : "mt-1",
+      )}
+      style={{ height }}
+    >
       <div
         className="sticky left-0 z-20 flex shrink-0 items-center border-r border-white/5 bg-background pl-3"
         style={{ width: HEADER }}
@@ -757,10 +982,21 @@ function Row({
   );
 }
 
-function Track({ width, dim, children }: { width: number; dim?: boolean; children: ReactNode }) {
+function Track({
+  width,
+  dim,
+  children,
+}: {
+  width: number;
+  dim?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div
-      className={cn("absolute inset-y-0 rounded-md bg-white/[0.025]", dim && "opacity-35")}
+      className={cn(
+        "absolute inset-y-0 rounded-md bg-white/[0.025]",
+        dim && "opacity-35",
+      )}
       style={{ left: GUTTER, width }}
     >
       {children}
@@ -777,13 +1013,22 @@ function TrackHeader({
   name: string;
   hint?: string;
   color: string;
-  toggle?: { on: boolean; label: string; icon: typeof ViewIcon; onClick: () => void };
+  toggle?: {
+    on: boolean;
+    label: string;
+    icon: typeof ViewIcon;
+    onClick: () => void;
+  };
 }) {
   return (
     <div className="flex w-full items-center gap-1.5 pr-1.5">
       <span className={cn("h-4 w-1 rounded-full", color)} />
       <span className="text-[11px] font-semibold">{name}</span>
-      {hint ? <span className="truncate text-[10px] text-muted-foreground">{hint}</span> : null}
+      {hint ? (
+        <span className="truncate text-[10px] text-muted-foreground">
+          {hint}
+        </span>
+      ) : null}
       {toggle ? (
         <button
           type="button"
@@ -814,7 +1059,9 @@ function TransitionMark({
   clip: MainClip;
   onSelect: () => void;
 }) {
-  const label = TRANSITION_KINDS.find((k) => k.id === clip.transition?.kind)?.label;
+  const label = TRANSITION_KINDS.find(
+    (k) => k.id === clip.transition?.kind,
+  )?.label;
   if (clip.transition && width > 0) {
     return (
       <button
@@ -852,8 +1099,12 @@ function ClipLabel({ clip }: { clip: MainClip }) {
   if (clip.kind === "slide") {
     return (
       <>
-        <span className="max-w-full truncate px-3 text-[11px] font-medium">{clip.title || "Slide"}</span>
-        <span className="font-mono text-[11px] opacity-70 tabular-nums">{seconds}s</span>
+        <span className="max-w-full truncate px-3 text-[11px] font-medium">
+          {clip.title || "Slide"}
+        </span>
+        <span className="font-mono text-[11px] opacity-70 tabular-nums">
+          {seconds}s
+        </span>
       </>
     );
   }
@@ -863,7 +1114,9 @@ function ClipLabel({ clip }: { clip: MainClip }) {
         Clip{clip.speed !== 1 ? ` · ${clip.speed}×` : ""}
         {clip.muted ? " · muted" : ""}
       </span>
-      <span className="font-mono text-[12px] font-semibold tabular-nums">{seconds}s</span>
+      <span className="font-mono text-[12px] font-semibold tabular-nums">
+        {seconds}s
+      </span>
     </>
   );
 }
@@ -910,7 +1163,13 @@ function Block({
   );
 }
 
-function TrimHandle({ side, onPointerDown }: { side: "start" | "end"; onPointerDown: (e: PointerEvent<HTMLElement>) => void }) {
+function TrimHandle({
+  side,
+  onPointerDown,
+}: {
+  side: "start" | "end";
+  onPointerDown: (e: PointerEvent<HTMLElement>) => void;
+}) {
   return (
     <div
       aria-hidden="true"
@@ -925,12 +1184,21 @@ function TrimHandle({ side, onPointerDown }: { side: "start" | "end"; onPointerD
   );
 }
 
-function EdgeHandle({ side, onPointerDown }: { side: "start" | "end"; onPointerDown: (e: PointerEvent<HTMLElement>) => void }) {
+function EdgeHandle({
+  side,
+  onPointerDown,
+}: {
+  side: "start" | "end";
+  onPointerDown: (e: PointerEvent<HTMLElement>) => void;
+}) {
   return (
     <div
       aria-hidden="true"
       onPointerDown={onPointerDown}
-      className={cn("absolute inset-y-0 w-2 cursor-ew-resize hover:bg-white/25", side === "start" ? "left-0" : "right-0")}
+      className={cn(
+        "absolute inset-y-0 w-2 cursor-ew-resize hover:bg-white/25",
+        side === "start" ? "left-0" : "right-0",
+      )}
     />
   );
 }
@@ -939,13 +1207,21 @@ function EdgeHandle({ side, onPointerDown }: { side: "start" | "end"; onPointerD
 // The line runs above clips but under the pinned headers and ruler.
 function Playhead({ x }: { x: (t: number) => number }) {
   const time = usePlayback((s) => s.time);
-  return <div className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-violet-400" style={{ left: x(time) }} />;
+  return (
+    <div
+      className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-violet-400"
+      style={{ left: x(time) }}
+    />
+  );
 }
 
 function PlayheadKnob({ x }: { x: (t: number) => number }) {
   const time = usePlayback((s) => s.time);
   return (
-    <div className="pointer-events-none absolute inset-y-0 w-px bg-violet-400" style={{ left: x(time) }}>
+    <div
+      className="pointer-events-none absolute inset-y-0 w-px bg-violet-400"
+      style={{ left: x(time) }}
+    >
       <div className="absolute bottom-0 left-1/2 h-3 w-2.5 -translate-x-1/2 rounded-b-sm bg-violet-400 [clip-path:polygon(0_0,100%_0,100%_60%,50%_100%,0_60%)]" />
     </div>
   );
@@ -953,5 +1229,9 @@ function PlayheadKnob({ x }: { x: (t: number) => number }) {
 
 function Timecode() {
   const time = usePlayback((s) => s.time);
-  return <span className="font-mono text-[11px] font-semibold text-violet-300 tabular-nums">{formatTime(time, true)}</span>;
+  return (
+    <span className="font-mono text-[11px] font-semibold text-violet-300 tabular-nums">
+      {formatTime(time, true)}
+    </span>
+  );
 }

@@ -44,7 +44,14 @@ export const canvasCommands = {
       if (!p) return [];
       const f = frameSizeOf(d);
       // Laptop bases and monitor stands hang below the frame.
-      return [{ x: p.x, y: p.y - LABEL_SPACE, width: f.width, height: f.height + LABEL_SPACE + f.width * 0.14 }];
+      return [
+        {
+          x: p.x,
+          y: p.y - LABEL_SPACE,
+          width: f.width,
+          height: f.height + LABEL_SPACE + f.width * 0.14,
+        },
+      ];
     });
     const bounds = boundsOf(rects);
     if (!r || !bounds) return;
@@ -66,6 +73,17 @@ export const canvasCommands = {
     const p = d ? useProject.getState().canvas[id] : undefined;
     if (!r || !d || !p) return;
     const f = frameSizeOf(d);
-    animateTo(fitView({ x: p.x, y: p.y - LABEL_SPACE, width: f.width, height: f.height + LABEL_SPACE }, r, 96));
+    animateTo(
+      fitView(
+        {
+          x: p.x,
+          y: p.y - LABEL_SPACE,
+          width: f.width,
+          height: f.height + LABEL_SPACE,
+        },
+        r,
+        96,
+      ),
+    );
   },
 };

@@ -14,7 +14,12 @@ import {
   transitionMix,
 } from "@goscreen/render-engine";
 import { drawDevice } from "./devices";
-import { drawOverlays, drawSlide, fillBackground, type MediaOf } from "./drawOverlays";
+import {
+  drawOverlays,
+  drawSlide,
+  fillBackground,
+  type MediaOf,
+} from "./drawOverlays";
 
 export type Sources = {
   video: CanvasImageSource | null;
@@ -47,12 +52,28 @@ export function drawAt(
   } else {
     const { width, height } = ctx.canvas;
     const to = scratch(0, width, height);
-    drawClip(to.getContext("2d") as CanvasRenderingContext2D, sources, edit, timeline, output, t, pixelScale);
+    drawClip(
+      to.getContext("2d") as CanvasRenderingContext2D,
+      sources,
+      edit,
+      timeline,
+      output,
+      t,
+      pixelScale,
+    );
     let from: CanvasImageSource | null = null;
     if (tr.prev.clip.kind === "slide") {
       const c = scratch(1, width, height);
       const fctx = c.getContext("2d") as CanvasRenderingContext2D;
-      drawClip(fctx, sources, edit, timeline, output, tr.prev.end - 1e-3, pixelScale);
+      drawClip(
+        fctx,
+        sources,
+        edit,
+        timeline,
+        output,
+        tr.prev.end - 1e-3,
+        pixelScale,
+      );
       from = c;
     } else {
       from = sources.stillOf?.(tr.prev as Placed<RecordingClip>) ?? null;
@@ -61,7 +82,9 @@ export function drawAt(
   }
 
   const hidden = edit.tracks.hidden;
-  const overlays = hidden.length ? edit.overlays.filter((o) => !hidden.includes(o.lane)) : edit.overlays;
+  const overlays = hidden.length
+    ? edit.overlays.filter((o) => !hidden.includes(o.lane))
+    : edit.overlays;
   if (overlays.length === 0) return;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -92,9 +115,18 @@ function drawClip(
     return;
   }
   const hidden = p?.clip.kind === "recording" && p.clip.cameraHidden;
-  const e = hidden ? { ...edit, camera: { ...edit.camera, visible: false } } : edit;
+  const e = hidden
+    ? { ...edit, camera: { ...edit.camera, visible: false } }
+    : edit;
   const s = sourceTimeAt(edit.clips, t) ?? 0;
-  drawFrame(ctx, sources, composeFrame(e, timeline, output, s), e, pixelScale, timeline);
+  drawFrame(
+    ctx,
+    sources,
+    composeFrame(e, timeline, output, s),
+    e,
+    pixelScale,
+    timeline,
+  );
 }
 
 /** Source time of the frame a recording clip ends on. */
@@ -117,8 +149,17 @@ export function drawStill(
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const e = p.clip.cameraHidden ? { ...edit, camera: { ...edit.camera, visible: false } } : edit;
-  drawFrame(ctx, sources, composeFrame(e, timeline, output, stillTime(p)), e, pixelScale, timeline);
+  const e = p.clip.cameraHidden
+    ? { ...edit, camera: { ...edit.camera, visible: false } }
+    : edit;
+  drawFrame(
+    ctx,
+    sources,
+    composeFrame(e, timeline, output, stillTime(p)),
+    e,
+    pixelScale,
+    timeline,
+  );
 }
 
 const scratches: HTMLCanvasElement[] = [];
@@ -142,7 +183,11 @@ function mixTransition(
   to: CanvasImageSource,
 ) {
   const { width: w, height: h } = ctx.canvas;
-  const layer = (img: CanvasImageSource | null, side: TransitionMix["from"], reveal = 1) => {
+  const layer = (
+    img: CanvasImageSource | null,
+    side: TransitionMix["from"],
+    reveal = 1,
+  ) => {
     if (!img || side.alpha <= 0) return;
     ctx.save();
     if (reveal < 1) {
@@ -179,7 +224,13 @@ const REFERENCE = 1080;
 
 function roundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number) {
   ctx.beginPath();
-  ctx.roundRect(r.x, r.y, r.width, r.height, Math.min(radius, r.width / 2, r.height / 2));
+  ctx.roundRect(
+    r.x,
+    r.y,
+    r.width,
+    r.height,
+    Math.min(radius, r.width / 2, r.height / 2),
+  );
 }
 
 function hexAlpha(hex: string, alpha: number) {
@@ -224,14 +275,27 @@ export function drawFrame(
   const layered = frame.layers.length > 0;
   for (const layer of frame.layers) {
     const le = edit.layers?.find((l) => l.instanceId === layer.instanceId);
-    const recorded = timeline.layers.find((l) => l.instanceId === layer.instanceId);
+    const recorded = timeline.layers.find(
+      (l) => l.instanceId === layer.instanceId,
+    );
     if (!le || !recorded) continue;
     ctx.save();
     ctx.translate(layer.center.x, layer.center.y);
     ctx.rotate(layer.rotation);
     ctx.scale(layer.scale, layer.scale);
-    ctx.translate(-layer.geometry.frame.width / 2, -layer.geometry.frame.height / 2);
-    drawDevice(ctx, layer, le, recorded, video ? { image: video, crop: layer.crop } : null, edit.shadow, shadowScale * layer.scale);
+    ctx.translate(
+      -layer.geometry.frame.width / 2,
+      -layer.geometry.frame.height / 2,
+    );
+    drawDevice(
+      ctx,
+      layer,
+      le,
+      recorded,
+      video ? { image: video, crop: layer.crop } : null,
+      edit.shadow,
+      shadowScale * layer.scale,
+    );
     ctx.restore();
   }
   if (!layered && framed && edit.shadow > 0) {
@@ -295,7 +359,12 @@ function drawWebcam(
   pixelScale: number,
 ) {
   const shape = edit.camera.shape;
-  const radius = shape === "circle" ? r.width / 2 : shape === "rounded" ? r.width * 0.18 : 6 * k;
+  const radius =
+    shape === "circle"
+      ? r.width / 2
+      : shape === "rounded"
+        ? r.width * 0.18
+        : 6 * k;
   ctx.save();
   ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
   ctx.shadowBlur = 40 * k * pixelScale;

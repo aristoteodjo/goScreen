@@ -7,7 +7,9 @@ export type Rect = { x: number; y: number; width: number; height: number };
 // Low floor: a 2240px iMac next to phones must fit on a laptop screen.
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 4;
-export const ZOOM_STEPS = [0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4] as const;
+export const ZOOM_STEPS = [
+  0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4,
+] as const;
 
 export function clampZoom(z: number): number {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
@@ -18,7 +20,12 @@ export function screenToCanvas(sx: number, sy: number, v: View) {
 }
 
 // Keeps the screen point (originX, originY) fixed while zooming.
-export function zoomAt(v: View, nextZoom: number, originX: number, originY: number): View {
+export function zoomAt(
+  v: View,
+  nextZoom: number,
+  originX: number,
+  originY: number,
+): View {
   const zoom = clampZoom(nextZoom);
   const k = zoom / v.zoom;
   return {
@@ -29,7 +36,8 @@ export function zoomAt(v: View, nextZoom: number, originX: number, originY: numb
 }
 
 export function stepZoom(current: number, direction: 1 | -1): number {
-  if (direction === 1) return ZOOM_STEPS.find((z) => z > current + 1e-9) ?? MAX_ZOOM;
+  if (direction === 1)
+    return ZOOM_STEPS.find((z) => z > current + 1e-9) ?? MAX_ZOOM;
   return [...ZOOM_STEPS].reverse().find((z) => z < current - 1e-9) ?? MIN_ZOOM;
 }
 
@@ -42,7 +50,11 @@ export function boundsOf(rects: Rect[]): Rect | null {
   return { x, y, width: right - x, height: bottom - y };
 }
 
-export function fitView(bounds: Rect, viewport: { width: number; height: number }, padding = 80): View {
+export function fitView(
+  bounds: Rect,
+  viewport: { width: number; height: number },
+  padding = 80,
+): View {
   const zoom = clampZoom(
     Math.min(
       1,

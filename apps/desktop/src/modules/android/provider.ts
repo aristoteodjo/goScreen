@@ -15,7 +15,10 @@ export const useAndroidSettings = create<AndroidSettings>()(
       adbPath: null,
       setAdbPath: (path) => set({ adbPath: path?.trim() ? path.trim() : null }),
     }),
-    { name: "goscreen.android", storage: createJSONStorage(() => localStorage) },
+    {
+      name: "goscreen.android",
+      storage: createJSONStorage(() => localStorage),
+    },
   ),
 );
 

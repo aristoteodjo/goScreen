@@ -10,18 +10,35 @@ import {
   type Size,
   sourceTimeAt,
 } from "@goscreen/render-engine";
-import { type PointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "@/lib/utils";
 import { overlayBox } from "./drawOverlays";
 import { imageFor, pooled, prunePool } from "./media";
 import { PreviewMenu, type PreviewTarget } from "./PreviewMenu";
-import { previewStill } from "./stills";
 import { drawAt, type TimelineSources } from "./render";
-import { assetUrl, currentTimeline, requestPaint, setPainter, useSession } from "./session";
+import {
+  assetUrl,
+  currentTimeline,
+  requestPaint,
+  setPainter,
+  useSession,
+} from "./session";
+import { previewStill } from "./stills";
 import { useEdit, usePlayback } from "./store";
 
 /** Live media for overlays, from the preview pools. */
-function previewSources(edit: EditState, output: Size, pixelScale: number): TimelineSources {
+function previewSources(
+  edit: EditState,
+  output: Size,
+  pixelScale: number,
+): TimelineSources {
   const { video, camera } = useSession.getState();
   return {
     stillOf: (p) => previewStill(p, edit, output, pixelScale),
@@ -58,12 +75,23 @@ function syncPool(edit: EditState) {
 }
 
 /** Top-most overlay under an output point at time t. */
-function hitOverlay(overlays: Overlay[], t: number, p: Point, out: Size): Overlay | null {
+function hitOverlay(
+  overlays: Overlay[],
+  t: number,
+  p: Point,
+  out: Size,
+): Overlay | null {
   const shown = activeOverlays(overlays, t);
   for (let i = shown.length - 1; i >= 0; i -= 1) {
     const r = overlayBox(shown[i], out);
     const pad = 6;
-    if (p.x >= r.x - pad && p.x <= r.x + r.width + pad && p.y >= r.y - pad && p.y <= r.y + r.height + pad) return shown[i];
+    if (
+      p.x >= r.x - pad &&
+      p.x <= r.x + r.width + pad &&
+      p.y >= r.y - pad &&
+      p.y <= r.y + r.height + pad
+    )
+      return shown[i];
   }
   return null;
 }
@@ -90,22 +118,39 @@ export function Preview() {
   useLayoutEffect(() => {
     const el = hostRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setBox({ width: e.contentRect.width, height: e.contentRect.height }));
+    const ro = new ResizeObserver(([e]) =>
+      setBox({ width: e.contentRect.width, height: e.contentRect.height }),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const output = useMemo(() => (source ? outputSize(aspect, source) : null), [aspect, source]);
+  const output = useMemo(
+    () => (source ? outputSize(aspect, source) : null),
+    [aspect, source],
+  );
   const fit = output
-    ? fitInto({ width: Math.max(0, box.width - MARGIN * 2), height: Math.max(0, box.height - MARGIN * 2) }, output)
+    ? fitInto(
+        {
+          width: Math.max(0, box.width - MARGIN * 2),
+          height: Math.max(0, box.height - MARGIN * 2),
+        },
+        output,
+      )
     : null;
   const css =
-    output && fit && viewZoom !== null ? { width: output.width * viewZoom, height: output.height * viewZoom } : fit;
+    output && fit && viewZoom !== null
+      ? { width: output.width * viewZoom, height: output.height * viewZoom }
+      : fit;
   const dpr = window.devicePixelRatio || 1;
   // Never more backing pixels than the output has: zooming in shows real pixels, not a huge canvas.
   const density = css && output ? Math.min(dpr, output.width / css.width) : dpr;
-  const backingW = css ? Math.max(2, Math.round(css.width * density * quality)) : 0;
-  const backingH = css ? Math.max(2, Math.round(css.height * density * quality)) : 0;
+  const backingW = css
+    ? Math.max(2, Math.round(css.width * density * quality))
+    : 0;
+  const backingH = css
+    ? Math.max(2, Math.round(css.height * density * quality))
+    : 0;
 
   // Cmd + wheel (or a trackpad pinch) zooms the preview around the pointer.
   useEffect(() => {
@@ -117,7 +162,13 @@ export function Preview() {
       const { viewZoom: current, setViewZoom } = usePlayback.getState();
       const fitZoom = fit.width / output.width;
       const from = current ?? fitZoom;
-      const next = Math.max(0.1, Math.min(4, from * Math.exp(-Math.max(-60, Math.min(60, e.deltaY)) * 0.01)));
+      const next = Math.max(
+        0.1,
+        Math.min(
+          4,
+          from * Math.exp(-Math.max(-60, Math.min(60, e.deltaY)) * 0.01),
+        ),
+      );
       setViewZoom(next <= fitZoom * 1.001 && from > next ? null : next);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -132,7 +183,12 @@ export function Preview() {
     e.stopPropagation();
     const target = e.currentTarget;
     target.setPointerCapture(e.pointerId);
-    const start = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+    const start = {
+      x: e.clientX,
+      y: e.clientY,
+      left: el.scrollLeft,
+      top: el.scrollTop,
+    };
     const onMove = (ev: globalThis.PointerEvent) => {
       el.scrollLeft = start.left - (ev.clientX - start.x);
       el.scrollTop = start.top - (ev.clientY - start.y);
@@ -156,7 +212,15 @@ export function Preview() {
       if (!timeline) return;
       const { edit } = useEdit.getState();
       const t = usePlayback.getState().time;
-      drawAt(ctx, previewSources(edit, output, canvas.width / output.width), edit, timeline, output, t, canvas.width / output.width);
+      drawAt(
+        ctx,
+        previewSources(edit, output, canvas.width / output.width),
+        edit,
+        timeline,
+        output,
+        t,
+        canvas.width / output.width,
+      );
     });
     requestPaint();
     return () => setPainter(null);
@@ -165,7 +229,11 @@ export function Preview() {
   useEffect(() => {
     syncPool(useEdit.getState().edit);
     const offPool = useEdit.subscribe((s, prev) => {
-      if (s.edit.overlays !== prev.edit.overlays || s.edit.audio !== prev.edit.audio) syncPool(s.edit);
+      if (
+        s.edit.overlays !== prev.edit.overlays ||
+        s.edit.audio !== prev.edit.audio
+      )
+        syncPool(s.edit);
     });
     const offAssets = useSession.subscribe((s, prev) => {
       if (s.assetUrls !== prev.assetUrls) syncPool(useEdit.getState().edit);
@@ -187,7 +255,10 @@ export function Preview() {
     const canvas = canvasRef.current;
     if (!output || !canvas) return null;
     const r = canvas.getBoundingClientRect();
-    return { x: ((clientX - r.left) / r.width) * output.width, y: ((clientY - r.top) / r.height) * output.height };
+    return {
+      x: ((clientX - r.left) / r.width) * output.width,
+      y: ((clientY - r.top) / r.height) * output.height,
+    };
   };
 
   /** The recording frame under the playhead, or null on a slide. */
@@ -226,11 +297,17 @@ export function Preview() {
     const now = frameNow();
     const id = p && now ? hitLayer(now.frame.layers, p) : null;
     if (id) return { kind: "layer", id };
-    return { kind: "empty", at: { x: screen.x / output.width, y: screen.y / output.height } };
+    return {
+      kind: "empty",
+      at: { x: screen.x / output.width, y: screen.y / output.height },
+    };
   };
 
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (e.button === 1 || (e.button === 0 && usePlayback.getState().tool === "hand")) {
+    if (
+      e.button === 1 ||
+      (e.button === 0 && usePlayback.getState().tool === "hand")
+    ) {
       pan(e);
       return;
     }
@@ -240,7 +317,9 @@ export function Preview() {
     // Overlays sit above everything: they take the click first.
     const screen = toScreen(e.clientX, e.clientY);
     const t = usePlayback.getState().time;
-    const hit = screen ? hitOverlay(useEdit.getState().edit.overlays, t, screen, output) : null;
+    const hit = screen
+      ? hitOverlay(useEdit.getState().edit.overlays, t, screen, output)
+      : null;
     if (hit && screen) {
       usePlayback.getState().select({ kind: "overlay", id: hit.id });
       dragOverlay(e, hit, screen, "move");
@@ -256,8 +335,16 @@ export function Preview() {
 
     // With a zoom selected, a click pins where it looks.
     if (selectedZoom) {
-      const focus = { x: Math.max(0, Math.min(1, p.x / output.width)), y: Math.max(0, Math.min(1, p.y / output.height)) };
-      change((ed) => ({ ...ed, zooms: ed.zooms.map((z) => (z.id === selectedZoom ? { ...z, focus } : z)) }));
+      const focus = {
+        x: Math.max(0, Math.min(1, p.x / output.width)),
+        y: Math.max(0, Math.min(1, p.y / output.height)),
+      };
+      change((ed) => ({
+        ...ed,
+        zooms: ed.zooms.map((z) =>
+          z.id === selectedZoom ? { ...z, focus } : z,
+        ),
+      }));
       return;
     }
     if (!layered) return;
@@ -270,7 +357,9 @@ export function Preview() {
     // Drag the device; positions are fractions of the stage area.
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
-    const start = useEdit.getState().edit.layers?.find((l) => l.instanceId === id);
+    const start = useEdit
+      .getState()
+      .edit.layers?.find((l) => l.instanceId === id);
     if (!start) return;
     const area = frame.content;
     const onMove = (ev: globalThis.PointerEvent) => {
@@ -279,7 +368,12 @@ export function Preview() {
       const x = start.x + (q.x - p.x) / area.width;
       const y = start.y + (q.y - p.y) / area.height;
       change(
-        (ed) => ({ ...ed, layers: ed.layers?.map((l) => (l.instanceId === id ? { ...l, x, y } : l)) ?? null }),
+        (ed) => ({
+          ...ed,
+          layers:
+            ed.layers?.map((l) => (l.instanceId === id ? { ...l, x, y } : l)) ??
+            null,
+        }),
         `move-${id}`,
       );
     };
@@ -294,7 +388,12 @@ export function Preview() {
   };
 
   /** Moves an overlay, or resizes it from its corner; sizes are fractions of the output. */
-  const dragOverlay = (e: PointerEvent<HTMLElement>, o: Overlay, from: Point, mode: "move" | "resize") => {
+  const dragOverlay = (
+    e: PointerEvent<HTMLElement>,
+    o: Overlay,
+    from: Point,
+    mode: "move" | "resize",
+  ) => {
     if (!output) return;
     e.stopPropagation();
     const el = e.currentTarget;
@@ -312,8 +411,17 @@ export function Preview() {
             if (mode === "move") return { ...x, x: o.x + dx, y: o.y + dy };
             // Grows from the opposite corner; media keep their aspect.
             const width = Math.max(0.02, o.width + dx);
-            const height = x.kind === "image" || x.kind === "video" ? (width * o.height) / o.width : Math.max(0.02, o.height + dy);
-            return { ...x, width, height, x: o.x - o.width / 2 + width / 2, y: o.y - o.height / 2 + height / 2 };
+            const height =
+              x.kind === "image" || x.kind === "video"
+                ? (width * o.height) / o.width
+                : Math.max(0.02, o.height + dy);
+            return {
+              ...x,
+              width,
+              height,
+              x: o.x - o.width / 2 + width / 2,
+              y: o.y - o.height / 2 + height / 2,
+            };
           }),
         }),
         `overlay-${mode}-${o.id}`,
@@ -333,37 +441,57 @@ export function Preview() {
     <div ref={hostRef} className="relative min-h-0 flex-1">
       <div
         ref={scrollRef}
-        className={cn("absolute inset-0 flex overflow-auto", tool === "hand" && "cursor-grab active:cursor-grabbing")}
+        className={cn(
+          "absolute inset-0 flex overflow-auto",
+          tool === "hand" && "cursor-grab active:cursor-grabbing",
+        )}
         onPointerDown={(e) => {
-          if (e.target === e.currentTarget && (e.button === 1 || tool === "hand")) pan(e);
+          if (
+            e.target === e.currentTarget &&
+            (e.button === 1 || tool === "hand")
+          )
+            pan(e);
         }}
       >
         {css ? (
           <PreviewMenu target={menuTarget}>
-          <div
-            className="relative m-auto shrink-0"
-            style={{ width: css.width, height: css.height, margin: viewZoom === null ? "auto" : MARGIN }}
-            onContextMenuCapture={(e) => setMenuTarget(targetAt(e.clientX, e.clientY))}
-          >
-            <canvas
-              ref={canvasRef}
-              data-preview-canvas
-              data-output-width={output?.width}
-              width={backingW}
-              height={backingH}
-              onPointerDown={onPointerDown}
-              className={cn(
-                "block rounded-sm shadow-2xl",
-                tool === "hand"
-                  ? "cursor-grab active:cursor-grabbing"
-                  : selectedZoom
-                    ? "cursor-crosshair"
-                    : layered && "cursor-grab active:cursor-grabbing",
-              )}
-              style={{ width: css.width, height: css.height }}
-            />
-            {output ? <SelectionBox css={css} output={output} onResize={dragOverlay} toScreen={toScreen} /> : null}
-          </div>
+            <div
+              className="relative m-auto shrink-0"
+              style={{
+                width: css.width,
+                height: css.height,
+                margin: viewZoom === null ? "auto" : MARGIN,
+              }}
+              onContextMenuCapture={(e) =>
+                setMenuTarget(targetAt(e.clientX, e.clientY))
+              }
+            >
+              <canvas
+                ref={canvasRef}
+                data-preview-canvas
+                data-output-width={output?.width}
+                width={backingW}
+                height={backingH}
+                onPointerDown={onPointerDown}
+                className={cn(
+                  "block rounded-sm shadow-2xl",
+                  tool === "hand"
+                    ? "cursor-grab active:cursor-grabbing"
+                    : selectedZoom
+                      ? "cursor-crosshair"
+                      : layered && "cursor-grab active:cursor-grabbing",
+                )}
+                style={{ width: css.width, height: css.height }}
+              />
+              {output ? (
+                <SelectionBox
+                  css={css}
+                  output={output}
+                  onResize={dragOverlay}
+                  toScreen={toScreen}
+                />
+              ) : null}
+            </div>
           </PreviewMenu>
         ) : null}
       </div>
@@ -385,13 +513,27 @@ function SelectionBox({
 }: {
   css: Size;
   output: Size;
-  onResize: (e: PointerEvent<HTMLElement>, o: Overlay, from: Point, mode: "resize") => void;
+  onResize: (
+    e: PointerEvent<HTMLElement>,
+    o: Overlay,
+    from: Point,
+    mode: "resize",
+  ) => void;
   toScreen: (x: number, y: number) => Point | null;
 }) {
   const selection = usePlayback((s) => s.selection);
   const time = usePlayback((s) => s.time);
-  const overlay = useEdit((s) => (selection?.kind === "overlay" ? s.edit.overlays.find((o) => o.id === selection.id) : undefined));
-  if (!overlay || time < overlay.start || time > overlay.start + overlay.duration) return null;
+  const overlay = useEdit((s) =>
+    selection?.kind === "overlay"
+      ? s.edit.overlays.find((o) => o.id === selection.id)
+      : undefined,
+  );
+  if (
+    !overlay ||
+    time < overlay.start ||
+    time > overlay.start + overlay.duration
+  )
+    return null;
   const r = overlayBox(overlay, output);
   const k = css.width / output.width;
   return (
@@ -404,7 +546,9 @@ function SelectionBox({
             top: r.y * k,
             width: r.width * k,
             height: r.height * k,
-            transform: overlay.rotation ? `rotate(${overlay.rotation}deg)` : undefined,
+            transform: overlay.rotation
+              ? `rotate(${overlay.rotation}deg)`
+              : undefined,
           }}
         >
           <div

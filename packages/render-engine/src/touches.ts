@@ -37,7 +37,10 @@ export function presses(pointers: RecordedPointer[]): Press[] {
 export function touchesAt(
   list: Press[],
   t: number,
-  map: (p: RecordedPointer) => { x: number; y: number } | null = (p) => ({ x: p.x, y: p.y }),
+  map: (p: RecordedPointer) => { x: number; y: number } | null = (p) => ({
+    x: p.x,
+    y: p.y,
+  }),
 ): TouchMark[] {
   const out: TouchMark[] = [];
   for (const p of list) {
@@ -56,13 +59,17 @@ export function touchesAt(
 }
 
 /** Tap times in timeline seconds, for click sound effects. Muted clips stay silent. */
-export function tapTimes(pointers: RecordedPointer[], clips: MainClip[]): number[] {
+export function tapTimes(
+  pointers: RecordedPointer[],
+  clips: MainClip[],
+): number[] {
   const out: number[] = [];
   for (const p of pointers) {
     if (p.kind !== "down") continue;
     for (const span of recordingSpans(clips)) {
       const c = span.clip;
-      if (!c.muted && p.t >= c.in && p.t < c.out) out.push(span.start + (p.t - c.in) / c.speed);
+      if (!c.muted && p.t >= c.in && p.t < c.out)
+        out.push(span.start + (p.t - c.in) / c.speed);
     }
   }
   return out.sort((a, b) => a - b);

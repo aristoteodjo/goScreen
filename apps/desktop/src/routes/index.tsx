@@ -4,14 +4,14 @@ import { useAndroidSync } from "@/modules/android/useAndroid";
 import { CanvasRoot } from "@/modules/canvas/CanvasRoot";
 import { CaptureBar } from "@/modules/recording/CaptureBar";
 import { LiveCamera } from "@/modules/recording/LiveCamera";
-import { SiteTourDialog } from "@/modules/tour/SiteTourDialog";
 import { useCapture } from "@/modules/recording/useCapture";
+import { bindCapture } from "@/modules/studio/actions";
 import { CommandPalette } from "@/modules/studio/components/CommandPalette";
 import { Inspector } from "@/modules/studio/components/Inspector";
 import { StudioSidebar } from "@/modules/studio/components/StudioSidebar";
 import { Toolbar } from "@/modules/studio/components/Toolbar";
-import { bindCapture } from "@/modules/studio/actions";
 import { useBridgeWiring } from "@/modules/studio/useBridgeWiring";
+import { SiteTourDialog } from "@/modules/tour/SiteTourDialog";
 
 export const Route = createFileRoute("/")({
   component: Studio,

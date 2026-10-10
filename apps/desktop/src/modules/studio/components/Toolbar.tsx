@@ -12,19 +12,34 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { normalizeUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
 import { useReload } from "@/modules/interaction/runtime";
-import type { CaptureControls } from "@/modules/recording/useCapture";
 import { useCaptureSettings } from "@/modules/recording/settings";
 import { useRecording } from "@/modules/recording/store";
+import type { CaptureControls } from "@/modules/recording/useCapture";
 import { pageLabel } from "@/modules/tour/plan";
 import { useTour } from "@/modules/tour/store";
 import { ASPECTS, type AspectId } from "../store/aspect";
@@ -39,7 +54,9 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
   const view = useEditor((s) => s.view);
   // An unsynced selected device has its own address; edit that one.
   const ownDevice = useProject((s) =>
-    s.devices.find((d) => d.id === selectedId && !d.synced && d.source.kind === "web"),
+    s.devices.find(
+      (d) => d.id === selectedId && !d.synced && d.source.kind === "web",
+    ),
   );
   const url = ownDevice ? (ownDevice.url ?? sharedUrl) : sharedUrl;
   const aspect = useProject((s) => s.aspect);
@@ -73,7 +90,10 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
   };
 
   return (
-    <header data-tauri-drag-region className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+    <header
+      data-tauri-drag-region
+      className="flex h-12 shrink-0 items-center gap-2 border-b px-3"
+    >
       <SidebarTrigger className="-ml-1" />
       <form onSubmit={submit} className="mx-auto w-full max-w-xl">
         <InputGroup className="h-8">
@@ -83,14 +103,23 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
           <InputGroupInput
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={ownDevice ? "Address for this device only" : "https://your-site.com or localhost:3000"}
+            placeholder={
+              ownDevice
+                ? "Address for this device only"
+                : "https://your-site.com or localhost:3000"
+            }
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
             className="font-mono text-xs"
           />
           <InputGroupAddon align="inline-end">
-            <InputGroupButton size="icon-xs" type="button" onClick={reload} aria-label="Reload all devices">
+            <InputGroupButton
+              size="icon-xs"
+              type="button"
+              onClick={reload}
+              aria-label="Reload all devices"
+            >
               <HugeiconsIcon icon={RefreshIcon} strokeWidth={1.75} />
             </InputGroupButton>
           </InputGroupAddon>
@@ -100,25 +129,35 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
         <Tooltip>
           <TooltipTrigger asChild>
             <Label className="flex items-center gap-2 text-xs text-muted-foreground text-nowrap">
-              <Switch size="sm" checked={allSynced} onCheckedChange={setAllSynced} />
+              <Switch
+                size="sm"
+                checked={allSynced}
+                onCheckedChange={setAllSynced}
+              />
               Sync all
             </Label>
           </TooltipTrigger>
-          <TooltipContent>Shared URL and scroll for every device. Fine-tune per device on each frame.</TooltipContent>
+          <TooltipContent>
+            Shared URL and scroll for every device. Fine-tune per device on each
+            frame.
+          </TooltipContent>
         </Tooltip>
         {view === "scene" ? (
-        <Select value={aspect} onValueChange={(v) => setAspect(v as AspectId)}>
-          <SelectTrigger size="sm" className="w-[84px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.keys(ASPECTS).map((id) => (
-              <SelectItem key={id} value={id}>
-                {id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select
+            value={aspect}
+            onValueChange={(v) => setAspect(v as AspectId)}
+          >
+            <SelectTrigger size="sm" className="w-[84px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.keys(ASPECTS).map((id) => (
+                <SelectItem key={id} value={id}>
+                  {id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -129,7 +168,11 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
               disabled={capture.isShooting || capture.recording}
               aria-label="Screenshot"
             >
-              {capture.isShooting ? <Spinner /> : <HugeiconsIcon icon={Camera01Icon} strokeWidth={1.75} />}
+              {capture.isShooting ? (
+                <Spinner />
+              ) : (
+                <HugeiconsIcon icon={Camera01Icon} strokeWidth={1.75} />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>Screenshot</TooltipContent>
@@ -168,14 +211,20 @@ function PauseButton({ capture }: { capture: CaptureControls }) {
           variant="outline"
           disabled={!started || capture.isStopping}
           onClick={capture.togglePause}
-          className={cn("gap-1.5", paused && "border-amber-400/60 text-amber-300")}
+          className={cn(
+            "gap-1.5",
+            paused && "border-amber-400/60 text-amber-300",
+          )}
         >
           <HugeiconsIcon icon={paused ? PlayIcon : PauseIcon} strokeWidth={2} />
           {paused ? "Resume" : "Pause"}
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        {paused ? "Resume recording" : "Pause: what happens until you resume is cut out"} (⇧⌘P)
+        {paused
+          ? "Resume recording"
+          : "Pause: what happens until you resume is cut out"}{" "}
+        (⇧⌘P)
       </TooltipContent>
     </Tooltip>
   );
@@ -196,12 +245,22 @@ function RecordButton({ capture }: { capture: CaptureControls }) {
   const setBarOpen = useCaptureSettings((s) => s.setBarOpen);
   // Record opens the capture bar; while recording this is the Stop button,
   // kept in the toolbar so it is never inside the captured area.
-  const onClick = () => (capture.recording ? capture.toggleRecording() : setBarOpen(!barOpen));
+  const onClick = () =>
+    capture.recording ? capture.toggleRecording() : setBarOpen(!barOpen);
   // The clock shows what will be kept: paused time does not count.
-  const pausedFor = useRecording.getState().closedPauses().reduce((s, p) => s + (p.end - p.start), 0);
-  const elapsed = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000 - pausedFor)) : 0;
+  const pausedFor = useRecording
+    .getState()
+    .closedPauses()
+    .reduce((s, p) => s + (p.end - p.start), 0);
+  const elapsed = startedAt
+    ? Math.max(0, Math.floor((now - startedAt) / 1000 - pausedFor))
+    : 0;
   const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
-  const label = capture.recording ? (paused ? `Paused ${clock}` : clock) : "Record";
+  const label = capture.recording
+    ? paused
+      ? `Paused ${clock}`
+      : clock
+    : "Record";
 
   return (
     <Button
@@ -210,13 +269,18 @@ function RecordButton({ capture }: { capture: CaptureControls }) {
       disabled={busy}
       className={cn(
         "min-w-[92px] gap-1.5 tabular-nums",
-        capture.recording ? "bg-rec text-white hover:bg-rec/90" : "bg-signal text-signal-foreground hover:bg-signal/90",
+        capture.recording
+          ? "bg-rec text-white hover:bg-rec/90"
+          : "bg-signal text-signal-foreground hover:bg-signal/90",
       )}
     >
       {busy ? (
         <Spinner />
       ) : (
-        <HugeiconsIcon icon={capture.recording ? StopIcon : RecordIcon} strokeWidth={2} />
+        <HugeiconsIcon
+          icon={capture.recording ? StopIcon : RecordIcon}
+          strokeWidth={2}
+        />
       )}
       {label}
     </Button>

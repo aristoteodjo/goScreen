@@ -1,4 +1,8 @@
-import { DEFAULT_EDIT, type EditState, sequenceDuration } from "@goscreen/render-engine";
+import {
+  DEFAULT_EDIT,
+  type EditState,
+  sequenceDuration,
+} from "@goscreen/render-engine";
 import { create } from "zustand";
 
 const HISTORY_LIMIT = 100;
@@ -32,7 +36,8 @@ export const useEdit = create<EditStore>((set, get) => ({
     const next = fn(edit);
     if (next === edit) return;
     const now = Date.now();
-    const coalesce = key !== undefined && key === lastKey && now - lastAt < COALESCE_MS;
+    const coalesce =
+      key !== undefined && key === lastKey && now - lastAt < COALESCE_MS;
     set({
       edit: next,
       past: coalesce ? past : [...past, edit].slice(-HISTORY_LIMIT),
@@ -45,17 +50,37 @@ export const useEdit = create<EditStore>((set, get) => ({
     const { past, edit, future } = get();
     const prev = past[past.length - 1];
     if (!prev) return;
-    set({ edit: prev, past: past.slice(0, -1), future: [edit, ...future], lastKey: null });
+    set({
+      edit: prev,
+      past: past.slice(0, -1),
+      future: [edit, ...future],
+      lastKey: null,
+    });
   },
   redo: () => {
     const { past, edit, future } = get();
     const next = future[0];
     if (!next) return;
-    set({ edit: next, past: [...past, edit], future: future.slice(1), lastKey: null });
+    set({
+      edit: next,
+      past: [...past, edit],
+      future: future.slice(1),
+      lastKey: null,
+    });
   },
 }));
 
-export type Panel = "devices" | "background" | "touch" | "zoom" | "camera" | "audio" | "clip" | "overlay" | "music";
+export type Panel =
+  | "proposals"
+  | "devices"
+  | "background"
+  | "touch"
+  | "zoom"
+  | "camera"
+  | "audio"
+  | "clip"
+  | "overlay"
+  | "music";
 export type Quality = 1 | 0.5 | 0.25;
 /** Timeline tool, as in Premiere: select (V), blade (C), hand (H). */
 export type Tool = "select" | "blade" | "hand";
@@ -63,7 +88,11 @@ export type Tool = "select" | "blade" | "hand";
 /** A selected timeline item other than a zoom. */
 export type Selection = { kind: "clip" | "overlay" | "audio"; id: string };
 
-const PANEL_OF: Record<Selection["kind"], Panel> = { clip: "clip", overlay: "overlay", audio: "music" };
+const PANEL_OF: Record<Selection["kind"], Panel> = {
+  clip: "clip",
+  overlay: "overlay",
+  audio: "music",
+};
 
 // Editor UI State: playback and panels. Never saved. `time` is timeline
 // time (the sequence of clips); `duration` is the source recording's.
@@ -120,13 +149,31 @@ export const usePlayback = create<PlaybackStore>((set) => ({
   setPanel: (panel) => set({ panel }),
   setQuality: (quality) => set({ quality }),
   selectZoom: (selectedZoom) =>
-    set(selectedZoom ? { selectedZoom, selection: null, panel: "zoom" } : { selectedZoom }),
+    set(
+      selectedZoom
+        ? { selectedZoom, selection: null, panel: "zoom" }
+        : { selectedZoom },
+    ),
   selectLayer: (selectedLayer) =>
-    set(selectedLayer ? { selectedLayer, selectedZoom: null, selection: null, panel: "devices" } : { selectedLayer }),
+    set(
+      selectedLayer
+        ? {
+            selectedLayer,
+            selectedZoom: null,
+            selection: null,
+            panel: "devices",
+          }
+        : { selectedLayer },
+    ),
   select: (selection) =>
     set(
       selection
-        ? { selection, selectedZoom: null, selectedLayer: null, panel: PANEL_OF[selection.kind] }
+        ? {
+            selection,
+            selectedZoom: null,
+            selectedLayer: null,
+            panel: PANEL_OF[selection.kind],
+          }
         : { selection: null },
     ),
   setScale: (scale) => set({ scale }),
@@ -135,11 +182,20 @@ export const usePlayback = create<PlaybackStore>((set) => ({
   setSnapping: (snapping) => set({ snapping }),
   setViewZoom: (viewZoom) => set({ viewZoom }),
   reset: () =>
-    set({ time: 0, duration: 0, playing: false, selectedZoom: null, selectedLayer: null, selection: null, scale: null }),
+    set({
+      time: 0,
+      duration: 0,
+      playing: false,
+      selectedZoom: null,
+      selectedLayer: null,
+      selection: null,
+      scale: null,
+    }),
 }));
 
 /** Length of the edited video, in timeline seconds. */
 export const timelineEnd = (edit: EditState) => sequenceDuration(edit.clips);
 
 /** A short unique id for new timeline items. */
-export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+export const newId = (prefix: string) =>
+  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;

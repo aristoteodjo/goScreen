@@ -1,4 +1,10 @@
-import { ComputerIcon, Delete02Icon, LaptopIcon, SmartPhone01Icon, Tablet01Icon } from "@hugeicons/core-free-icons";
+import {
+  ComputerIcon,
+  Delete02Icon,
+  LaptopIcon,
+  SmartPhone01Icon,
+  Tablet01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Sidebar,
@@ -27,11 +33,13 @@ const CATEGORIES = [
   { id: "desktop", label: "Desktops", icon: ComputerIcon },
 ] as const;
 
-const groups = CATEGORIES.map((c) => ({ ...c, devices: registry.list().filter((d) => d.category === c.id) })).filter(
-  (g) => g.devices.length > 0,
-);
+const groups = CATEGORIES.map((c) => ({
+  ...c,
+  devices: registry.list().filter((d) => d.category === c.id),
+})).filter((g) => g.devices.length > 0);
 
-const iconFor = (category: string) => CATEGORIES.find((c) => c.id === category)?.icon ?? SmartPhone01Icon;
+const iconFor = (category: string) =>
+  CATEGORIES.find((c) => c.id === category)?.icon ?? SmartPhone01Icon;
 
 export function StudioSidebar() {
   const devices = useProject((s) => s.devices);
@@ -43,7 +51,10 @@ export function StudioSidebar() {
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarHeader data-tauri-drag-region className="h-12 justify-end pl-20">
-        <span data-tauri-drag-region className="text-[13px] font-semibold tracking-tight">
+        <span
+          data-tauri-drag-region
+          className="text-[13px] font-semibold tracking-tight"
+        >
           goScreen
         </span>
       </SidebarHeader>
@@ -53,7 +64,9 @@ export function StudioSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {devices.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">No device yet.</p>
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                  No device yet.
+                </p>
               ) : null}
               {devices.map((d) => {
                 const def = registry.get(d.deviceId);
@@ -63,16 +76,27 @@ export function StudioSidebar() {
                       isActive={d.id === selectedId}
                       onClick={() => {
                         select(d.id);
-                        if (useEditor.getState().view === "canvas") canvasCommands.focus(d.id);
+                        if (useEditor.getState().view === "canvas")
+                          canvasCommands.focus(d.id);
                       }}
                     >
-                      <HugeiconsIcon icon={iconFor(def?.category ?? "phone")} strokeWidth={1.75} />
+                      <HugeiconsIcon
+                        icon={iconFor(def?.category ?? "phone")}
+                        strokeWidth={1.75}
+                      />
                       <span>{def?.name ?? d.deviceId}</span>
                       {d.source.kind === "android" ? (
-                        <span className="ml-auto size-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden="true" />
+                        <span
+                          className="ml-auto size-1.5 shrink-0 rounded-full bg-emerald-400"
+                          aria-hidden="true"
+                        />
                       ) : null}
                     </SidebarMenuButton>
-                    <SidebarMenuAction showOnHover onClick={() => removeDevice(d.id)} aria-label="Remove device">
+                    <SidebarMenuAction
+                      showOnHover
+                      onClick={() => removeDevice(d.id)}
+                      aria-label="Remove device"
+                    >
                       <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.75} />
                     </SidebarMenuAction>
                   </SidebarMenuItem>
@@ -99,7 +123,9 @@ export function StudioSidebar() {
                       <HugeiconsIcon icon={group.icon} strokeWidth={1.75} />
                       <span>{device.name}</span>
                     </SidebarMenuButton>
-                    {device.tier === "premium" ? <SidebarMenuBadge>Pro</SidebarMenuBadge> : null}
+                    {device.tier === "premium" ? (
+                      <SidebarMenuBadge>Pro</SidebarMenuBadge>
+                    ) : null}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>

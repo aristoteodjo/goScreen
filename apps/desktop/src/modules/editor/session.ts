@@ -21,6 +21,8 @@ type Opened = {
   micUrl: string | null;
   pointers: RecordedPointer[];
   layers: RecordedLayer[];
+  // Site tour pages, in source seconds (empty for other takes).
+  chapters: { url: string; start: number; end: number }[];
   // Camera/mic start, in seconds after the first screen frame.
   mediaOffset: number;
   // Imported asset file name -> local media URL.
@@ -49,6 +51,7 @@ export const useSession = create<SessionStore>((set) => ({
   micUrl: null,
   pointers: [],
   layers: [],
+  chapters: [],
   mediaOffset: 0,
   assetUrls: {},
   source: null,
@@ -60,7 +63,8 @@ export const useSession = create<SessionStore>((set) => ({
   setCamera: (camera) => set({ camera }),
   setMic: (mic) => set({ mic }),
   setSource: (source) => set({ source }),
-  addAssetUrl: (file, url) => set((s) => ({ assetUrls: { ...s.assetUrls, [file]: url } })),
+  addAssetUrl: (file, url) =>
+    set((s) => ({ assetUrls: { ...s.assetUrls, [file]: url } })),
 }));
 
 let cachedTimeline: { key: unknown[]; value: Timeline } | null = null;
@@ -72,7 +76,11 @@ export function currentTimeline(): Timeline | null {
   if (!cachedTimeline || key.some((k, i) => cachedTimeline?.key[i] !== k)) {
     cachedTimeline = {
       key,
-      value: timelineOf(source, pointers, { layers, hasCamera: cameraUrl !== null, geometry: geometryOf }),
+      value: timelineOf(source, pointers, {
+        layers,
+        hasCamera: cameraUrl !== null,
+        geometry: geometryOf,
+      }),
     };
   }
   return cachedTimeline.value;
@@ -106,13 +114,23 @@ export function assetUrl(edit: EditState, id: string): string | null {
 // playing element stutters.
 const DRIFT = 0.2;
 
-function follow(m: HTMLMediaElement, local: number | null, playing: boolean, rate = 1) {
-  if (local === null || local < 0 || (Number.isFinite(m.duration) && local > m.duration)) {
+function follow(
+  m: HTMLMediaElement,
+  local: number | null,
+  playing: boolean,
+  rate = 1,
+) {
+  if (
+    local === null ||
+    local < 0 ||
+    (Number.isFinite(m.duration) && local > m.duration)
+  ) {
     if (!m.paused) m.pause();
     return;
   }
   if (m.playbackRate !== rate) m.playbackRate = rate;
-  if (!playing || Math.abs(m.currentTime - local) > DRIFT) m.currentTime = local;
+  if (!playing || Math.abs(m.currentTime - local) > DRIFT)
+    m.currentTime = local;
   if (playing && m.paused) void m.play().catch(() => {});
   if (!playing && !m.paused) m.pause();
 }
@@ -123,10 +141,17 @@ function syncMedia(t: number, playing: boolean) {
   const { edit } = useEdit.getState();
   const p = clipAt(edit.clips, t);
   const rec = p && p.clip.kind === "recording" ? p.clip : null;
-  const source = rec && p ? Math.min(rec.out, rec.in + (t - p.start) * rec.speed) : null;
+  const source =
+    rec && p ? Math.min(rec.out, rec.in + (t - p.start) * rec.speed) : null;
   const rate = rec?.speed ?? 1;
   if (video) follow(video, source, playing, rate);
-  if (camera) follow(camera, source === null ? null : source - mediaOffset, playing, rate);
+  if (camera)
+    follow(
+      camera,
+      source === null ? null : source - mediaOffset,
+      playing,
+      rate,
+    );
   if (mic) {
     mic.muted = (rec?.muted ?? true) || edit.tracks.micMuted;
     follow(mic, source === null ? null : source - mediaOffset, playing, rate);
@@ -134,11 +159,17 @@ function syncMedia(t: number, playing: boolean) {
   for (const [id, { el }] of pooledEntries()) {
     const o = edit.overlays.find((x) => x.id === id);
     const a = o ? null : edit.audio.find((x) => x.id === id);
-    const item = o?.kind === "video" ? { start: o.start, duration: o.duration, in: o.in, volume: o.volume } : a;
+    const item =
+      o?.kind === "video"
+        ? { start: o.start, duration: o.duration, in: o.in, volume: o.volume }
+        : a;
     if (!item) continue;
     // Detached voice: `in` is source time; the mic file starts mediaOffset later.
     const shift = a?.asset === MIC_ASSET ? mediaOffset : 0;
-    const local = t >= item.start && t <= item.start + item.duration ? t - item.start + item.in - shift : null;
+    const local =
+      t >= item.start && t <= item.start + item.duration
+        ? t - item.start + item.in - shift
+        : null;
     el.volume = Math.min(1, item.volume);
     // A muted music lane is silent (video overlays are muted by the painter).
     if (a) el.muted = edit.tracks.muted.includes(a.lane);

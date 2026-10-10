@@ -25,7 +25,13 @@ type Props = {
 };
 
 // Renders one device at its natural frame size. Callers position it.
-export function DeviceMockup({ instance, url, selected, framesInteractive, onFramePointerDown }: Props) {
+export function DeviceMockup({
+  instance,
+  url,
+  selected,
+  framesInteractive,
+  onFramePointerDown,
+}: Props) {
   const device = registry.get(instance.deviceId) ?? registry.list()[0];
   const live = instance.source.kind === "android" ? instance.source : null;
   const { src, bump } = useStableSource(instance.id, live ? "" : url);
@@ -35,19 +41,38 @@ export function DeviceMockup({ instance, url, selected, framesInteractive, onFra
   // after capture; they must not be burned into the recorded glass.
   const recording = useRecording((s) => s.active);
 
-  const { frame, screen, bezel } = resolveScreenLayout(device, instance.orientation, instance.viewport);
-  const color = device.frame.colors.find((c) => c.id === instance.colorId) ?? device.frame.colors[0];
+  const { frame, screen, bezel } = resolveScreenLayout(
+    device,
+    instance.orientation,
+    instance.viewport,
+  );
+  const color =
+    device.frame.colors.find((c) => c.id === instance.colorId) ??
+    device.frame.colors[0];
   const portrait = instance.orientation === "portrait";
   const handheld = device.category === "phone" || device.category === "tablet";
   // A live Android screen draws its own status bar and navigation.
   const showStatusBar =
-    !live && handheld && portrait && instance.statusBar === "auto" && device.statusBar.style !== "none";
+    !live &&
+    handheld &&
+    portrait &&
+    instance.statusBar === "auto" &&
+    device.statusBar.style !== "none";
 
   return (
-    <div className="relative" style={{ width: frame.width, height: frame.height }}>
-      {device.category === "phone" ? <SideButtons portrait={portrait} color={color.edge} /> : null}
-      {device.category === "laptop" ? <LaptopBase width={frame.width} body={color.body} edge={color.edge} /> : null}
-      {device.category === "desktop" ? <MonitorStand width={frame.width} body={color.body} edge={color.edge} /> : null}
+    <div
+      className="relative"
+      style={{ width: frame.width, height: frame.height }}
+    >
+      {device.category === "phone" ? (
+        <SideButtons portrait={portrait} color={color.edge} />
+      ) : null}
+      {device.category === "laptop" ? (
+        <LaptopBase width={frame.width} body={color.body} edge={color.edge} />
+      ) : null}
+      {device.category === "desktop" ? (
+        <MonitorStand width={frame.width} body={color.body} edge={color.edge} />
+      ) : null}
       <div
         onPointerDown={onFramePointerDown}
         className={cn(
@@ -71,11 +96,24 @@ export function DeviceMockup({ instance, url, selected, framesInteractive, onFra
           return () => registerGlass(instance.id, null);
         }}
         className="absolute overflow-hidden bg-black"
-        style={{ left: bezel, top: bezel, width: screen.width, height: screen.height, borderRadius: device.frame.screenRadius }}
+        style={{
+          left: bezel,
+          top: bezel,
+          width: screen.width,
+          height: screen.height,
+          borderRadius: device.frame.screenRadius,
+        }}
       >
-        {recording ? null : <Cutout cutout={device.cutout} orientation={instance.orientation} />}
+        {recording ? null : (
+          <Cutout cutout={device.cutout} orientation={instance.orientation} />
+        )}
         <div className="flex h-full w-full flex-col bg-white">
-          {showStatusBar ? <StatusBar style={device.statusBar.style} height={device.safeArea.top} /> : null}
+          {showStatusBar ? (
+            <StatusBar
+              style={device.statusBar.style}
+              height={device.safeArea.top}
+            />
+          ) : null}
           <div
             className="relative min-h-0 flex-1"
             ref={(el) => {
@@ -85,7 +123,11 @@ export function DeviceMockup({ instance, url, selected, framesInteractive, onFra
           >
             <CornerMarkers />
             {live ? (
-              <AndroidScreen instanceId={instance.id} serial={live.serial} interactive={framesInteractive} />
+              <AndroidScreen
+                instanceId={instance.id}
+                serial={live.serial}
+                interactive={framesInteractive}
+              />
             ) : content.data ? (
               <iframe
                 key={`${content.data.proxiedUrl}#${nonce}.${bump}`}
@@ -95,7 +137,10 @@ export function DeviceMockup({ instance, url, selected, framesInteractive, onFra
                 }}
                 src={content.data.proxiedUrl}
                 title={`${device.name} preview`}
-                className={cn("h-full w-full border-0 bg-white", !framesInteractive && "pointer-events-none")}
+                className={cn(
+                  "h-full w-full border-0 bg-white",
+                  !framesInteractive && "pointer-events-none",
+                )}
                 // No allow-top-navigation: a previewed page must never be able
                 // to navigate the studio window itself.
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
@@ -140,24 +185,58 @@ function CornerMarkers() {
   const base = "pointer-events-none absolute size-0";
   return (
     <>
-      <span aria-hidden="true" data-corner="tl" className={cn(base, "top-0 left-0")} />
-      <span aria-hidden="true" data-corner="tr" className={cn(base, "top-0 right-0")} />
-      <span aria-hidden="true" data-corner="br" className={cn(base, "right-0 bottom-0")} />
-      <span aria-hidden="true" data-corner="bl" className={cn(base, "bottom-0 left-0")} />
+      <span
+        aria-hidden="true"
+        data-corner="tl"
+        className={cn(base, "top-0 left-0")}
+      />
+      <span
+        aria-hidden="true"
+        data-corner="tr"
+        className={cn(base, "top-0 right-0")}
+      />
+      <span
+        aria-hidden="true"
+        data-corner="br"
+        className={cn(base, "right-0 bottom-0")}
+      />
+      <span
+        aria-hidden="true"
+        data-corner="bl"
+        className={cn(base, "bottom-0 left-0")}
+      />
     </>
   );
 }
 
-function ScreenMessage({ message, error = false }: { message: string; error?: boolean }) {
+function ScreenMessage({
+  message,
+  error = false,
+}: {
+  message: string;
+  error?: boolean;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 bg-neutral-50 px-8 text-center text-neutral-500">
-      {error ? <HugeiconsIcon icon={Alert02Icon} size={28} strokeWidth={1.5} /> : <Spinner className="size-6" />}
+      {error ? (
+        <HugeiconsIcon icon={Alert02Icon} size={28} strokeWidth={1.5} />
+      ) : (
+        <Spinner className="size-6" />
+      )}
       <p className="text-[15px] leading-snug">{message}</p>
     </div>
   );
 }
 
-function LaptopBase({ width, body, edge }: { width: number; body: string; edge: string }) {
+function LaptopBase({
+  width,
+  body,
+  edge,
+}: {
+  width: number;
+  body: string;
+  edge: string;
+}) {
   const overhang = width * 0.07;
   const height = Math.max(14, width * 0.018);
   return (
@@ -175,19 +254,40 @@ function LaptopBase({ width, body, edge }: { width: number; body: string; edge: 
     >
       <div
         className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-md"
-        style={{ width: width * 0.14, height: height * 0.4, background: body, filter: "brightness(0.82)" }}
+        style={{
+          width: width * 0.14,
+          height: height * 0.4,
+          background: body,
+          filter: "brightness(0.82)",
+        }}
       />
     </div>
   );
 }
 
-function MonitorStand({ width, body, edge }: { width: number; body: string; edge: string }) {
+function MonitorStand({
+  width,
+  body,
+  edge,
+}: {
+  width: number;
+  body: string;
+  edge: string;
+}) {
   const neckH = width * 0.12;
   return (
-    <div aria-hidden="true" className="absolute left-1/2 -translate-x-1/2" style={{ top: "100%", width: width * 0.36 }}>
+    <div
+      aria-hidden="true"
+      className="absolute left-1/2 -translate-x-1/2"
+      style={{ top: "100%", width: width * 0.36 }}
+    >
       <div
         className="mx-auto"
-        style={{ width: width * 0.16, height: neckH, background: `linear-gradient(90deg, ${body}, ${edge}, ${body})` }}
+        style={{
+          width: width * 0.16,
+          height: neckH,
+          background: `linear-gradient(90deg, ${body}, ${edge}, ${body})`,
+        }}
       />
       <div
         style={{
@@ -200,23 +300,53 @@ function MonitorStand({ width, body, edge }: { width: number; body: string; edge
   );
 }
 
-function SideButtons({ portrait, color }: { portrait: boolean; color: string }) {
+function SideButtons({
+  portrait,
+  color,
+}: {
+  portrait: boolean;
+  color: string;
+}) {
   const style = { background: color };
   const v = "absolute w-[4px] rounded-sm";
   const h = "absolute h-[4px] rounded-sm";
   return portrait ? (
     <>
-      <div className={cn(v, "-left-[3px] top-[180px] h-[34px]")} style={style} />
-      <div className={cn(v, "-left-[3px] top-[240px] h-[64px]")} style={style} />
-      <div className={cn(v, "-left-[3px] top-[320px] h-[64px]")} style={style} />
-      <div className={cn(v, "-right-[3px] top-[260px] h-[100px]")} style={style} />
+      <div
+        className={cn(v, "-left-[3px] top-[180px] h-[34px]")}
+        style={style}
+      />
+      <div
+        className={cn(v, "-left-[3px] top-[240px] h-[64px]")}
+        style={style}
+      />
+      <div
+        className={cn(v, "-left-[3px] top-[320px] h-[64px]")}
+        style={style}
+      />
+      <div
+        className={cn(v, "-right-[3px] top-[260px] h-[100px]")}
+        style={style}
+      />
     </>
   ) : (
     <>
-      <div className={cn(h, "-top-[3px] right-[180px] w-[34px]")} style={style} />
-      <div className={cn(h, "-top-[3px] right-[240px] w-[64px]")} style={style} />
-      <div className={cn(h, "-top-[3px] right-[320px] w-[64px]")} style={style} />
-      <div className={cn(h, "-bottom-[3px] right-[260px] w-[100px]")} style={style} />
+      <div
+        className={cn(h, "-top-[3px] right-[180px] w-[34px]")}
+        style={style}
+      />
+      <div
+        className={cn(h, "-top-[3px] right-[240px] w-[64px]")}
+        style={style}
+      />
+      <div
+        className={cn(h, "-top-[3px] right-[320px] w-[64px]")}
+        style={style}
+      />
+      <div
+        className={cn(h, "-bottom-[3px] right-[260px] w-[100px]")}
+        style={style}
+      />
     </>
   );
 }

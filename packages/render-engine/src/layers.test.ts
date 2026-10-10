@@ -39,7 +39,13 @@ describe("layers", () => {
   });
 
   it("lays devices side by side, bottoms aligned", () => {
-    const [a, b] = arrangeLayers([{ width: 100, height: 200 }, { width: 100, height: 100 }], { width: 1000, height: 1000 });
+    const [a, b] = arrangeLayers(
+      [
+        { width: 100, height: 200 },
+        { width: 100, height: 100 },
+      ],
+      { width: 1000, height: 1000 },
+    );
     expect(a.scale).toBeCloseTo(0.8);
     expect(a.y + a.scale / 2).toBeCloseTo(b.y + b.scale / 2);
     expect(a.x).toBeLessThan(b.x);
@@ -50,8 +56,15 @@ describe("layers", () => {
     const out = { width: 1000, height: 500 };
     expect(webcamRect(out, cam, false)).toBeNull();
     const r = webcamRect(out, { ...cam, corner: 8, size: 0.2 }, true);
-    expect(r).toEqual({ x: 1000 - 100 - 20, y: 500 - 100 - 20, width: 100, height: 100 });
-    expect(stageArea(out, { ...cam, layout: "split" }, true).width).toBeCloseTo(660);
+    expect(r).toEqual({
+      x: 1000 - 100 - 20,
+      y: 500 - 100 - 20,
+      width: 100,
+      height: 100,
+    });
+    expect(stageArea(out, { ...cam, layout: "split" }, true).width).toBeCloseTo(
+      660,
+    );
   });
 
   it("snaps a dropped webcam to the closest of the nine slots", () => {
@@ -67,18 +80,51 @@ describe("layers", () => {
 describe("layered compose", () => {
   const edit: EditState = {
     ...DEFAULT_EDIT,
-    layers: [{ instanceId: "a", deviceId: "phone", colorId: "black", frame: true, x: 0.5, y: 0.5, scale: 0.84, rotation: 0, hidden: false }],
+    layers: [
+      {
+        instanceId: "a",
+        deviceId: "phone",
+        colorId: "black",
+        frame: true,
+        x: 0.5,
+        y: 0.5,
+        scale: 0.84,
+        rotation: 0,
+        hidden: false,
+      },
+    ],
   };
   const timeline = timelineOf(
     { width: 2000, height: 1000 },
-    [{ t: 1, kind: "down", x: 0.2, y: 0.5, u: 0.5, v: 0.5, instanceId: "a", source: "web" }],
+    [
+      {
+        t: 1,
+        kind: "down",
+        x: 0.2,
+        y: 0.5,
+        u: 0.5,
+        v: 0.5,
+        instanceId: "a",
+        source: "web",
+      },
+    ],
     { layers: [recorded], geometry },
   );
 
   it("crops each screen from the capture and places its frame", () => {
-    const frame = composeFrame(edit, timeline, { width: 1000, height: 1000 }, 1.05);
+    const frame = composeFrame(
+      edit,
+      timeline,
+      { width: 1000, height: 1000 },
+      1.05,
+    );
     expect(frame.layers).toHaveLength(1);
-    expect(frame.layers[0].crop).toEqual({ x: 200, y: 100, width: 400, height: 800 });
+    expect(frame.layers[0].crop).toEqual({
+      x: 200,
+      y: 100,
+      width: 400,
+      height: 800,
+    });
     expect(frame.layers[0].scale).toBeCloseTo(1);
     // The tap sits at the screen center, which is the frame center here.
     expect(frame.touches[0].x).toBeCloseTo(500);
@@ -103,9 +149,17 @@ describe("layered compose", () => {
   });
 
   it("keeps the webcam layout placed in the studio, ignoring a broken one", () => {
-    const base = { version: 3, mode: "scene", capture: { width: 10, height: 10 }, layers: [], pointers: [] };
+    const base = {
+      version: 3,
+      mode: "scene",
+      capture: { width: 10, height: 10 },
+      layers: [],
+      pointers: [],
+    };
     const camera = { ...DEFAULT_EDIT.camera, corner: 0, size: 0.3 };
     expect(parseRecordingFile({ ...base, camera }).camera).toEqual(camera);
-    expect(parseRecordingFile({ ...base, camera: { corner: 42 } }).camera).toBeNull();
+    expect(
+      parseRecordingFile({ ...base, camera: { corner: 42 } }).camera,
+    ).toBeNull();
   });
 });

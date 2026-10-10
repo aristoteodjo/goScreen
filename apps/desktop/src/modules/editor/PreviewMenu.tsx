@@ -28,20 +28,30 @@ export type PreviewTarget =
  * Right-click on the preview: quick edits on what was clicked, without
  * going through the inspector.
  */
-export function PreviewMenu({ target, children }: { target: PreviewTarget | null; children: ReactElement }) {
+export function PreviewMenu({
+  target,
+  children,
+}: {
+  target: PreviewTarget | null;
+  children: ReactElement;
+}) {
   return (
     <ContextMenu
       onOpenChange={(open) => {
         if (!open || !target) return;
-        if (target.kind === "overlay") usePlayback.getState().select({ kind: "overlay", id: target.id });
-        if (target.kind === "layer") usePlayback.getState().selectLayer(target.id);
+        if (target.kind === "overlay")
+          usePlayback.getState().select({ kind: "overlay", id: target.id });
+        if (target.kind === "layer")
+          usePlayback.getState().selectLayer(target.id);
       }}
     >
       <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-56">
         {target?.kind === "overlay" ? <OverlayItems id={target.id} /> : null}
         {target?.kind === "layer" ? <LayerItems id={target.id} /> : null}
-        {target?.kind === "empty" || !target ? <EmptyItems at={target?.kind === "empty" ? target.at : undefined} /> : null}
+        {target?.kind === "empty" || !target ? (
+          <EmptyItems at={target?.kind === "empty" ? target.at : undefined} />
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -53,15 +63,24 @@ function OverlayItems({ id }: { id: string }) {
   const sel = { kind: "overlay" as const, id };
   return (
     <>
-      <ContextMenuLabel className="capitalize">{overlay.kind === "text" ? overlay.text.slice(0, 28) : overlay.kind}</ContextMenuLabel>
-      <ContextMenuItem onClick={() => usePlayback.getState().select(sel)}>Edit…</ContextMenuItem>
+      <ContextMenuLabel className="capitalize">
+        {overlay.kind === "text" ? overlay.text.slice(0, 28) : overlay.kind}
+      </ContextMenuLabel>
+      <ContextMenuItem onClick={() => usePlayback.getState().select(sel)}>
+        Edit…
+      </ContextMenuItem>
       <ContextMenuItem onClick={() => editActions.duplicate(sel)}>
         Duplicate
         <ContextMenuShortcut>⌘D</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => editActions.moveOverlayLane(id, 1)}>Bring forward</ContextMenuItem>
-      <ContextMenuItem disabled={overlay.lane === 0} onClick={() => editActions.moveOverlayLane(id, -1)}>
+      <ContextMenuItem onClick={() => editActions.moveOverlayLane(id, 1)}>
+        Bring forward
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={overlay.lane === 0}
+        onClick={() => editActions.moveOverlayLane(id, -1)}
+      >
         Send backward
       </ContextMenuItem>
       <ContextMenuSeparator />
@@ -85,7 +104,9 @@ function LayerItems({ id }: { id: string }) {
   if (!layer) return null;
   const device = registry.get(layer.deviceId);
   // Same kind of hardware: a phone recording stays believable in another phone.
-  const models = registry.list().filter((d) => !device || d.category === device.category);
+  const models = registry
+    .list()
+    .filter((d) => !device || d.category === device.category);
   return (
     <>
       <ContextMenuLabel>{device?.name ?? layer.deviceId}</ContextMenuLabel>
@@ -96,7 +117,11 @@ function LayerItems({ id }: { id: string }) {
             value={layer.deviceId}
             onValueChange={(v) => {
               const d = registry.get(String(v));
-              if (d) editActions.setLayer(id, { deviceId: d.id, colorId: d.frame.colors[0].id });
+              if (d)
+                editActions.setLayer(id, {
+                  deviceId: d.id,
+                  colorId: d.frame.colors[0].id,
+                });
             }}
           >
             {models.map((d) => (
@@ -111,10 +136,18 @@ function LayerItems({ id }: { id: string }) {
         <ContextMenuSub>
           <ContextMenuSubTrigger>Finish</ContextMenuSubTrigger>
           <ContextMenuSubContent>
-            <ContextMenuRadioGroup value={layer.colorId} onValueChange={(v) => editActions.setLayer(id, { colorId: String(v) })}>
+            <ContextMenuRadioGroup
+              value={layer.colorId}
+              onValueChange={(v) =>
+                editActions.setLayer(id, { colorId: String(v) })
+              }
+            >
               {device.frame.colors.map((c) => (
                 <ContextMenuRadioItem key={c.id} value={c.id}>
-                  <span className="size-3 rounded-full border border-white/20" style={{ background: c.body }} />
+                  <span
+                    className="size-3 rounded-full border border-white/20"
+                    style={{ background: c.body }}
+                  />
                   {c.name}
                 </ContextMenuRadioItem>
               ))}
@@ -122,21 +155,39 @@ function LayerItems({ id }: { id: string }) {
           </ContextMenuSubContent>
         </ContextMenuSub>
       ) : null}
-      <ContextMenuCheckboxItem checked={layer.frame} onCheckedChange={() => editActions.setLayer(id, { frame: !layer.frame })}>
+      <ContextMenuCheckboxItem
+        checked={layer.frame}
+        onCheckedChange={() =>
+          editActions.setLayer(id, { frame: !layer.frame })
+        }
+      >
         Device frame
       </ContextMenuCheckboxItem>
-      <ContextMenuItem onClick={() => editActions.setLayer(id, { rotation: 0 })}>Straighten</ContextMenuItem>
+      <ContextMenuItem
+        onClick={() => editActions.setLayer(id, { rotation: 0 })}
+      >
+        Straighten
+      </ContextMenuItem>
       {count > 1 ? (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => editActions.soloLayer(id)}>Show only this device</ContextMenuItem>
-          <ContextMenuItem onClick={() => editActions.showAllLayers()}>Show all devices</ContextMenuItem>
+          <ContextMenuItem onClick={() => editActions.soloLayer(id)}>
+            Show only this device
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => editActions.showAllLayers()}>
+            Show all devices
+          </ContextMenuItem>
         </>
       ) : null}
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => usePlayback.getState().selectLayer(id)}>More settings…</ContextMenuItem>
+      <ContextMenuItem onClick={() => usePlayback.getState().selectLayer(id)}>
+        More settings…
+      </ContextMenuItem>
       {count > 1 ? (
-        <ContextMenuItem variant="destructive" onClick={() => editActions.setLayerHidden(id, true)}>
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => editActions.setLayerHidden(id, true)}
+        >
           Remove from video
         </ContextMenuItem>
       ) : null}
@@ -147,12 +198,22 @@ function LayerItems({ id }: { id: string }) {
 function EmptyItems({ at }: { at?: { x: number; y: number } }) {
   return (
     <>
-      <ContextMenuItem onClick={() => editActions.addText(TEXT_PRESETS[0], at)}>Add a title here</ContextMenuItem>
-      <ContextMenuItem onClick={() => editActions.addText(TEXT_PRESETS[1], at)}>Add a caption here</ContextMenuItem>
-      <ContextMenuItem onClick={() => editActions.addBlur("blur", at)}>Blur here</ContextMenuItem>
-      <ContextMenuItem onClick={() => editActions.addBlur("pixelate", at)}>Pixelate here</ContextMenuItem>
+      <ContextMenuItem onClick={() => editActions.addText(TEXT_PRESETS[0], at)}>
+        Add a title here
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => editActions.addText(TEXT_PRESETS[1], at)}>
+        Add a caption here
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => editActions.addBlur("blur", at)}>
+        Blur here
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => editActions.addBlur("pixelate", at)}>
+        Pixelate here
+      </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => editActions.addSlide()}>Add a slide at the playhead</ContextMenuItem>
+      <ContextMenuItem onClick={() => editActions.addSlide()}>
+        Add a slide at the playhead
+      </ContextMenuItem>
     </>
   );
 }

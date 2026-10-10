@@ -1,4 +1,8 @@
-import { type CameraEdit, type CaptureMode, DEFAULT_EDIT } from "@goscreen/render-engine";
+import {
+  type CameraEdit,
+  type CaptureMode,
+  DEFAULT_EDIT,
+} from "@goscreen/render-engine";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useEditor } from "@/modules/studio/store/editor";
@@ -43,14 +47,22 @@ export const useCaptureSettings = create<CaptureSettings>()(
       name: "goscreen.capture",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ deviceOnly: s.deviceOnly, separate: s.separate, bubble: s.bubble, camera: s.camera, microphone: s.microphone }),
+      partialize: (s) => ({
+        deviceOnly: s.deviceOnly,
+        separate: s.separate,
+        bubble: s.bubble,
+        camera: s.camera,
+        microphone: s.microphone,
+      }),
     },
   ),
 );
 
 /** The area the next capture records: the selected device, or the current view. */
 export function captureMode(): CaptureMode {
-  return useCaptureSettings.getState().deviceOnly ? "device" : useEditor.getState().view;
+  return useCaptureSettings.getState().deviceOnly
+    ? "device"
+    : useEditor.getState().view;
 }
 
 export function useCaptureMode(): CaptureMode {

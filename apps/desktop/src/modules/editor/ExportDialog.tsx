@@ -23,21 +23,31 @@ const RESOLUTIONS = [
   { id: "2160", label: "4K", longSide: 3840 },
 ] as const;
 
-export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [resolution, setResolution] = useState<(typeof RESOLUTIONS)[number]["id"]>("1080");
+export function ExportDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [resolution, setResolution] =
+    useState<(typeof RESOLUTIONS)[number]["id"]>("1080");
   const [fps, setFps] = useState(60);
   const [progress, setProgress] = useState(0);
   const abort = useRef<AbortController | null>(null);
   const source = useSession((s) => s.source);
   const aspect = useEdit((s) => s.edit.aspect);
-  const longSide = RESOLUTIONS.find((r) => r.id === resolution)?.longSide ?? 1920;
+  const longSide =
+    RESOLUTIONS.find((r) => r.id === resolution)?.longSide ?? 1920;
   const size = source ? outputSize(aspect, source, longSide) : null;
 
   const run = useMutation({
     mutationFn: async () => {
-      const { videoUrl, videoPath, cameraUrl, micUrl, mediaOffset, name } = useSession.getState();
+      const { videoUrl, videoPath, cameraUrl, micUrl, mediaOffset, name } =
+        useSession.getState();
       const timeline = currentTimeline();
-      if (!videoUrl || !timeline) throw new Error("The recording is not loaded yet.");
+      if (!videoUrl || !timeline)
+        throw new Error("The recording is not loaded yet.");
       player.pause();
       setProgress(0);
       abort.current = new AbortController();
@@ -62,11 +72,15 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         toast.error("Export finished without a file.");
         return;
       }
-      toast.success("Video exported", { action: { label: "Show", onClick: () => revealItemInDir(path) } });
+      toast.success("Video exported", {
+        action: { label: "Show", onClick: () => revealItemInDir(path) },
+      });
     },
     onError: (e) => {
       if (e instanceof DOMException && e.name === "AbortError") return;
-      toast.error("Export failed", { description: e instanceof Error ? e.message : String(e) });
+      toast.error("Export failed", {
+        description: e instanceof Error ? e.message : String(e),
+      });
     },
   });
 
@@ -92,14 +106,19 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
         {done ? null : (
           <div className="flex flex-col gap-4">
-            <Option label="Resolution" value={size ? `${size.width} × ${size.height}` : ""}>
+            <Option
+              label="Resolution"
+              value={size ? `${size.width} × ${size.height}` : ""}
+            >
               <ToggleGroup
                 type="single"
                 variant="outline"
                 size="sm"
                 value={resolution}
                 disabled={run.isPending}
-                onValueChange={(v) => v && setResolution(v as typeof resolution)}
+                onValueChange={(v) =>
+                  v && setResolution(v as typeof resolution)
+                }
                 className="w-full"
               >
                 {RESOLUTIONS.map((r) => (
@@ -130,7 +149,10 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             {run.isPending ? (
               <div className="flex flex-col gap-1.5">
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full rounded-full bg-violet-500 transition-[width]" style={{ width: `${progress * 100}%` }} />
+                  <div
+                    className="h-full rounded-full bg-violet-500 transition-[width]"
+                    style={{ width: `${progress * 100}%` }}
+                  />
                 </div>
                 <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
                   Rendering {Math.round(progress * 100)}%
@@ -153,7 +175,11 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               Cancel
             </Button>
           ) : (
-            <Button className="bg-violet-600 text-white hover:bg-violet-500" onClick={() => run.mutate()} disabled={!source}>
+            <Button
+              className="bg-violet-600 text-white hover:bg-violet-500"
+              onClick={() => run.mutate()}
+              disabled={!source}
+            >
               Export
             </Button>
           )}
@@ -163,12 +189,24 @@ export function ExportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   );
 }
 
-function Option({ label, value, children }: { label: string; value?: string; children: React.ReactNode }) {
+function Option({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        {value ? <span className="font-mono text-[11px] text-foreground/80 tabular-nums">{value}</span> : null}
+        {value ? (
+          <span className="font-mono text-[11px] text-foreground/80 tabular-nums">
+            {value}
+          </span>
+        ) : null}
       </div>
       {children}
     </div>

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TOUR, pageLabel, samePage, scrollRatioAt, tourSeconds } from "./plan";
+import {
+  DEFAULT_TOUR,
+  pageLabel,
+  samePage,
+  scrollRatioAt,
+  tourSeconds,
+} from "./plan";
 
 describe("site tour plan", () => {
   it("eases the scroll from top to bottom", () => {
@@ -14,7 +20,9 @@ describe("site tour plan", () => {
   });
 
   it("compares pages without trailing slash or hash", () => {
-    expect(samePage("https://a.app/offres/", "https://a.app/offres#x")).toBe(true);
+    expect(samePage("https://a.app/offres/", "https://a.app/offres#x")).toBe(
+      true,
+    );
     expect(samePage("https://a.app/", "https://a.app")).toBe(true);
     expect(samePage("https://a.app/a?x=1", "https://a.app/a")).toBe(false);
     expect(pageLabel("https://a.app/packs/mois")).toBe("/packs/mois");

@@ -1,6 +1,17 @@
-import { type CameraShape, nearestCorner, type Rect, webcamRect } from "@goscreen/render-engine";
+import {
+  type CameraShape,
+  nearestCorner,
+  type Rect,
+  webcamRect,
+} from "@goscreen/render-engine";
 import { useQuery } from "@tanstack/react-query";
-import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -50,15 +61,22 @@ function useCameraStream(name: string | null) {
     (async () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const match = devices.find((d) => d.kind === "videoinput" && d.label === name);
+        const match = devices.find(
+          (d) => d.kind === "videoinput" && d.label === name,
+        );
         const video = match ? { deviceId: { exact: match.deviceId } } : true;
-        current = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        current = await navigator.mediaDevices.getUserMedia({
+          video,
+          audio: false,
+        });
         if (alive) setStream(current);
         else for (const t of current.getTracks()) t.stop();
       } catch (e) {
         if (!alive) return;
         setStream(null);
-        const denied = e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError");
+        const denied =
+          e instanceof DOMException &&
+          (e.name === "NotAllowedError" || e.name === "SecurityError");
         setError(
           denied
             ? "Camera access is blocked. Allow it in System Settings → Privacy → Camera."
@@ -76,7 +94,10 @@ function useCameraStream(name: string | null) {
 }
 
 const overlaps = (a: Rect, b: DOMRect) =>
-  a.x < b.right && a.x + a.width > b.left && a.y < b.bottom && a.y + a.height > b.top;
+  a.x < b.right &&
+  a.x + a.width > b.left &&
+  a.y < b.bottom &&
+  a.y + a.height > b.top;
 
 /**
  * Live webcam bubble over the canvas or the scene, placed like the editor
@@ -99,31 +120,44 @@ export function LiveCamera() {
     enabled: cameraIndex !== null,
     staleTime: 15_000,
   });
-  const name = devices.data?.cameras.find((c) => c.index === cameraIndex)?.name ?? null;
+  const name =
+    devices.data?.cameras.find((c) => c.index === cameraIndex)?.name ?? null;
   const shown = cameraIndex !== null && bubble.visible;
   const { stream, error: cameraError } = useCameraStream(shown ? name : null);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setBox({ width: e.contentRect.width, height: e.contentRect.height }));
+    const ro = new ResizeObserver(([e]) =>
+      setBox({ width: e.contentRect.width, height: e.contentRect.height }),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const rect = box.width > 0 ? webcamRect(box, { ...bubble, layout: "overlay" }, true) : null;
+  const rect =
+    box.width > 0
+      ? webcamRect(box, { ...bubble, layout: "overlay" }, true)
+      : null;
 
   // Device screens are fixed for the whole take: checked when it starts.
   useEffect(() => {
     const host = hostRef.current;
-    const r = box.width > 0 ? webcamRect(box, { ...bubble, layout: "overlay" }, true) : null;
+    const r =
+      box.width > 0
+        ? webcamRect(box, { ...bubble, layout: "overlay" }, true)
+        : null;
     if (!recording || !r || !host) {
       setOverGlass(false);
       return;
     }
     const origin = host.getBoundingClientRect();
     const onScreen = { ...r, x: r.x + origin.left, y: r.y + origin.top };
-    setOverGlass([...screenElements().values()].some((el) => overlaps(onScreen, el.getBoundingClientRect())));
+    setOverGlass(
+      [...screenElements().values()].some((el) =>
+        overlaps(onScreen, el.getBoundingClientRect()),
+      ),
+    );
   }, [recording, box, bubble]);
 
   const video = useRef<HTMLVideoElement>(null);
@@ -138,8 +172,14 @@ export function LiveCamera() {
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
     // Offset of the pointer inside the bubble, in host coordinates.
-    const grab = { x: e.clientX - host.left - rect.x, y: e.clientY - host.top - rect.y };
-    const at = (ev: globalThis.PointerEvent) => ({ x: ev.clientX - host.left - grab.x, y: ev.clientY - host.top - grab.y });
+    const grab = {
+      x: e.clientX - host.left - rect.x,
+      y: e.clientY - host.top - rect.y,
+    };
+    const at = (ev: globalThis.PointerEvent) => ({
+      x: ev.clientX - host.left - grab.x,
+      y: ev.clientY - host.top - grab.y,
+    });
     const onMove = (ev: globalThis.PointerEvent) => setDrag(at(ev));
     const onUp = (ev: globalThis.PointerEvent) => {
       el.removeEventListener("pointermove", onMove);
@@ -154,44 +194,57 @@ export function LiveCamera() {
   };
 
   const visible = shown && rect && !(recording && overGlass);
-  const radius = bubble.shape === "circle" ? "50%" : bubble.shape === "rounded" ? "18%" : "6px";
+  const radius =
+    bubble.shape === "circle"
+      ? "50%"
+      : bubble.shape === "rounded"
+        ? "18%"
+        : "6px";
 
   return (
-    <div ref={hostRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+    <div
+      ref={hostRef}
+      className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+    >
       {visible ? (
         <ContextMenu>
           <ContextMenuTrigger
-              onPointerDown={startDrag}
-              className={cn(
-                "pointer-events-auto absolute overflow-hidden bg-neutral-900 shadow-2xl ring-1 ring-white/15",
-                !recording && "cursor-grab active:cursor-grabbing",
-                drag === null && "transition-[left,top,width,height] duration-200 ease-out",
-              )}
-              style={{
-                left: drag?.x ?? rect.x,
-                top: drag?.y ?? rect.y,
-                width: rect.width,
-                height: rect.height,
-                borderRadius: radius,
-              }}
-            >
-              <video
-                ref={video}
-                autoPlay
-                muted
-                playsInline
-                className="size-full object-cover"
-                style={{ transform: bubble.mirror ? "scaleX(-1)" : undefined }}
-              />
-              {stream ? null : (
-                <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-[11px] text-white/60">
-                  {cameraError ?? (name ? "Starting camera…" : "Camera unavailable")}
-                </div>
-              )}
+            onPointerDown={startDrag}
+            className={cn(
+              "pointer-events-auto absolute overflow-hidden bg-neutral-900 shadow-2xl ring-1 ring-white/15",
+              !recording && "cursor-grab active:cursor-grabbing",
+              drag === null &&
+                "transition-[left,top,width,height] duration-200 ease-out",
+            )}
+            style={{
+              left: drag?.x ?? rect.x,
+              top: drag?.y ?? rect.y,
+              width: rect.width,
+              height: rect.height,
+              borderRadius: radius,
+            }}
+          >
+            <video
+              ref={video}
+              autoPlay
+              muted
+              playsInline
+              className="size-full object-cover"
+              style={{ transform: bubble.mirror ? "scaleX(-1)" : undefined }}
+            />
+            {stream ? null : (
+              <div className="absolute inset-0 flex items-center justify-center px-3 text-center text-[11px] text-white/60">
+                {cameraError ??
+                  (name ? "Starting camera…" : "Camera unavailable")}
+              </div>
+            )}
           </ContextMenuTrigger>
           <ContextMenuContent className="w-48">
             <ContextMenuLabel>Camera bubble</ContextMenuLabel>
-            <ContextMenuRadioGroup value={String(bubble.size)} onValueChange={(v) => setBubble({ size: Number(v) })}>
+            <ContextMenuRadioGroup
+              value={String(bubble.size)}
+              onValueChange={(v) => setBubble({ size: Number(v) })}
+            >
               {SIZES.map((s) => (
                 <ContextMenuRadioItem key={s.value} value={String(s.value)}>
                   {s.label}
@@ -199,7 +252,10 @@ export function LiveCamera() {
               ))}
             </ContextMenuRadioGroup>
             <ContextMenuSeparator />
-            <ContextMenuRadioGroup value={bubble.shape} onValueChange={(v) => setBubble({ shape: v as CameraShape })}>
+            <ContextMenuRadioGroup
+              value={bubble.shape}
+              onValueChange={(v) => setBubble({ shape: v as CameraShape })}
+            >
               {SHAPES.map((s) => (
                 <ContextMenuRadioItem key={s.id} value={s.id}>
                   {s.label}
@@ -207,10 +263,15 @@ export function LiveCamera() {
               ))}
             </ContextMenuRadioGroup>
             <ContextMenuSeparator />
-            <ContextMenuCheckboxItem checked={bubble.mirror} onCheckedChange={(v) => setBubble({ mirror: v === true })}>
+            <ContextMenuCheckboxItem
+              checked={bubble.mirror}
+              onCheckedChange={(v) => setBubble({ mirror: v === true })}
+            >
               Mirror
             </ContextMenuCheckboxItem>
-            <ContextMenuItem onClick={() => setBubble({ visible: false })}>Hide bubble</ContextMenuItem>
+            <ContextMenuItem onClick={() => setBubble({ visible: false })}>
+              Hide bubble
+            </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
       ) : null}

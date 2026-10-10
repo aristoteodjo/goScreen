@@ -3,7 +3,13 @@ import type { Animation, Overlay } from "./types";
 
 // How an animated element looks at one instant. Offsets are fractions of
 // the output size; `reveal` drives typewriter, words and wipe (0..1).
-export type Motion = { opacity: number; dx: number; dy: number; scale: number; reveal: number };
+export type Motion = {
+  opacity: number;
+  dx: number;
+  dy: number;
+  scale: number;
+  reveal: number;
+};
 
 export const STILL: Motion = { opacity: 1, dx: 0, dy: 0, scale: 1, reveal: 1 };
 
@@ -35,7 +41,13 @@ export function animate(kind: Animation, p: number): Motion {
 }
 
 /** An element with enter and exit motions, at `local` seconds into its life. */
-export function motionAt(enter: Animation, exit: Animation, motion: number, duration: number, local: number): Motion {
+export function motionAt(
+  enter: Animation,
+  exit: Animation,
+  motion: number,
+  duration: number,
+  local: number,
+): Motion {
   if (local < 0 || local > duration) return { ...STILL, opacity: 0 };
   // Short elements share their time between enter and exit.
   const span = Math.min(motion, duration / 2);
@@ -44,7 +56,9 @@ export function motionAt(enter: Animation, exit: Animation, motion: number, dura
   if (local > duration - span) {
     const out = animate(exit, (duration - local) / span);
     // Text reveals read better un-revealed by fading out.
-    return exit === "typewriter" || exit === "words" ? { ...out, reveal: 1, opacity: clamp01((duration - local) / span) } : out;
+    return exit === "typewriter" || exit === "words"
+      ? { ...out, reveal: 1, opacity: clamp01((duration - local) / span) }
+      : out;
   }
   return STILL;
 }
@@ -55,7 +69,9 @@ export function overlayMotion(o: Overlay, t: number): Motion {
 
 /** Overlays showing at timeline time t, bottom lane first. */
 export function activeOverlays(overlays: Overlay[], t: number): Overlay[] {
-  return overlays.filter((o) => t >= o.start && t <= o.start + o.duration).sort((a, b) => a.lane - b.lane);
+  return overlays
+    .filter((o) => t >= o.start && t <= o.start + o.duration)
+    .sort((a, b) => a.lane - b.lane);
 }
 
 /** Characters shown by a typewriter at `reveal`. */
@@ -70,15 +86,27 @@ export function wordOpacities(words: number, reveal: number): number[] {
   // Each word fades over `fade`; starts are spread so the last ends at 1.
   const fade = Math.min(1, 1.6 / words);
   const gap = words > 1 ? (1 - fade) / (words - 1) : 0;
-  return Array.from({ length: words }, (_, i) => clamp01((reveal - i * gap) / fade));
+  return Array.from({ length: words }, (_, i) =>
+    clamp01((reveal - i * gap) / fade),
+  );
 }
 
 /** Slides reveal the title first, then the subtitle a beat later. */
-export function slideMotion(animation: Animation, duration: number, local: number): { title: Motion; subtitle: Motion } {
+export function slideMotion(
+  animation: Animation,
+  duration: number,
+  local: number,
+): { title: Motion; subtitle: Motion } {
   const motion = Math.min(0.8, duration / 3);
   const delay = Math.min(0.35, duration / 6);
   return {
     title: motionAt(animation, "fade", motion, duration, local),
-    subtitle: motionAt(animation, "fade", motion, Math.max(0.01, duration - delay), local - delay),
+    subtitle: motionAt(
+      animation,
+      "fade",
+      motion,
+      Math.max(0.01, duration - delay),
+      local - delay,
+    ),
   };
 }

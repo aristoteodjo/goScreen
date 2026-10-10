@@ -2,11 +2,11 @@ import {
   ASPECT_OPTIONS,
   type AspectId,
   buildAutoZooms,
-  clipsWithout,
   clampToSource,
+  clipsWithout,
   DEFAULT_EDIT,
-  EMPTY_RECORDING,
   type EditState,
+  EMPTY_RECORDING,
   formatTime,
   outputSize,
   parseEditState,
@@ -30,10 +30,9 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useDefaultLayout } from "react-resizable-panels";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,12 +40,21 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { Spinner } from "@/components/ui/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ipc } from "@/lib/ipc";
 import { VIEW_ZOOMS } from "./commands";
-import { EditorPalette } from "./EditorPalette";
 import { initialLayers } from "./devices";
+import { EditorPalette } from "./EditorPalette";
 import { ExportDialog } from "./ExportDialog";
 import { PanelContent, PanelRail } from "./Panels";
 import { Preview } from "./Preview";
@@ -77,7 +85,9 @@ export function EditorPage({ video }: { video: string }) {
     try {
       if (data.interactions) file = parseRecordingFile(data.interactions);
     } catch {
-      toast.warning("Interactions could not be read; touches and auto zoom are off.");
+      toast.warning(
+        "Interactions could not be read; touches and auto zoom are off.",
+      );
     }
     const saved = data.edit ? parseEditState(data.edit) : null;
     needsAutoZoom.current = saved === null;
@@ -90,6 +100,7 @@ export function EditorPage({ video }: { video: string }) {
       micUrl: data.micUrl,
       pointers: file.pointers,
       layers: file.layers,
+      chapters: file.chapters,
       mediaOffset: file.mediaOffset,
       assetUrls: data.assets,
     });
@@ -97,7 +108,10 @@ export function EditorPage({ video }: { video: string }) {
     const fresh = {
       ...DEFAULT_EDIT,
       camera: file.camera ?? DEFAULT_EDIT.camera,
-      clips: file.pauses.length > 0 ? clipsWithout(file.pauses, (i) => `clip-${i + 1}`) : DEFAULT_EDIT.clips,
+      clips:
+        file.pauses.length > 0
+          ? clipsWithout(file.pauses, (i) => `clip-${i + 1}`)
+          : DEFAULT_EDIT.clips,
     };
     useEdit.getState().load(saved ?? fresh);
     if (file.layers.length > 0) usePlayback.getState().setPanel("devices");
@@ -142,7 +156,11 @@ export function EditorPage({ video }: { video: string }) {
       const edit = useEdit.getState().edit;
       const zooms = buildAutoZooms(pointers, el.duration);
       // A fresh layered recording starts with its devices side by side.
-      const area = stageArea(outputSize(edit.aspect, source), edit.camera, cameraUrl !== null);
+      const area = stageArea(
+        outputSize(edit.aspect, source),
+        edit.camera,
+        cameraUrl !== null,
+      );
       const placed = layers.length > 0 ? initialLayers(layers, area) : null;
       useEdit.getState().load({ ...edit, zooms, layers: placed });
     }
@@ -219,7 +237,11 @@ function EditorLayout() {
   const rows = useDefaultLayout({ id: "editor-rows", storage: safeStorage });
   const cols = useDefaultLayout({ id: "editor-cols", storage: safeStorage });
   return (
-    <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1" {...rows}>
+    <ResizablePanelGroup
+      orientation="vertical"
+      className="min-h-0 flex-1"
+      {...rows}
+    >
       <ResizablePanel id="top" minSize={220}>
         <ResizablePanelGroup orientation="horizontal" {...cols}>
           <ResizablePanel id="preview" minSize="35">
@@ -230,7 +252,12 @@ function EditorLayout() {
             </div>
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel id="inspector" defaultSize={380} minSize={300} maxSize={640}>
+          <ResizablePanel
+            id="inspector"
+            defaultSize={380}
+            minSize={300}
+            maxSize={640}
+          >
             <div className="flex h-full gap-1 py-2 pr-3">
               <PanelRail />
               <PanelContent />
@@ -301,7 +328,13 @@ function IconButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick} disabled={disabled}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          onClick={onClick}
+          disabled={disabled}
+        >
           <HugeiconsIcon icon={icon} strokeWidth={1.75} />
         </Button>
       </TooltipTrigger>
@@ -315,15 +348,39 @@ function TopBar({ name, onExport }: { name: string; onExport: () => void }) {
   const canUndo = useEdit((s) => s.past.length > 0);
   const canRedo = useEdit((s) => s.future.length > 0);
   return (
-    <header data-tauri-drag-region className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20">
-      <IconButton label="Back to studio" icon={ArrowLeft01Icon} onClick={() => navigate({ to: "/" })} />
-      <h1 data-tauri-drag-region className="flex-1 truncate text-center text-[13px] font-medium">
+    <header
+      data-tauri-drag-region
+      className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20"
+    >
+      <IconButton
+        label="Back to studio"
+        icon={ArrowLeft01Icon}
+        onClick={() => navigate({ to: "/" })}
+      />
+      <h1
+        data-tauri-drag-region
+        className="flex-1 truncate text-center text-[13px] font-medium"
+      >
         {name}
         <span className="text-muted-foreground">.mp4</span>
       </h1>
-      <IconButton label="Undo" icon={UndoIcon} onClick={() => useEdit.getState().undo()} disabled={!canUndo} />
-      <IconButton label="Redo" icon={RedoIcon} onClick={() => useEdit.getState().redo()} disabled={!canRedo} />
-      <Button size="sm" onClick={onExport} className="ml-2 gap-1.5 bg-violet-600 text-white hover:bg-violet-500">
+      <IconButton
+        label="Undo"
+        icon={UndoIcon}
+        onClick={() => useEdit.getState().undo()}
+        disabled={!canUndo}
+      />
+      <IconButton
+        label="Redo"
+        icon={RedoIcon}
+        onClick={() => useEdit.getState().redo()}
+        disabled={!canRedo}
+      />
+      <Button
+        size="sm"
+        onClick={onExport}
+        className="ml-2 gap-1.5 bg-violet-600 text-white hover:bg-violet-500"
+      >
         <HugeiconsIcon icon={Upload04Icon} strokeWidth={2} />
         Export
       </Button>
@@ -351,45 +408,68 @@ function PreviewHeader() {
           <Button variant="ghost" size="sm" className="gap-1.5 text-[13px]">
             <HugeiconsIcon icon={SquareArrowExpand01Icon} strokeWidth={1.75} />
             {current?.label}
-            {current?.ratio ? <span className="text-muted-foreground">{current.ratio}</span> : null}
-            <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={1.75} className="opacity-60" />
+            {current?.ratio ? (
+              <span className="text-muted-foreground">{current.ratio}</span>
+            ) : null}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              strokeWidth={1.75}
+              className="opacity-60"
+            />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuRadioGroup
             value={aspect}
-            onValueChange={(v) => change((ed) => ({ ...ed, aspect: v as AspectId }))}
+            onValueChange={(v) =>
+              change((ed) => ({ ...ed, aspect: v as AspectId }))
+            }
           >
             {ASPECT_OPTIONS.map((a) => (
               <DropdownMenuRadioItem key={a.id} value={a.id}>
                 {a.label}
-                {a.ratio ? <span className="ml-auto text-muted-foreground">{a.ratio}</span> : null}
+                {a.ratio ? (
+                  <span className="ml-auto text-muted-foreground">
+                    {a.ratio}
+                  </span>
+                ) : null}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="flex items-center gap-1">
-      <ViewZoomMenu />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-[13px]">
-            Preview quality
-            <span className="text-muted-foreground">{QUALITIES.find((q) => q.value === quality)?.label}</span>
-            <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={1.75} className="opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuRadioGroup value={String(quality)} onValueChange={(v) => setQuality(Number(v) as Quality)}>
-            {QUALITIES.map((q) => (
-              <DropdownMenuRadioItem key={q.value} value={String(q.value)}>
-                {q.label}
-                <span className="ml-auto text-muted-foreground">{q.hint}</span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <ViewZoomMenu />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-[13px]">
+              Preview quality
+              <span className="text-muted-foreground">
+                {QUALITIES.find((q) => q.value === quality)?.label}
+              </span>
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                strokeWidth={1.75}
+                className="opacity-60"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuRadioGroup
+              value={String(quality)}
+              onValueChange={(v) => setQuality(Number(v) as Quality)}
+            >
+              {QUALITIES.map((q) => (
+                <DropdownMenuRadioItem key={q.value} value={String(q.value)}>
+                  {q.label}
+                  <span className="ml-auto text-muted-foreground">
+                    {q.hint}
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
@@ -401,9 +481,17 @@ function ViewZoomMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="w-20 justify-between gap-1 font-mono text-[12px] tabular-nums">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-20 justify-between gap-1 font-mono text-[12px] tabular-nums"
+        >
           {viewZoom === null ? "Fit" : `${Math.round(viewZoom * 100)}%`}
-          <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={1.75} className="opacity-60" />
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            strokeWidth={1.75}
+            className="opacity-60"
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
@@ -418,7 +506,9 @@ function ViewZoomMenu() {
           {VIEW_ZOOMS.map((z) => (
             <DropdownMenuRadioItem key={z} value={String(z)}>
               {Math.round(z * 100)}%
-              {z === 1 ? <span className="ml-auto text-muted-foreground">⌘0</span> : null}
+              {z === 1 ? (
+                <span className="ml-auto text-muted-foreground">⌘0</span>
+              ) : null}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -437,7 +527,11 @@ function Transport() {
       <span className="w-20 text-right font-mono text-[12px] text-muted-foreground tabular-nums">
         {formatTime(time, true)}
       </span>
-      <IconButton label="Go to start (Cmd ←)" icon={PreviousIcon} onClick={player.first} />
+      <IconButton
+        label="Go to start (Cmd ←)"
+        icon={PreviousIcon}
+        onClick={player.first}
+      />
       <Button
         variant="ghost"
         size="icon"
@@ -445,9 +539,16 @@ function Transport() {
         onClick={player.toggle}
         className="rounded-full border border-white/15"
       >
-        <HugeiconsIcon icon={playing ? PauseIcon : PlayIcon} strokeWidth={1.75} />
+        <HugeiconsIcon
+          icon={playing ? PauseIcon : PlayIcon}
+          strokeWidth={1.75}
+        />
       </Button>
-      <IconButton label="Go to end (Cmd →)" icon={NextIcon} onClick={player.last} />
+      <IconButton
+        label="Go to end (Cmd →)"
+        icon={NextIcon}
+        onClick={player.last}
+      />
       <span className="w-20 font-mono text-[12px] text-muted-foreground tabular-nums">
         {formatTime(end, true)}
       </span>

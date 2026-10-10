@@ -1,5 +1,10 @@
 import type { DeviceDefinition } from "@goscreen/device-registry";
-import { type CameraEdit, type LayerEdit, outputSize, stageArea } from "@goscreen/render-engine";
+import {
+  type CameraEdit,
+  type LayerEdit,
+  outputSize,
+  stageArea,
+} from "@goscreen/render-engine";
 import { ArrowLeft01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
@@ -11,7 +16,13 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { registry } from "@/lib/registry";
@@ -28,7 +39,11 @@ function useRearrange() {
     const { layers, source, cameraUrl } = useSession.getState();
     if (!source) return;
     change((ed) => {
-      const area = stageArea(outputSize(ed.aspect, source), ed.camera, cameraUrl !== null);
+      const area = stageArea(
+        outputSize(ed.aspect, source),
+        ed.camera,
+        cameraUrl !== null,
+      );
       return { ...ed, layers: initialLayers(layers, area, ed.layers ?? []) };
     });
   };
@@ -53,7 +68,10 @@ export function DevicesPanel() {
   if (!layer) {
     return (
       <>
-        <Section title="Devices" hint="Each device is its own layer: change the model, color or frame without re-recording.">
+        <Section
+          title="Devices"
+          hint="Each device is its own layer: change the model, color or frame without re-recording."
+        >
           <div className="flex flex-col gap-1.5">
             {layers.map((l) => (
               <button
@@ -62,14 +80,24 @@ export function DevicesPanel() {
                 onClick={() => selectLayer(l.instanceId)}
                 className="flex items-center gap-2.5 rounded-lg border bg-background/40 px-3 py-2 text-left text-[13px] hover:bg-white/5"
               >
-                <HugeiconsIcon icon={SmartPhone01Icon} size={16} strokeWidth={1.75} className="text-muted-foreground" />
-                <span className="flex-1 truncate">{registry.get(l.deviceId)?.name ?? l.deviceId}</span>
+                <HugeiconsIcon
+                  icon={SmartPhone01Icon}
+                  size={16}
+                  strokeWidth={1.75}
+                  className="text-muted-foreground"
+                />
+                <span className="flex-1 truncate">
+                  {registry.get(l.deviceId)?.name ?? l.deviceId}
+                </span>
                 <span className="text-[11px] text-muted-foreground">Edit</span>
               </button>
             ))}
           </div>
         </Section>
-        <Section title="Layout" hint="Drag devices in the preview, or reset them side by side.">
+        <Section
+          title="Layout"
+          hint="Drag devices in the preview, or reset them side by side."
+        >
           <Button variant="secondary" size="sm" onClick={rearrange}>
             Arrange side by side
           </Button>
@@ -81,12 +109,24 @@ export function DevicesPanel() {
   return <LayerEditor layer={layer} onBack={() => selectLayer(null)} />;
 }
 
-function LayerEditor({ layer, onBack }: { layer: LayerEdit; onBack: () => void }) {
+function LayerEditor({
+  layer,
+  onBack,
+}: {
+  layer: LayerEdit;
+  onBack: () => void;
+}) {
   const change = useChange();
   const device = registry.get(layer.deviceId);
   const set = (patch: Partial<LayerEdit>, key?: string) =>
     change(
-      (ed) => ({ ...ed, layers: ed.layers?.map((l) => (l.instanceId === layer.instanceId ? { ...l, ...patch } : l)) ?? null }),
+      (ed) => ({
+        ...ed,
+        layers:
+          ed.layers?.map((l) =>
+            l.instanceId === layer.instanceId ? { ...l, ...patch } : l,
+          ) ?? null,
+      }),
       key,
     );
 
@@ -100,7 +140,10 @@ function LayerEditor({ layer, onBack }: { layer: LayerEdit; onBack: () => void }
         <HugeiconsIcon icon={ArrowLeft01Icon} size={14} strokeWidth={1.75} />
         All devices
       </button>
-      <Section title="Model" hint="The recorded screen stays the same; only the hardware around it changes.">
+      <Section
+        title="Model"
+        hint="The recorded screen stays the same; only the hardware around it changes."
+      >
         <Combobox<DeviceDefinition>
           items={registry.list()}
           value={device ?? null}
@@ -118,7 +161,9 @@ function LayerEditor({ layer, onBack }: { layer: LayerEdit; onBack: () => void }
               {(d: DeviceDefinition) => (
                 <ComboboxItem key={d.id} value={d}>
                   <span className="flex-1">{d.name}</span>
-                  <span className="text-[11px] text-muted-foreground">{d.brand}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {d.brand}
+                  </span>
                 </ComboboxItem>
               )}
             </ComboboxList>
@@ -127,14 +172,20 @@ function LayerEditor({ layer, onBack }: { layer: LayerEdit; onBack: () => void }
       </Section>
       {device ? (
         <Section title="Finish">
-          <Select value={layer.colorId} onValueChange={(colorId) => set({ colorId })}>
+          <Select
+            value={layer.colorId}
+            onValueChange={(colorId) => set({ colorId })}
+          >
             <SelectTrigger size="sm" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {device.frame.colors.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  <span className="size-3 rounded-full border border-white/20" style={{ background: c.body }} />
+                  <span
+                    className="size-3 rounded-full border border-white/20"
+                    style={{ background: c.body }}
+                  />
                   {c.name}
                 </SelectItem>
               ))}
@@ -145,7 +196,12 @@ function LayerEditor({ layer, onBack }: { layer: LayerEdit; onBack: () => void }
       <Section
         title="Device frame"
         hint="Off shows the bare screen."
-        aside={<Switch checked={layer.frame} onCheckedChange={(frame) => set({ frame })} />}
+        aside={
+          <Switch
+            checked={layer.frame}
+            onCheckedChange={(frame) => set({ frame })}
+          />
+        }
       />
       <Section title="Size">
         <SliderRow
@@ -164,7 +220,9 @@ function LayerEditor({ layer, onBack }: { layer: LayerEdit; onBack: () => void }
           max={45}
           step={1}
           format={(v) => `${v}°`}
-          onChange={(rotation) => set({ rotation }, `rotation-${layer.instanceId}`)}
+          onChange={(rotation) =>
+            set({ rotation }, `rotation-${layer.instanceId}`)
+          }
           onReset={() => set({ rotation: 0 })}
         />
       </Section>
@@ -185,7 +243,12 @@ export function CameraPanel() {
       <Section
         title="Show camera"
         hint="Recorded apart from the screen: place, resize or hide it any time."
-        aside={<Switch checked={camera.visible} onCheckedChange={(visible) => set({ visible })} />}
+        aside={
+          <Switch
+            checked={camera.visible}
+            onCheckedChange={(visible) => set({ visible })}
+          />
+        }
       />
       <div className={cn(!camera.visible && "pointer-events-none opacity-40")}>
         <Section title="Layout">
@@ -197,7 +260,8 @@ export function CameraPanel() {
                 onClick={() => set({ layout })}
                 className={cn(
                   "flex flex-col items-center gap-1.5 rounded-lg border p-2 text-[11px] text-muted-foreground",
-                  camera.layout === layout && "border-violet-400 text-foreground",
+                  camera.layout === layout &&
+                    "border-violet-400 text-foreground",
                 )}
               >
                 <span className="relative block h-12 w-full rounded bg-white/90">
@@ -229,7 +293,8 @@ export function CameraPanel() {
                       <span
                         className={cn(
                           "size-2 rounded-full bg-muted-foreground/60",
-                          camera.corner === i && "size-3.5 bg-violet-400 ring-4 ring-violet-400/25",
+                          camera.corner === i &&
+                            "size-3.5 bg-violet-400 ring-4 ring-violet-400/25",
                         )}
                       />
                     </button>
@@ -273,7 +338,15 @@ export function CameraPanel() {
             </ToggleGroupItem>
           </ToggleGroup>
         </Section>
-        <Section title="Mirror" aside={<Switch checked={camera.mirror} onCheckedChange={(mirror) => set({ mirror })} />} />
+        <Section
+          title="Mirror"
+          aside={
+            <Switch
+              checked={camera.mirror}
+              onCheckedChange={(mirror) => set({ mirror })}
+            />
+          }
+        />
       </div>
     </>
   );

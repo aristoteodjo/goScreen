@@ -10,17 +10,19 @@ const SETTLE_MS = 700;
 
 class Cancelled extends Error {}
 
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Web devices that follow the shared URL: the ones a tour drives. */
 function tourDevices() {
-  return useProject.getState().devices.filter((d) => d.source.kind === "web" && d.synced);
+  return useProject
+    .getState()
+    .devices.filter((d) => d.source.kind === "web" && d.synced);
 }
 
 function guard() {
   // Stopping the recording (toolbar Stop) ends the tour.
-  if (!useRecording.getState().active || !useTour.getState().running) throw new Cancelled();
+  if (!useRecording.getState().active || !useTour.getState().running)
+    throw new Cancelled();
 }
 
 async function wait(ms: number) {
@@ -45,7 +47,8 @@ function afterLoads(trigger: () => void): Promise<void> {
       resolve();
     };
     const off = subscribeBridge((id, event) => {
-      if (event.type !== "location" || event.cause !== "load" || !ids.has(id)) return;
+      if (event.type !== "location" || event.cause !== "load" || !ids.has(id))
+        return;
       loaded.add(id);
       if (loaded.size >= ids.size) finish();
     });
@@ -60,7 +63,8 @@ function scrollAllTo(ratio: number) {
 
 /** Points every synced device at `url`, from the top, once loaded. */
 async function open(url: string, recording: boolean) {
-  if (!samePage(useProject.getState().url, url)) await afterLoads(() => useProject.getState().setUrl(url));
+  if (!samePage(useProject.getState().url, url))
+    await afterLoads(() => useProject.getState().setUrl(url));
   scrollAllTo(0);
   if (recording) await wait(SETTLE_MS);
   else await sleep(SETTLE_MS);
@@ -84,9 +88,14 @@ async function scrollThrough(seconds: number) {
  * Records a whole site: every page in turn, held at the top, scrolled to
  * the bottom, held again. Ends in the editor like any recording.
  */
-export async function runTour(pages: string[], options: TourOptions, capture: CaptureControls) {
+export async function runTour(
+  pages: string[],
+  options: TourOptions,
+  capture: CaptureControls,
+) {
   if (pages.length === 0) throw new Error("Pick at least one page.");
-  if (tourDevices().length === 0) throw new Error("Add a web device that follows the shared URL.");
+  if (tourDevices().length === 0)
+    throw new Error("Add a web device that follows the shared URL.");
   const tour = useTour.getState();
   tour.set({ running: true, index: 0, total: pages.length, page: pages[0] });
   try {
@@ -95,6 +104,7 @@ export async function runTour(pages: string[], options: TourOptions, capture: Ca
     await capture.startAsync();
     for (const [index, page] of pages.entries()) {
       useTour.getState().set({ index, page });
+      useRecording.getState().markChapter(page);
       if (index > 0) await open(page, true);
       await wait(options.pauseSeconds * 1000);
       await scrollThrough(options.scrollSeconds);
@@ -103,7 +113,8 @@ export async function runTour(pages: string[], options: TourOptions, capture: Ca
     if (useRecording.getState().active) await capture.stopAsync();
   } catch (e) {
     if (!(e instanceof Cancelled)) {
-      if (useRecording.getState().active) await capture.stopAsync().catch(() => {});
+      if (useRecording.getState().active)
+        await capture.stopAsync().catch(() => {});
       throw e;
     }
   } finally {

@@ -29,15 +29,34 @@ import { Spinner } from "@/components/ui/spinner";
 import { ipc } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useEditor } from "@/modules/studio/store/editor";
-import { useTour } from "@/modules/tour/store";
 import { useProject } from "@/modules/studio/store/project";
-import { selectCaptureMode, useCaptureMode, useCaptureSettings } from "./settings";
+import { useTour } from "@/modules/tour/store";
+import {
+  selectCaptureMode,
+  useCaptureMode,
+  useCaptureSettings,
+} from "./settings";
 import { useRecording } from "./store";
 import type { CaptureControls } from "./useCapture";
 
-const MODES: { id: CaptureMode; label: string; hint: string; icon: typeof Image01Icon }[] = [
-  { id: "device", label: "Device", hint: "The selected device only, at full resolution", icon: SmartPhone01Icon },
-  { id: "canvas", label: "Canvas", hint: "Every device visible on the canvas", icon: GridViewIcon },
+const MODES: {
+  id: CaptureMode;
+  label: string;
+  hint: string;
+  icon: typeof Image01Icon;
+}[] = [
+  {
+    id: "device",
+    label: "Device",
+    hint: "The selected device only, at full resolution",
+    icon: SmartPhone01Icon,
+  },
+  {
+    id: "canvas",
+    label: "Canvas",
+    hint: "Every device visible on the canvas",
+    icon: GridViewIcon,
+  },
 ];
 
 const NONE = "none";
@@ -47,19 +66,31 @@ const NONE = "none";
 export function CaptureBar({ capture }: { capture: CaptureControls }) {
   const open = useCaptureSettings((s) => s.barOpen);
   const active = useRecording((s) => s.active);
-  const { camera, microphone, setCamera, setMicrophone, setBarOpen } = useCaptureSettings();
+  const { camera, microphone, setCamera, setMicrophone, setBarOpen } =
+    useCaptureSettings();
   const mode = useCaptureMode();
   const selectedId = useEditor((s) => s.selectedId);
-  const selected = useProject((s) => s.devices.find((d) => d.id === selectedId));
+  const selected = useProject((s) =>
+    s.devices.find((d) => d.id === selectedId),
+  );
   const hasDevices = useProject((s) => s.devices.length > 0);
   const deviceCount = useProject((s) => s.devices.length);
   const separate = useCaptureSettings((s) => s.separate);
-  const devices = useQuery({ queryKey: ["capture-devices"], queryFn: ipc.captureDevices, enabled: open, staleTime: 15_000 });
+  const devices = useQuery({
+    queryKey: ["capture-devices"],
+    queryFn: ipc.captureDevices,
+    enabled: open,
+    staleTime: 15_000,
+  });
 
   if (!open || active) return null;
 
-  const cameraName = devices.data?.cameras.find((c) => c.index === camera)?.name;
-  const micName = devices.data?.microphones.find((m) => m.index === microphone)?.name;
+  const cameraName = devices.data?.cameras.find(
+    (c) => c.index === camera,
+  )?.name;
+  const micName = devices.data?.microphones.find(
+    (m) => m.index === microphone,
+  )?.name;
   const blocked = !hasDevices || (mode === "device" && !selected);
 
   return (
@@ -114,7 +145,8 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
           options={devices.data?.cameras ?? []}
           onChange={(index) => {
             setCamera(index);
-            if (index !== null) useCaptureSettings.getState().setBubble({ visible: true });
+            if (index !== null)
+              useCaptureSettings.getState().setBubble({ visible: true });
           }}
         />
         <DeviceMenu
@@ -139,10 +171,20 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
         <Button
           onClick={capture.toggleRecording}
           disabled={blocked || capture.isStarting}
-          title={blocked ? (hasDevices ? "Select a device first" : "Add a device first") : "Start recording (⇧⌘R)"}
+          title={
+            blocked
+              ? hasDevices
+                ? "Select a device first"
+                : "Add a device first"
+              : "Start recording (⇧⌘R)"
+          }
           className="mx-1 h-10 gap-2 rounded-xl bg-rec px-4 text-white hover:bg-rec/90"
         >
-          {capture.isStarting ? <Spinner /> : <HugeiconsIcon icon={RecordIcon} strokeWidth={2} />}
+          {capture.isStarting ? (
+            <Spinner />
+          ) : (
+            <HugeiconsIcon icon={RecordIcon} strokeWidth={2} />
+          )}
           Record
         </Button>
       </div>
@@ -181,9 +223,18 @@ function DeviceMenu({
             value === null ? "text-white/60" : "text-white",
           )}
         >
-          <HugeiconsIcon icon={icon} size={18} strokeWidth={1.6} className="shrink-0" />
+          <HugeiconsIcon
+            icon={icon}
+            size={18}
+            strokeWidth={1.6}
+            className="shrink-0"
+          />
           <span className="truncate">{label}</span>
-          <HugeiconsIcon icon={ArrowDown01Icon} size={14} className="shrink-0 opacity-50" />
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            size={14}
+            className="shrink-0 opacity-50"
+          />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="center" className="w-64">

@@ -1,5 +1,8 @@
+import {
+  selectCaptureMode,
+  useCaptureSettings,
+} from "@/modules/recording/settings";
 import type { CaptureControls } from "@/modules/recording/useCapture";
-import { selectCaptureMode, useCaptureSettings } from "@/modules/recording/settings";
 import { useEditor } from "./store/editor";
 import { useProject } from "./store/project";
 
@@ -37,7 +40,11 @@ export const studioActions = {
     const project = useProject.getState();
     const d = project.devices.find((x) => x.id === id);
     if (!d) return;
-    const copy = project.addDevice(d.deviceId, { source: d.source, viewport: d.viewport, orientation: d.orientation });
+    const copy = project.addDevice(d.deviceId, {
+      source: d.source,
+      viewport: d.viewport,
+      orientation: d.orientation,
+    });
     if (!copy) return;
     project.updateDevice(copy, {
       colorId: d.colorId,
@@ -52,10 +59,15 @@ export const studioActions = {
   rotate(id: string) {
     const d = useProject.getState().devices.find((x) => x.id === id);
     if (d?.source.kind !== "web") return;
-    useProject.getState().updateDevice(id, { orientation: d.orientation === "portrait" ? "landscape" : "portrait" });
+    useProject
+      .getState()
+      .updateDevice(id, {
+        orientation: d.orientation === "portrait" ? "landscape" : "portrait",
+      });
   },
   remove(id: string) {
-    if (useEditor.getState().selectedId === id) useEditor.getState().select(null);
+    if (useEditor.getState().selectedId === id)
+      useEditor.getState().select(null);
     useProject.getState().removeDevice(id);
   },
 };

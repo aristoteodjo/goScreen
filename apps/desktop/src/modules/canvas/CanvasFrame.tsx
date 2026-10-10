@@ -1,16 +1,29 @@
 import { type ResizeEdge, resizeViewport } from "@goscreen/device-engine";
-import { Cancel01Icon, RefreshIcon, RotateClockwiseIcon } from "@hugeicons/core-free-icons";
+import {
+  Cancel01Icon,
+  RefreshIcon,
+  RotateClockwiseIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type PointerEvent, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 import { DeviceMockup } from "@/modules/device/DeviceMockup";
 import { useRecording } from "@/modules/recording/store";
-import { type CanvasPoint, frameSizeOf, type ProjectDevice, useProject } from "@/modules/studio/store/project";
 import { DeviceContextMenu } from "@/modules/studio/components/StudioContextMenus";
 import { useEditor } from "@/modules/studio/store/editor";
+import {
+  type CanvasPoint,
+  frameSizeOf,
+  type ProjectDevice,
+  useProject,
+} from "@/modules/studio/store/project";
 import { snapViewportSize } from "./snap";
 import { useCanvasView } from "./view";
 
@@ -25,7 +38,13 @@ type Props = {
 // Sizes that must stay readable whatever the zoom are divided by it.
 const screenPx = (px: number) => `calc(${px}px / var(--canvas-zoom, 1))`;
 
-export function CanvasFrame({ device, position, url, selected, framesInteractive }: Props) {
+export function CanvasFrame({
+  device,
+  position,
+  url,
+  selected,
+  framesInteractive,
+}: Props) {
   const def = registry.get(device.deviceId);
   const select = useEditor((s) => s.select);
   const moveOnCanvas = useProject((s) => s.moveOnCanvas);
@@ -39,9 +58,14 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
   // A live Android source dictates its own size, rotation and navigation.
   const live = device.source.kind === "android" ? device.source : null;
   const frame = frameSizeOf(device);
-  const viewport = device.viewport ?? { width: def.viewport.width, height: def.viewport.height };
+  const viewport = device.viewport ?? {
+    width: def.viewport.width,
+    height: def.viewport.height,
+  };
   const shown =
-    device.orientation === "portrait" ? viewport : { width: viewport.height, height: viewport.width };
+    device.orientation === "portrait"
+      ? viewport
+      : { width: viewport.height, height: viewport.width };
 
   const startMove = (e: PointerEvent<HTMLElement>) => {
     if (e.button !== 0 || useRecording.getState().active) return;
@@ -67,140 +91,207 @@ export function CanvasFrame({ device, position, url, selected, framesInteractive
     el.addEventListener("pointercancel", onUp, { once: true });
   };
 
-  const startResize = (edge: ResizeEdge) => (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 || useRecording.getState().active) return;
-    e.stopPropagation();
-    select(device.id);
-    const zoom = useCanvasView.getState().zoom;
-    const origin = { x: e.clientX, y: e.clientY };
-    const start = viewport;
-    const el = e.currentTarget;
-    el.setPointerCapture(e.pointerId);
-    setInteracting(true);
-    setResizing(true);
-    const onMove = (ev: globalThis.PointerEvent) => {
-      const raw = resizeViewport(
-        start,
-        device.orientation,
-        edge,
-        (ev.clientX - origin.x) / zoom,
-        (ev.clientY - origin.y) / zoom,
-      );
-      updateDevice(device.id, { viewport: snapViewportSize(raw, ev.shiftKey) });
+  const startResize =
+    (edge: ResizeEdge) => (e: PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0 || useRecording.getState().active) return;
+      e.stopPropagation();
+      select(device.id);
+      const zoom = useCanvasView.getState().zoom;
+      const origin = { x: e.clientX, y: e.clientY };
+      const start = viewport;
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      setInteracting(true);
+      setResizing(true);
+      const onMove = (ev: globalThis.PointerEvent) => {
+        const raw = resizeViewport(
+          start,
+          device.orientation,
+          edge,
+          (ev.clientX - origin.x) / zoom,
+          (ev.clientY - origin.y) / zoom,
+        );
+        updateDevice(device.id, {
+          viewport: snapViewportSize(raw, ev.shiftKey),
+        });
+      };
+      const onUp = () => {
+        el.removeEventListener("pointermove", onMove);
+        setInteracting(false);
+        setResizing(false);
+      };
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onUp, { once: true });
+      el.addEventListener("pointercancel", onUp, { once: true });
     };
-    const onUp = () => {
-      el.removeEventListener("pointermove", onMove);
-      setInteracting(false);
-      setResizing(false);
-    };
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp, { once: true });
-    el.addEventListener("pointercancel", onUp, { once: true });
-  };
 
   return (
     <DeviceContextMenu id={device.id}>
-      <div className="absolute" style={{ left: position.x, top: position.y, width: frame.width, height: frame.height }}>
       <div
-        // A container: on a narrow (zoomed-out) frame the label drops its extras instead of overlapping.
-        className="@container absolute bottom-full left-0 origin-bottom-left pb-2"
-        style={{ width: `calc(${frame.width}px * var(--canvas-zoom, 1))`, transform: "scale(calc(1 / var(--canvas-zoom, 1)))" }}
+        className="absolute"
+        style={{
+          left: position.x,
+          top: position.y,
+          width: frame.width,
+          height: frame.height,
+        }}
       >
         <div
-          className={cn(
-            "flex h-7 items-center gap-1 overflow-hidden rounded-md px-1.5 text-xs transition-colors",
-            selected ? "bg-signal/15 text-foreground" : "text-muted-foreground hover:bg-white/5",
-          )}
+          // A container: on a narrow (zoomed-out) frame the label drops its extras instead of overlapping.
+          className="@container absolute bottom-full left-0 origin-bottom-left pb-2"
+          style={{
+            width: `calc(${frame.width}px * var(--canvas-zoom, 1))`,
+            transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+          }}
         >
-          <button
-            type="button"
-            onPointerDown={startMove}
-            className="flex min-w-0 flex-1 cursor-grab items-center gap-2 text-left active:cursor-grabbing"
+          <div
+            className={cn(
+              "flex h-7 items-center gap-1 overflow-hidden rounded-md px-1.5 text-xs transition-colors",
+              selected
+                ? "bg-signal/15 text-foreground"
+                : "text-muted-foreground hover:bg-white/5",
+            )}
           >
-            <span className="truncate font-medium text-foreground">{def.name}</span>
-            <span className="hidden shrink-0 font-mono text-[10.5px] tabular-nums opacity-70 @min-[260px]:inline">
-              {shown.width}×{shown.height}
-            </span>
-            {device.viewport && !live ? <span className="shrink-0 text-[10.5px] text-signal">custom</span> : null}
-            {live ? <span className="shrink-0 font-mono text-[10.5px] text-emerald-400">{live.serial}</span> : null}
-          </button>
-          {live ? null : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="hidden shrink-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 @min-[150px]:flex">
-                <Checkbox
-                  id={`sync-${device.id}`}
-                  checked={device.synced}
-                  onCheckedChange={(v) => setSynced(device.id, v === true)}
-                  className="size-3.5"
-                />
-                <label htmlFor={`sync-${device.id}`} className="hidden cursor-pointer text-[11px] @min-[200px]:inline">
-                  Sync
-                </label>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>Follow the shared URL and scroll</TooltipContent>
-          </Tooltip>
-          )}
-          {live ? null : (
+            <button
+              type="button"
+              onPointerDown={startMove}
+              className="flex min-w-0 flex-1 cursor-grab items-center gap-2 text-left active:cursor-grabbing"
+            >
+              <span className="truncate font-medium text-foreground">
+                {def.name}
+              </span>
+              <span className="hidden shrink-0 font-mono text-[10.5px] tabular-nums opacity-70 @min-[260px]:inline">
+                {shown.width}×{shown.height}
+              </span>
+              {device.viewport && !live ? (
+                <span className="shrink-0 text-[10.5px] text-signal">
+                  custom
+                </span>
+              ) : null}
+              {live ? (
+                <span className="shrink-0 font-mono text-[10.5px] text-emerald-400">
+                  {live.serial}
+                </span>
+              ) : null}
+            </button>
+            {live ? null : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="hidden shrink-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-white/5 @min-[150px]:flex">
+                    <Checkbox
+                      id={`sync-${device.id}`}
+                      checked={device.synced}
+                      onCheckedChange={(v) => setSynced(device.id, v === true)}
+                      className="size-3.5"
+                    />
+                    <label
+                      htmlFor={`sync-${device.id}`}
+                      className="hidden cursor-pointer text-[11px] @min-[200px]:inline"
+                    >
+                      Sync
+                    </label>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  Follow the shared URL and scroll
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {live ? null : (
+              <FrameButton
+                label="Rotate"
+                secondary
+                icon={RotateClockwiseIcon}
+                onClick={() =>
+                  updateDevice(device.id, {
+                    orientation:
+                      device.orientation === "portrait"
+                        ? "landscape"
+                        : "portrait",
+                  })
+                }
+              />
+            )}
+            {device.viewport && !live ? (
+              <FrameButton
+                label="Reset to native size"
+                secondary
+                icon={RefreshIcon}
+                onClick={() => updateDevice(device.id, { viewport: null })}
+              />
+            ) : null}
             <FrameButton
-              label="Rotate"
-              secondary
-              icon={RotateClockwiseIcon}
-              onClick={() =>
-                updateDevice(device.id, { orientation: device.orientation === "portrait" ? "landscape" : "portrait" })
-              }
+              label="Remove"
+              icon={Cancel01Icon}
+              onClick={() => removeDevice(device.id)}
             />
-          )}
-          {device.viewport && !live ? (
-            <FrameButton
-              label="Reset to native size"
-              secondary
-              icon={RefreshIcon}
-              onClick={() => updateDevice(device.id, { viewport: null })}
-            />
-          ) : null}
-          <FrameButton label="Remove" icon={Cancel01Icon} onClick={() => removeDevice(device.id)} />
+          </div>
         </div>
-      </div>
 
-      <DeviceMockup
-        instance={device}
-        url={url}
-        selected={selected}
-        framesInteractive={framesInteractive}
-        onFramePointerDown={startMove}
-      />
+        <DeviceMockup
+          instance={device}
+          url={url}
+          selected={selected}
+          framesInteractive={framesInteractive}
+          onFramePointerDown={startMove}
+        />
 
-      {live ? null : (
-        <>
-          <Handle edge="right" onPointerDown={startResize("right")} />
-          <Handle edge="bottom" onPointerDown={startResize("bottom")} />
-          <Handle edge="corner" onPointerDown={startResize("corner")} />
-        </>
-      )}
+        {live ? null : (
+          <>
+            <Handle edge="right" onPointerDown={startResize("right")} />
+            <Handle edge="bottom" onPointerDown={startResize("bottom")} />
+            <Handle edge="corner" onPointerDown={startResize("corner")} />
+          </>
+        )}
 
-      {resizing ? (
-        <div
-          className="pointer-events-none absolute top-full left-1/2 mt-3 origin-top -translate-x-1/2 rounded-md bg-signal px-2 py-0.5 font-mono text-xs text-signal-foreground tabular-nums"
-          style={{ transform: "translateX(-50%) scale(calc(1 / var(--canvas-zoom, 1)))" }}
-        >
-          {shown.width} × {shown.height}
-        </div>
-      ) : null}
+        {resizing ? (
+          <div
+            className="pointer-events-none absolute top-full left-1/2 mt-3 origin-top -translate-x-1/2 rounded-md bg-signal px-2 py-0.5 font-mono text-xs text-signal-foreground tabular-nums"
+            style={{
+              transform:
+                "translateX(-50%) scale(calc(1 / var(--canvas-zoom, 1)))",
+            }}
+          >
+            {shown.width} × {shown.height}
+          </div>
+        ) : null}
       </div>
     </DeviceContextMenu>
   );
 }
 
-function Handle({ edge, onPointerDown }: { edge: ResizeEdge; onPointerDown: (e: PointerEvent<HTMLDivElement>) => void }) {
+function Handle({
+  edge,
+  onPointerDown,
+}: {
+  edge: ResizeEdge;
+  onPointerDown: (e: PointerEvent<HTMLDivElement>) => void;
+}) {
   const thickness = screenPx(10);
   const style =
     edge === "right"
-      ? { top: 0, bottom: 0, left: "100%", width: thickness, cursor: "ew-resize" }
+      ? {
+          top: 0,
+          bottom: 0,
+          left: "100%",
+          width: thickness,
+          cursor: "ew-resize",
+        }
       : edge === "bottom"
-        ? { left: 0, right: 0, top: "100%", height: thickness, cursor: "ns-resize" }
-        : { left: "100%", top: "100%", width: screenPx(16), height: screenPx(16), cursor: "nwse-resize" };
+        ? {
+            left: 0,
+            right: 0,
+            top: "100%",
+            height: thickness,
+            cursor: "ns-resize",
+          }
+        : {
+            left: "100%",
+            top: "100%",
+            width: screenPx(16),
+            height: screenPx(16),
+            cursor: "nwse-resize",
+          };
   return (
     <div
       aria-hidden="true"

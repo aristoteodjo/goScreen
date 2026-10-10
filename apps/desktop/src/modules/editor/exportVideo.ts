@@ -7,8 +7,8 @@ import {
   type RecordingClip,
   sequenceDuration,
   sourceTimeAt,
-  tapTimes,
   type Timeline,
+  tapTimes,
 } from "@goscreen/render-engine";
 import { ipc } from "@/lib/ipc";
 import { loadImage } from "./media";
@@ -54,7 +54,11 @@ async function seek(video: HTMLVideoElement, t: number) {
 
 function jpeg(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Frame encoding failed."))), "image/jpeg", 0.98),
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Frame encoding failed."))),
+      "image/jpeg",
+      0.98,
+    ),
   );
 }
 
@@ -79,13 +83,19 @@ function release(video: HTMLVideoElement | null) {
 type OverlayMedia = Map<string, HTMLImageElement | HTMLVideoElement>;
 
 /** Loads every image and video overlay once, up front. */
-async function loadOverlayMedia(edit: EditState, urlOf: (assetId: string) => string | null): Promise<OverlayMedia> {
+async function loadOverlayMedia(
+  edit: EditState,
+  urlOf: (assetId: string) => string | null,
+): Promise<OverlayMedia> {
   const out: OverlayMedia = new Map();
   for (const o of edit.overlays) {
     if (o.kind !== "image" && o.kind !== "video") continue;
     const url = urlOf(o.asset);
     if (!url) continue;
-    const media = o.kind === "image" ? await loadImage(url).catch(() => null) : await load(url).catch(() => null);
+    const media =
+      o.kind === "image"
+        ? await loadImage(url).catch(() => null)
+        : await load(url).catch(() => null);
     if (media) out.set(o.id, media);
   }
   return out;
@@ -99,7 +109,10 @@ async function loadOverlayMedia(edit: EditState, urlOf: (assetId: string) => str
 export async function exportVideo(o: ExportOptions): Promise<string> {
   const video = await load(o.videoUrl);
   const showCamera = o.cameraUrl !== null && o.edit.camera.visible;
-  const camera = showCamera && o.cameraUrl ? await load(o.cameraUrl).catch(() => null) : null;
+  const camera =
+    showCamera && o.cameraUrl
+      ? await load(o.cameraUrl).catch(() => null)
+      : null;
   const overlayMedia = await loadOverlayMedia(o.edit, o.assetUrl);
 
   const source = { width: video.videoWidth, height: video.videoHeight };
@@ -142,7 +155,8 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
   await ipc.exportBegin(o.name, o.fps);
   try {
     for (let i = 0; i < frames; i += 1) {
-      if (o.signal.aborted) throw new DOMException("Export cancelled", "AbortError");
+      if (o.signal.aborted)
+        throw new DOMException("Export cancelled", "AbortError");
       const t = Math.min(end, i / o.fps);
       const s = sourceTimeAt(o.edit.clips, t);
       if (s !== null) {
@@ -156,20 +170,33 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
         const el = overlayMedia.get(ov.id);
         if (ov.kind !== "video" || !(el instanceof HTMLVideoElement)) continue;
         const local = t - ov.start + ov.in;
-        if (t >= ov.start && t <= ov.start + ov.duration && local <= el.duration) await seek(el, local);
+        if (
+          t >= ov.start &&
+          t <= ov.start + ov.duration &&
+          local <= el.duration
+        )
+          await seek(el, local);
       }
       drawAt(ctx, sources, o.edit, timeline, output, t, 1);
       await ipc.exportFrame(await (await jpeg(canvas)).arrayBuffer());
       o.onProgress((i + 1) / frames);
     }
-    const clicks = o.edit.sound.clicks ? tapTimes(timeline.pointers, o.edit.clips) : [];
-    return await ipc.exportFinish(o.videoPath, clicks, o.edit.sound.volume, audioPieces(o.edit, o.hasMic));
+    const clicks = o.edit.sound.clicks
+      ? tapTimes(timeline.pointers, o.edit.clips)
+      : [];
+    return await ipc.exportFinish(
+      o.videoPath,
+      clicks,
+      o.edit.sound.volume,
+      audioPieces(o.edit, o.hasMic),
+    );
   } catch (e) {
     await ipc.exportCancel().catch(() => {});
     throw e;
   } finally {
     release(video);
     release(camera);
-    for (const el of overlayMedia.values()) if (el instanceof HTMLVideoElement) release(el);
+    for (const el of overlayMedia.values())
+      if (el instanceof HTMLVideoElement) release(el);
   }
 }

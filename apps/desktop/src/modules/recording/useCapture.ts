@@ -11,12 +11,13 @@ import { stageRegion } from "@/modules/studio/stageRef";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
 import { layerLog } from "./layerLog";
-import { splitParts, type TakeJournal } from "./split";
 import { captureMode, useCaptureSettings } from "./settings";
+import { splitParts, type TakeJournal } from "./split";
 import { screenRect } from "./stagePoint";
 import { interactionLog, useRecording } from "./store";
 
-const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+const nextFrame = () =>
+  new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
 function errorMessage(e: unknown) {
   return e instanceof Error ? e.message : String(e);
@@ -30,7 +31,10 @@ function settingsAction(message: string) {
       ? "camera"
       : null;
   if (!pane) return undefined;
-  return { label: "Open Settings", onClick: () => void ipc.openPrivacySettings(pane).catch(() => {}) };
+  return {
+    label: "Open Settings",
+    onClick: () => void ipc.openPrivacySettings(pane).catch(() => {}),
+  };
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -48,7 +52,8 @@ function restoreCanvasView() {
  * first fitted to the canvas: more real pixels, a sharper video.
  */
 async function frameDeviceForTake() {
-  const id = useEditor.getState().selectedId ?? useProject.getState().devices[0]?.id;
+  const id =
+    useEditor.getState().selectedId ?? useProject.getState().devices[0]?.id;
   if (!id || useEditor.getState().view !== "canvas") return;
   const { zoom, panX, panY } = useCanvasView.getState();
   viewBeforeTake = { zoom, panX, panY };
@@ -60,7 +65,9 @@ async function frameDeviceForTake() {
 function boxOf(el: HTMLElement | null): CaptureRegion | null {
   if (!el) return null;
   const r = el.getBoundingClientRect();
-  return r.width > 0 && r.height > 0 ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
+  return r.width > 0 && r.height > 0
+    ? { x: r.left, y: r.top, width: r.width, height: r.height }
+    : null;
 }
 
 /**
@@ -87,7 +94,8 @@ function regionFor(mode: CaptureMode): CaptureRegion {
     if (!r) throw new Error("The canvas is not visible.");
     return r;
   }
-  const id = useEditor.getState().selectedId ?? useProject.getState().devices[0]?.id;
+  const id =
+    useEditor.getState().selectedId ?? useProject.getState().devices[0]?.id;
   const r = id ? screenRect(id) : null;
   if (!r) throw new Error("Select the device to record first.");
   return r;
@@ -100,13 +108,17 @@ export function useCapture() {
 
   const start = useMutation({
     mutationFn: async () => {
-      if (useProject.getState().devices.length === 0) throw new Error("Add a device to record first.");
+      if (useProject.getState().devices.length === 0)
+        throw new Error("Add a device to record first.");
       const { camera, microphone } = useCaptureSettings.getState();
       // Canvas and Scene record the view on screen; the view never changes here.
       const mode = captureMode();
       interactionLog.reset();
       if (mode === "device") await frameDeviceForTake();
-      else if (useCaptureSettings.getState().separate && useProject.getState().devices.length > 1) {
+      else if (
+        useCaptureSettings.getState().separate &&
+        useProject.getState().devices.length > 1
+      ) {
         await packDevicesForTake();
       }
       // `active` flattens frames and hides UI chrome before FFmpeg starts.
@@ -120,7 +132,10 @@ export function useCapture() {
       return { started, called, region };
     },
     onSuccess: ({ started, called, region }) => {
-      if (typeof started?.videoPath !== "string" || started.videoPath.length === 0) {
+      if (
+        typeof started?.videoPath !== "string" ||
+        started.videoPath.length === 0
+      ) {
         setActive(false);
         toast.error("Recording did not start.");
         return;
@@ -167,17 +182,27 @@ export function useCapture() {
         devices: project.devices,
         events,
         pauses: useRecording.getState().closedPauses(),
+        chapters: useRecording.getState().closedChapters(),
         // The editor opens the webcam where the bubble sat in the studio.
-        camera: camera === null ? null : { ...bubble, visible: true, layout: "overlay" },
+        camera:
+          camera === null
+            ? null
+            : { ...bubble, visible: true, layout: "overlay" },
       };
       const result = await ipc.recordingStop(journal);
       const parts = separate && mode !== "device" ? splitParts(journal) : [];
-      if (parts.length === 0 || !result?.videoPath) return { result, split: [] as string[] };
+      if (parts.length === 0 || !result?.videoPath)
+        return { result, split: [] as string[] };
       try {
-        return { result, split: await ipc.recordingSplit(result.videoPath, parts) };
+        return {
+          result,
+          split: await ipc.recordingSplit(result.videoPath, parts),
+        };
       } catch (e) {
         // The take itself is safe; only the per-device copies failed.
-        toast.error("Could not save one video per device", { description: errorMessage(e) });
+        toast.error("Could not save one video per device", {
+          description: errorMessage(e),
+        });
         return { result, split: [] as string[] };
       }
     },
@@ -186,7 +211,8 @@ export function useCapture() {
       restoreCanvasView();
       if (Array.isArray(split) && split.length > 0) {
         toast.success(`${split.length} device videos saved`, {
-          description: "Each one opens on its own from Recordings, ready for a user test.",
+          description:
+            "Each one opens on its own from Recordings, ready for a user test.",
           action: { label: "Show", onClick: () => revealItemInDir(split[0]) },
         });
       }
@@ -222,7 +248,8 @@ export function useCapture() {
         action: { label: "Show", onClick: () => revealItemInDir(path) },
       });
     },
-    onError: (e) => toast.error("Screenshot failed", { description: errorMessage(e) }),
+    onError: (e) =>
+      toast.error("Screenshot failed", { description: errorMessage(e) }),
   });
 
   return {

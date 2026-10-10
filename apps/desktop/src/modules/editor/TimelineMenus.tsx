@@ -1,4 +1,10 @@
-import { DEFAULT_TRANSITION, MIC_ASSET, SPEEDS, TRANSITION_KINDS, type TransitionKind } from "@goscreen/render-engine";
+import {
+  DEFAULT_TRANSITION,
+  MIC_ASSET,
+  SPEEDS,
+  TRANSITION_KINDS,
+  type TransitionKind,
+} from "@goscreen/render-engine";
 import type { ReactElement } from "react";
 import {
   ContextMenu,
@@ -19,9 +25,17 @@ import { player, useSession } from "./session";
 import { type Selection, useEdit, usePlayback } from "./store";
 
 /** Right-click on a timeline item: it is selected, then quick actions. */
-export function TimelineItemMenu({ selection, children }: { selection: Selection; children: ReactElement }) {
+export function TimelineItemMenu({
+  selection,
+  children,
+}: {
+  selection: Selection;
+  children: ReactElement;
+}) {
   const clip = useEdit((s) =>
-    selection.kind === "clip" ? s.edit.clips.find((c) => c.id === selection.id) : undefined,
+    selection.kind === "clip"
+      ? s.edit.clips.find((c) => c.id === selection.id)
+      : undefined,
   );
   const item = useEdit((s) =>
     selection.kind === "overlay"
@@ -32,7 +46,9 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
   );
 
   return (
-    <ContextMenu onOpenChange={(open) => open && usePlayback.getState().select(selection)}>
+    <ContextMenu
+      onOpenChange={(open) => open && usePlayback.getState().select(selection)}
+    >
       <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-52">
         <ContextMenuItem onClick={editActions.splitAtPlayhead}>
@@ -43,7 +59,11 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
           Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
         </ContextMenuItem>
-        {item ? <ContextMenuItem onClick={() => player.seek(item.start)}>Go to start</ContextMenuItem> : null}
+        {item ? (
+          <ContextMenuItem onClick={() => player.seek(item.start)}>
+            Go to start
+          </ContextMenuItem>
+        ) : null}
 
         {clip ? (
           <>
@@ -58,11 +78,18 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
                       clip.id,
                       v === "none"
                         ? null
-                        : { kind: v as TransitionKind, duration: clip.transition?.duration ?? DEFAULT_TRANSITION.duration },
+                        : {
+                            kind: v as TransitionKind,
+                            duration:
+                              clip.transition?.duration ??
+                              DEFAULT_TRANSITION.duration,
+                          },
                     )
                   }
                 >
-                  <ContextMenuRadioItem value="none">Cut (none)</ContextMenuRadioItem>
+                  <ContextMenuRadioItem value="none">
+                    Cut (none)
+                  </ContextMenuRadioItem>
                   {TRANSITION_KINDS.map((k) => (
                     <ContextMenuRadioItem key={k.id} value={k.id}>
                       {k.label}
@@ -82,7 +109,9 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
               <ContextMenuSubContent>
                 <ContextMenuRadioGroup
                   value={String(clip.speed)}
-                  onValueChange={(v) => editActions.setClipSpeed(clip.id, Number(v))}
+                  onValueChange={(v) =>
+                    editActions.setClipSpeed(clip.id, Number(v))
+                  }
                 >
                   {SPEEDS.map((s) => (
                     <ContextMenuRadioItem key={s} value={String(s)}>
@@ -92,13 +121,18 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
                 </ContextMenuRadioGroup>
               </ContextMenuSubContent>
             </ContextMenuSub>
-            <ContextMenuCheckboxItem checked={clip.muted} onCheckedChange={() => editActions.toggleClip(clip.id, "muted")}>
+            <ContextMenuCheckboxItem
+              checked={clip.muted}
+              onCheckedChange={() => editActions.toggleClip(clip.id, "muted")}
+            >
               Mute
             </ContextMenuCheckboxItem>
             <VoiceItem />
             <ContextMenuCheckboxItem
               checked={clip.cameraHidden}
-              onCheckedChange={() => editActions.toggleClip(clip.id, "cameraHidden")}
+              onCheckedChange={() =>
+                editActions.toggleClip(clip.id, "cameraHidden")
+              }
             >
               Hide camera
             </ContextMenuCheckboxItem>
@@ -106,7 +140,10 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
         ) : null}
 
         <ContextMenuSeparator />
-        <ContextMenuItem variant="destructive" onClick={() => editActions.deleteSelection()}>
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => editActions.deleteSelection()}
+        >
           Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
         </ContextMenuItem>
@@ -116,23 +153,45 @@ export function TimelineItemMenu({ selection, children }: { selection: Selection
 }
 
 /** Right-click on a device track: solo it, hide it, or open its settings. */
-export function DeviceMenu({ instanceId, children }: { instanceId: string; children: ReactElement }) {
-  const layer = useEdit((s) => s.edit.layers?.find((l) => l.instanceId === instanceId));
+export function DeviceMenu({
+  instanceId,
+  children,
+}: {
+  instanceId: string;
+  children: ReactElement;
+}) {
+  const layer = useEdit((s) =>
+    s.edit.layers?.find((l) => l.instanceId === instanceId),
+  );
   if (!layer) return children;
   return (
-    <ContextMenu onOpenChange={(open) => open && usePlayback.getState().selectLayer(instanceId)}>
+    <ContextMenu
+      onOpenChange={(open) =>
+        open && usePlayback.getState().selectLayer(instanceId)
+      }
+    >
       <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-52">
-        <ContextMenuItem onClick={() => editActions.soloLayer(instanceId)}>Show only this device</ContextMenuItem>
-        <ContextMenuItem onClick={() => editActions.showAllLayers()}>Show all devices</ContextMenuItem>
+        <ContextMenuItem onClick={() => editActions.soloLayer(instanceId)}>
+          Show only this device
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => editActions.showAllLayers()}>
+          Show all devices
+        </ContextMenuItem>
         <ContextMenuCheckboxItem
           checked={!layer.hidden}
-          onCheckedChange={() => editActions.setLayerHidden(instanceId, !layer.hidden)}
+          onCheckedChange={() =>
+            editActions.setLayerHidden(instanceId, !layer.hidden)
+          }
         >
           Visible
         </ContextMenuCheckboxItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => usePlayback.getState().selectLayer(instanceId)}>Edit device…</ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => usePlayback.getState().selectLayer(instanceId)}
+        >
+          Edit device…
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -141,11 +200,17 @@ export function DeviceMenu({ instanceId, children }: { instanceId: string; child
 /** Detach the voice from the video (or put it back), from any recording clip. */
 function VoiceItem() {
   const hasMic = useSession((s) => s.micUrl !== null);
-  const detached = useEdit((s) => s.edit.audio.some((a) => a.asset === MIC_ASSET));
+  const detached = useEdit((s) =>
+    s.edit.audio.some((a) => a.asset === MIC_ASSET),
+  );
   if (!hasMic) return null;
   return detached ? (
-    <ContextMenuItem onClick={() => editActions.reattachAudio()}>Reattach voice to video</ContextMenuItem>
+    <ContextMenuItem onClick={() => editActions.reattachAudio()}>
+      Reattach voice to video
+    </ContextMenuItem>
   ) : (
-    <ContextMenuItem onClick={() => editActions.detachAudio()}>Detach voice from video</ContextMenuItem>
+    <ContextMenuItem onClick={() => editActions.detachAudio()}>
+      Detach voice from video
+    </ContextMenuItem>
   );
 }
