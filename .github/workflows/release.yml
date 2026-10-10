@@ -22,7 +22,7 @@ jobs:
         run: |
           version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
           tag="v$version"
-          # Drafts have no tag yet, so look them up by name in the list (the token can see drafts).
+          # Reuse the draft of this version if a previous run made it (drafts are only listed, never "viewed" by tag).
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq "map(select(.tag_name == \"$tag\")) | .[0].id // empty")
           if [ -z "$id" ]; then
             id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" --jq .id \
