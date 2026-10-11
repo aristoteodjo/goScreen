@@ -26,6 +26,8 @@ use tokio::sync::{mpsc, OnceCell};
 
 use super::local_http;
 
+pub mod voiceover;
+
 const CHUNK: usize = 256 * 1024;
 
 type Files = Arc<Mutex<HashMap<String, PathBuf>>>;

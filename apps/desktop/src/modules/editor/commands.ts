@@ -2,6 +2,7 @@ import { placeZoom, sourceTimeAt } from "@goscreen/render-engine";
 import { editActions } from "./actions";
 import { player } from "./session";
 import { useEdit, usePlayback } from "./store";
+import { cancelVoiceOver, startVoiceOver, useVoiceOver } from "./voiceover";
 
 const FRAME = 1 / 30;
 export const VIEW_ZOOMS = [0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
@@ -68,6 +69,35 @@ export function editorCommands(openExport: () => void): EditorCommand[] {
       label: "Play / pause",
       shortcut: "Space",
       run: player.toggle,
+    },
+    {
+      id: "pause",
+      group: "Playback",
+      label: "Stop",
+      shortcut: "K",
+      run: player.pause,
+    },
+    {
+      id: "play-forward",
+      group: "Playback",
+      label: "Play forwards",
+      shortcut: "L",
+      run: () => {
+        if (!usePlayback.getState().playing) player.play();
+      },
+    },
+    {
+      id: "back-second",
+      group: "Playback",
+      label: "Back one second",
+      shortcut: "J",
+      run: () => player.step(-1),
+    },
+    {
+      id: "voice-over",
+      group: "Add",
+      label: "Record a voice-over from the playhead",
+      run: () => void startVoiceOver(),
     },
     {
       id: "first",
@@ -277,7 +307,14 @@ export function commandForKey(e: KeyboardEvent): string | null {
   if (mod && key === "arrowleft") return "first";
   if (mod && key === "arrowright") return "last";
   if (mod) return null;
+  if (key === "escape" && useVoiceOver.getState().phase !== "idle") {
+    cancelVoiceOver();
+    return null;
+  }
   if (key === " ") return "play";
+  if (key === "k") return "pause";
+  if (key === "l") return "play-forward";
+  if (key === "j") return "back-second";
   if (e.shiftKey && e.code === "Digit1") return "view-fit";
   if (e.shiftKey && key === "z") return "timeline-fit";
   if (key === "v") return "tool-select";

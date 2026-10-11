@@ -58,7 +58,10 @@ import {
   usePlayback,
 } from "./store";
 import { DeviceMenu, TimelineItemMenu } from "./TimelineMenus";
-import { TimelineToolbar } from "./TimelineToolbar";
+import { ASSET_DRAG } from "./ProjectPanel";
+import { TimelineTools, TimelineToolbar } from "./TimelineToolbar";
+import { VoiceOverButton } from "./voiceover";
+import { timecode } from "./timecode";
 import { Waveform } from "./Waveform";
 
 const LANE = 30;
@@ -67,7 +70,7 @@ const MIC = 40;
 const ZOOM = 34;
 const MIN_ITEM = 0.2;
 const GUTTER = 16;
-const HEADER = 92;
+const HEADER = 132;
 
 type Move = (dx: number, dy: number, e: globalThis.PointerEvent) => void;
 
@@ -493,487 +496,569 @@ export function Timeline() {
         ? "cursor-grab active:cursor-grabbing"
         : "";
 
+  const onDrop = (e: React.DragEvent) => {
+    const id = e.dataTransfer.getData(ASSET_DRAG);
+    if (!id) return;
+    e.preventDefault();
+    void editActions.placeAsset(id, toTime(e.clientX));
+  };
+
   return (
-    <div className="flex h-full min-h-0 select-none flex-col">
-      <TimelineToolbar />
-      <div
-        ref={scrollRef}
-        className={cn("relative min-h-0 flex-1 overflow-auto pb-3", toolCursor)}
-        data-timeline-pps={pps}
-        onWheel={onWheel}
-        onPointerMove={(e) =>
-          setBlade(tool === "blade" ? toTime(e.clientX) : null)
-        }
-        onPointerLeave={() => setBlade(null)}
-        onPointerDown={(e) => {
-          if (e.button === 1 || (e.button === 0 && tool === "hand")) {
-            panDrag(e);
-            return;
-          }
-          if (e.target === e.currentTarget) select(null);
-        }}
-      >
+    <div data-ai="timeline" className="flex h-full min-h-0 select-none">
+      <TimelineTools />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <TimelineToolbar />
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: a drop target for media dragged from the Project panel */}
         <div
-          className="relative"
-          style={{ width: HEADER + trackWidth + GUTTER * 2 }}
-        >
-          {/* Ruler */}
-          <Row header={<Timecode />} sticky height={28}>
-            <div
-              ref={contentRef}
-              className="absolute inset-y-0 cursor-pointer"
-              style={{ left: GUTTER, width: trackWidth }}
-              onPointerDown={seekDrag}
-            >
-              {ticks.map((t) => {
-                const major = Math.abs(t / step - Math.round(t / step)) < 1e-6;
-                return (
-                  <div
-                    key={t}
-                    className="absolute bottom-1 -translate-x-1/2"
-                    style={{ left: x(t) }}
-                  >
-                    {major && t > 0 ? (
-                      <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 font-mono text-[10.5px] text-muted-foreground tabular-nums">
-                        {formatTime(t)}
-                      </span>
-                    ) : null}
-                    <div
-                      className={cn(
-                        "size-[3px] rounded-full",
-                        major
-                          ? "bg-muted-foreground"
-                          : "bg-muted-foreground/40",
-                      )}
-                    />
-                  </div>
-                );
-              })}
-              <PlayheadKnob x={x} />
-            </div>
-          </Row>
-
-          {/* Overlay lanes, highest on top */}
-          {Array.from(
-            { length: overlayLanes },
-            (_, i) => overlayLanes - 1 - i,
-          ).map((lane) => {
-            const hidden = edit.tracks.hidden.includes(lane);
-            return (
-              <Row
-                key={`o${lane}`}
-                height={LANE}
-                header={
-                  <TrackHeader
-                    name={`T${lane + 1}`}
-                    hint="Overlays"
-                    color="bg-sky-500"
-                    toggle={{
-                      on: !hidden,
-                      label: hidden ? "Show track" : "Hide track",
-                      icon: hidden ? ViewOffSlashIcon : ViewIcon,
-                      onClick: () => toggleLane("hidden", lane),
-                    }}
-                  />
-                }
-              >
-                <Track width={trackWidth} dim={hidden}>
-                  {edit.overlays
-                    .filter((o) => o.lane === lane)
-                    .map((o) => (
-                      <TimelineItemMenu
-                        key={o.id}
-                        selection={{ kind: "overlay", id: o.id }}
-                      >
-                        <Block
-                          left={x(o.start)}
-                          width={x(o.duration)}
-                          selected={isSel("overlay", o.id)}
-                          className={OVERLAY_COLOR[o.kind]}
-                          background={
-                            o.keyframes ? (
-                              <KeyMarks times={keyTimes(o)} x={x} />
-                            ) : null
-                          }
-                          onPointerDown={dragFree(
-                            "overlay",
-                            o,
-                            "move",
-                            overlayLanes,
-                          )}
-                          onStart={dragFree(
-                            "overlay",
-                            o,
-                            "start",
-                            overlayLanes,
-                          )}
-                          onEnd={dragFree("overlay", o, "end", overlayLanes)}
-                        >
-                          {o.kind === "text"
-                            ? o.text
-                            : o.kind === "shape"
-                              ? o.shape
-                              : o.kind === "blur"
-                                ? `Blur · ${o.mode}`
-                                : assetName(o.asset)}
-                        </Block>
-                      </TimelineItemMenu>
-                    ))}
-                </Track>
-              </Row>
-            );
-          })}
-
-          {/* Main track */}
-          <Row
-            height={MAIN}
-            header={
-              <ContextMenu>
-                <MenuTrigger>
-                  <div className="w-full">
-                    <TrackHeader
-                      name="Video"
-                      hint="main track: clips and cards"
-                      color="bg-amber-500"
-                    />
-                  </div>
-                </MenuTrigger>
-                <ContextMenuContent className="w-56">
-                  <ContextMenuItem onClick={() => editActions.addSlide()}>
-                    Add a card at the playhead
-                  </ContextMenuItem>
-                  <ContextMenuItem onClick={() => editActions.captionScenes()}>
-                    Caption every scene
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem onClick={() => editActions.autoZoom()}>
-                    Zoom on every click
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    variant="destructive"
-                    onClick={() => editActions.clearZooms()}
-                  >
-                    Remove every zoom
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
+          ref={scrollRef}
+          className={cn(
+            "relative min-h-0 flex-1 overflow-auto pb-3",
+            toolCursor,
+          )}
+          data-timeline-pps={pps}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes(ASSET_DRAG)) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
             }
+          }}
+          onDrop={onDrop}
+          onWheel={onWheel}
+          onPointerMove={(e) =>
+            setBlade(tool === "blade" ? toTime(e.clientX) : null)
+          }
+          onPointerLeave={() => setBlade(null)}
+          onPointerDown={(e) => {
+            if (e.button === 1 || (e.button === 0 && tool === "hand")) {
+              panDrag(e);
+              return;
+            }
+            if (e.target === e.currentTarget) select(null);
+          }}
+        >
+          <div
+            className="relative"
+            style={{ width: HEADER + trackWidth + GUTTER * 2 }}
           >
-            <Track width={trackWidth}>
-              {placed.map((p) => (
-                <TimelineItemMenu
-                  key={p.clip.id}
-                  selection={{ kind: "clip", id: p.clip.id }}
-                >
-                  <div
-                    className={cn(
-                      "absolute inset-y-0 flex flex-col items-center justify-center overflow-hidden rounded-lg border border-black/20 shadow-inner",
-                      tool === "select" && "cursor-grab active:cursor-grabbing",
-                      p.clip.kind === "recording"
-                        ? "bg-gradient-to-b from-amber-500 to-amber-600 text-amber-950"
-                        : "bg-gradient-to-b from-indigo-500 to-indigo-700 text-white",
-                      isSel("clip", p.clip.id) &&
-                        "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
-                      moving?.id === p.clip.id && "z-10 opacity-80 shadow-xl",
-                    )}
-                    style={{
-                      left: x(p.start),
-                      width: Math.max(4, x(p.end - p.start)),
-                      transform:
-                        moving?.id === p.clip.id
-                          ? `translateX(${moving.dx}px)`
-                          : undefined,
-                    }}
-                    onPointerDown={dragClip(p)}
-                  >
-                    <ClipLabel clip={p.clip} />
-                    <TrimHandle
-                      side="start"
-                      onPointerDown={trimMain(p, "start")}
-                    />
-                    <TrimHandle side="end" onPointerDown={trimMain(p, "end")} />
-                  </div>
-                </TimelineItemMenu>
-              ))}
-              {placed.slice(1).map((p, i) => (
-                <TransitionMark
-                  key={`tr-${p.clip.id}`}
-                  left={x(p.start)}
-                  width={x(transitionLength(placed[i].clip, p.clip))}
-                  clip={p.clip}
-                  onSelect={() => select({ kind: "clip", id: p.clip.id })}
-                />
-              ))}
-              {taps.map((t, i) => (
-                <div
-                  // biome-ignore lint/suspicious/noArrayIndexKey: derived positions, no identity
-                  key={i}
-                  className="pointer-events-none absolute bottom-1 size-1.5 -translate-x-1/2 rounded-full bg-white/80"
-                  style={{ left: x(t) }}
-                />
-              ))}
-            </Track>
-          </Row>
+            {/* Ruler */}
+            <Row header={<Timecode />} sticky height={28}>
+              <div
+                ref={contentRef}
+                className="absolute inset-y-0 cursor-pointer"
+                style={{ left: GUTTER, width: trackWidth }}
+                onPointerDown={seekDrag}
+              >
+                {ticks.map((t) => {
+                  const major =
+                    Math.abs(t / step - Math.round(t / step)) < 1e-6;
+                  return (
+                    <div
+                      key={t}
+                      className="absolute bottom-1 -translate-x-1/2"
+                      style={{ left: x(t) }}
+                    >
+                      {major && t > 0 ? (
+                        <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 font-mono text-[10.5px] text-muted-foreground tabular-nums">
+                          {formatTime(t)}
+                        </span>
+                      ) : null}
+                      <div
+                        className={cn(
+                          "size-[3px] rounded-full",
+                          major
+                            ? "bg-muted-foreground"
+                            : "bg-muted-foreground/40",
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+                <PlayheadKnob x={x} />
+              </div>
+            </Row>
 
-          {/* One track per recorded device */}
-          {edit.layers && recordedLayers.length > 1
-            ? edit.layers.map((le, i) => (
+            {/* Overlay lanes, highest on top */}
+            {Array.from(
+              { length: overlayLanes },
+              (_, i) => overlayLanes - 1 - i,
+            ).map((lane) => {
+              const hidden = edit.tracks.hidden.includes(lane);
+              return (
                 <Row
-                  key={`d-${le.instanceId}`}
-                  height={DEVICE}
+                  key={`o${lane}`}
+                  height={LANE}
                   header={
                     <TrackHeader
-                      name={`D${i + 1}`}
-                      hint={registry.get(le.deviceId)?.name ?? le.deviceId}
-                      color={DEVICE_COLORS[i % DEVICE_COLORS.length]}
+                      name={`V${lane + 2}`}
+                      hint={`Video ${lane + 2}`}
+                      color="bg-sky-700"
                       toggle={{
-                        on: !le.hidden,
-                        label: le.hidden ? "Show device" : "Hide device",
-                        icon: le.hidden ? ViewOffSlashIcon : ViewIcon,
-                        onClick: () =>
-                          editActions.setLayerHidden(le.instanceId, !le.hidden),
+                        on: !hidden,
+                        label: hidden ? "Show track" : "Hide track",
+                        icon: hidden ? ViewOffSlashIcon : ViewIcon,
+                        onClick: () => toggleLane("hidden", lane),
                       }}
                     />
                   }
                 >
-                  <Track width={trackWidth} dim={le.hidden}>
-                    {spans.map((p) => (
-                      <DeviceMenu
-                        key={`${le.instanceId}-${p.clip.id}`}
-                        instanceId={le.instanceId}
-                      >
-                        <div
-                          className={cn(
-                            "absolute inset-y-1 cursor-pointer rounded-md opacity-80 ring-1 ring-white/10 hover:opacity-100",
-                            DEVICE_COLORS[i % DEVICE_COLORS.length],
-                            selectedLayer === le.instanceId &&
-                              "opacity-100 ring-2 ring-white/80",
-                          )}
-                          style={{
-                            left: x(p.start),
-                            width: Math.max(2, x(p.end - p.start)),
-                          }}
-                          onPointerDown={(e) => {
-                            if (toolPress(e, { kind: "clip", id: p.clip.id }))
-                              return;
-                            usePlayback.getState().selectLayer(le.instanceId);
-                            seekDrag(e);
-                          }}
-                        />
-                      </DeviceMenu>
-                    ))}
+                  <Track width={trackWidth} dim={hidden}>
+                    {edit.overlays
+                      .filter((o) => o.lane === lane)
+                      .map((o) => (
+                        <TimelineItemMenu
+                          key={o.id}
+                          selection={{ kind: "overlay", id: o.id }}
+                        >
+                          <Block
+                            data-ai-item={o.id}
+                            left={x(o.start)}
+                            width={x(o.duration)}
+                            selected={isSel("overlay", o.id)}
+                            className={OVERLAY_COLOR[o.kind]}
+                            background={
+                              o.keyframes ? (
+                                <KeyMarks times={keyTimes(o)} x={x} />
+                              ) : null
+                            }
+                            onPointerDown={dragFree(
+                              "overlay",
+                              o,
+                              "move",
+                              overlayLanes,
+                            )}
+                            onStart={dragFree(
+                              "overlay",
+                              o,
+                              "start",
+                              overlayLanes,
+                            )}
+                            onEnd={dragFree("overlay", o, "end", overlayLanes)}
+                          >
+                            {o.kind === "text"
+                              ? o.text
+                              : o.kind === "shape"
+                                ? o.shape
+                                : o.kind === "blur"
+                                  ? `Blur · ${o.mode}`
+                                  : assetName(o.asset)}
+                          </Block>
+                        </TimelineItemMenu>
+                      ))}
                   </Track>
                 </Row>
-              ))
-            : null}
+              );
+            })}
 
-          {/* Zoom track */}
-          <Row
-            height={ZOOM}
-            header={<TrackHeader name="Zoom" color="bg-violet-500" />}
-          >
-            <Track width={trackWidth}>
-              <div
-                className={cn(
-                  "group/zooms absolute inset-0 rounded-lg",
-                  tool === "select" && "cursor-copy",
-                )}
-                onPointerMove={(e) => setHover(toTime(e.clientX))}
-                onPointerLeave={() => setHover(null)}
-                onPointerDown={(e) => {
-                  if (toolPress(e, null) || e.button !== 0) return;
-                  selectZoom(null);
-                  addZoomAt(toTime(e.clientX));
-                }}
-              >
-                {edit.zooms.length === 0 && hover === null ? (
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
-                    Click to add a zoom
-                  </span>
-                ) : null}
-                {tool === "select" && hover !== null && canZoomAt(hover) ? (
-                  <div
-                    className="pointer-events-none absolute inset-y-1 flex w-6 -translate-x-1/2 items-center justify-center rounded-md bg-violet-500/30 text-violet-200"
-                    style={{ left: x(hover) }}
-                  >
-                    <HugeiconsIcon icon={Add01Icon} size={12} strokeWidth={2} />
-                  </div>
-                ) : null}
-                {zoomBlocks.map(({ zoom: z, span, start, end: zEnd }) => (
-                  <div
-                    key={`${z.id}-${span.clip.id}`}
-                    className={cn(
-                      "absolute inset-y-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-b from-violet-500 to-violet-700 text-[12px] text-white",
-                      tool === "select" && "cursor-grab active:cursor-grabbing",
-                      selectedZoom === z.id &&
-                        "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
-                    )}
-                    style={{
-                      left: x(start),
-                      width: Math.max(4, x(zEnd - start)),
-                    }}
-                    onPointerDown={dragZoom(z, span, "move")}
-                    onPointerMove={(e) => e.stopPropagation()}
-                    onPointerEnter={() => setHover(null)}
-                  >
-                    <HugeiconsIcon
-                      icon={Search01Icon}
-                      size={12}
-                      strokeWidth={2}
-                    />
-                    <span className="font-mono tabular-nums">
-                      {z.scale.toFixed(1)}×
-                    </span>
-                    <span className="opacity-70">
-                      {z.focus ? "Manual" : "Auto"}
-                    </span>
-                    <EdgeHandle
-                      side="start"
-                      onPointerDown={dragZoom(z, span, "start")}
-                    />
-                    <EdgeHandle
-                      side="end"
-                      onPointerDown={dragZoom(z, span, "end")}
-                    />
-                  </div>
-                ))}
-              </div>
-            </Track>
-          </Row>
-
-          {/* Mic, under each recording clip */}
-          {micUrl ? (
+            {/* Main track */}
             <Row
-              height={MIC}
+              height={MAIN}
               header={
-                <TrackHeader
-                  name="A1"
-                  hint="Mic"
-                  color="bg-emerald-500"
-                  toggle={{
-                    on: !edit.tracks.micMuted,
-                    label: edit.tracks.micMuted ? "Unmute mic" : "Mute mic",
-                    icon: edit.tracks.micMuted
-                      ? VolumeMute01Icon
-                      : VolumeHighIcon,
-                    onClick: () =>
-                      change((ed) => ({
-                        ...ed,
-                        tracks: { ...ed.tracks, micMuted: !ed.tracks.micMuted },
-                      })),
-                  }}
-                />
+                <ContextMenu>
+                  <MenuTrigger>
+                    <div className="w-full">
+                      <TrackHeader
+                        name="V1"
+                        hint="Video 1"
+                        color="bg-sky-600"
+                        target
+                      />
+                    </div>
+                  </MenuTrigger>
+                  <ContextMenuContent className="w-56">
+                    <ContextMenuItem onClick={() => editActions.addSlide()}>
+                      Add a card at the playhead
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => editActions.captionScenes()}
+                    >
+                      Caption every scene
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => editActions.autoZoom()}>
+                      Zoom on every click
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      variant="destructive"
+                      onClick={() => editActions.clearZooms()}
+                    >
+                      Remove every zoom
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               }
             >
-              <Track width={trackWidth} dim={edit.tracks.micMuted}>
-                {spans.map((p) => (
-                  <div
-                    key={`mic-${p.clip.id}`}
-                    className={cn(
-                      "absolute inset-y-0 overflow-hidden rounded-md bg-emerald-900/60 ring-1 ring-emerald-500/30",
-                      p.clip.muted && "opacity-30",
-                    )}
-                    style={{
-                      left: x(p.start),
-                      width: Math.max(2, x(p.end - p.start)),
-                    }}
-                    onPointerDown={(e) =>
-                      toolPress(e, { kind: "clip", id: p.clip.id }) ||
-                      seekDrag(e)
-                    }
+              <Track width={trackWidth}>
+                {placed.map((p) => (
+                  <TimelineItemMenu
+                    key={p.clip.id}
+                    selection={{ kind: "clip", id: p.clip.id }}
                   >
-                    <Waveform
-                      url={micUrl}
-                      from={p.clip.in - mediaOffset}
-                      duration={p.end - p.start}
-                      speed={p.clip.speed}
-                      width={Math.max(2, x(p.end - p.start))}
-                      height={MIC - 4}
-                      color="rgba(110, 231, 183, 0.85)"
-                    />
-                  </div>
+                    <div
+                      className={cn(
+                        "absolute inset-y-0 flex flex-col items-center justify-center overflow-hidden rounded-sm border border-black/30",
+                        tool === "select" &&
+                          "cursor-grab active:cursor-grabbing",
+                        p.clip.kind === "recording"
+                          ? "bg-[#2b6c8c] text-white"
+                          : "bg-[#5a4fa8] text-white",
+                        isSel("clip", p.clip.id) &&
+                          "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
+                        moving?.id === p.clip.id && "z-10 opacity-80 shadow-xl",
+                      )}
+                      style={{
+                        left: x(p.start),
+                        width: Math.max(4, x(p.end - p.start)),
+                        transform:
+                          moving?.id === p.clip.id
+                            ? `translateX(${moving.dx}px)`
+                            : undefined,
+                      }}
+                      data-ai-item={p.clip.id}
+                      onPointerDown={dragClip(p)}
+                    >
+                      <ClipLabel clip={p.clip} />
+                      <TrimHandle
+                        side="start"
+                        onPointerDown={trimMain(p, "start")}
+                      />
+                      <TrimHandle
+                        side="end"
+                        onPointerDown={trimMain(p, "end")}
+                      />
+                    </div>
+                  </TimelineItemMenu>
+                ))}
+                {placed.slice(1).map((p, i) => (
+                  <TransitionMark
+                    key={`tr-${p.clip.id}`}
+                    left={x(p.start)}
+                    width={x(transitionLength(placed[i].clip, p.clip))}
+                    clip={p.clip}
+                    onSelect={() => select({ kind: "clip", id: p.clip.id })}
+                  />
+                ))}
+                {taps.map((t, i) => (
+                  <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: derived positions, no identity
+                    key={i}
+                    className="pointer-events-none absolute bottom-1 size-1.5 -translate-x-1/2 rounded-full bg-white/80"
+                    style={{ left: x(t) }}
+                  />
                 ))}
               </Track>
             </Row>
-          ) : null}
 
-          {/* Music lanes */}
-          {Array.from({ length: audioLanes }, (_, lane) => {
-            const muted = edit.tracks.muted.includes(lane);
-            return (
+            {/* One track per recorded device */}
+            {edit.layers && recordedLayers.length > 1
+              ? edit.layers.map((le, i) => (
+                  <Row
+                    key={`d-${le.instanceId}`}
+                    height={DEVICE}
+                    header={
+                      <TrackHeader
+                        name={`D${i + 1}`}
+                        hint={registry.get(le.deviceId)?.name ?? le.deviceId}
+                        color={DEVICE_COLORS[i % DEVICE_COLORS.length]}
+                        toggle={{
+                          on: !le.hidden,
+                          label: le.hidden ? "Show device" : "Hide device",
+                          icon: le.hidden ? ViewOffSlashIcon : ViewIcon,
+                          onClick: () =>
+                            editActions.setLayerHidden(
+                              le.instanceId,
+                              !le.hidden,
+                            ),
+                        }}
+                      />
+                    }
+                  >
+                    <Track width={trackWidth} dim={le.hidden}>
+                      {spans.map((p) => (
+                        <DeviceMenu
+                          key={`${le.instanceId}-${p.clip.id}`}
+                          instanceId={le.instanceId}
+                        >
+                          <div
+                            className={cn(
+                              "absolute inset-y-1 cursor-pointer rounded-md opacity-80 ring-1 ring-white/10 hover:opacity-100",
+                              DEVICE_COLORS[i % DEVICE_COLORS.length],
+                              selectedLayer === le.instanceId &&
+                                "opacity-100 ring-2 ring-white/80",
+                            )}
+                            style={{
+                              left: x(p.start),
+                              width: Math.max(2, x(p.end - p.start)),
+                            }}
+                            onPointerDown={(e) => {
+                              if (toolPress(e, { kind: "clip", id: p.clip.id }))
+                                return;
+                              usePlayback.getState().selectLayer(le.instanceId);
+                              seekDrag(e);
+                            }}
+                          />
+                        </DeviceMenu>
+                      ))}
+                    </Track>
+                  </Row>
+                ))
+              : null}
+
+            {/* Zoom track */}
+            <Row
+              height={ZOOM}
+              header={<TrackHeader name="Zoom" color="bg-violet-500" />}
+            >
+              <Track width={trackWidth}>
+                <div
+                  className={cn(
+                    "group/zooms absolute inset-0 rounded-md",
+                    tool === "select" && "cursor-copy",
+                  )}
+                  onPointerMove={(e) => setHover(toTime(e.clientX))}
+                  onPointerLeave={() => setHover(null)}
+                  onPointerDown={(e) => {
+                    if (toolPress(e, null) || e.button !== 0) return;
+                    selectZoom(null);
+                    addZoomAt(toTime(e.clientX));
+                  }}
+                >
+                  {edit.zooms.length === 0 && hover === null ? (
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
+                      Click to add a zoom
+                    </span>
+                  ) : null}
+                  {tool === "select" && hover !== null && canZoomAt(hover) ? (
+                    <div
+                      className="pointer-events-none absolute inset-y-1 flex w-6 -translate-x-1/2 items-center justify-center rounded-md bg-violet-500/30 text-violet-200"
+                      style={{ left: x(hover) }}
+                    >
+                      <HugeiconsIcon
+                        icon={Add01Icon}
+                        size={12}
+                        strokeWidth={2}
+                      />
+                    </div>
+                  ) : null}
+                  {zoomBlocks.map(({ zoom: z, span, start, end: zEnd }) => (
+                    <div
+                      key={`${z.id}-${span.clip.id}`}
+                      className={cn(
+                        "absolute inset-y-1 flex items-center justify-center gap-1.5 overflow-hidden rounded-sm bg-[#5b4f8f] text-[11px] text-white",
+                        tool === "select" &&
+                          "cursor-grab active:cursor-grabbing",
+                        selectedZoom === z.id &&
+                          "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
+                      )}
+                      style={{
+                        left: x(start),
+                        width: Math.max(4, x(zEnd - start)),
+                      }}
+                      onPointerDown={dragZoom(z, span, "move")}
+                      onPointerMove={(e) => e.stopPropagation()}
+                      onPointerEnter={() => setHover(null)}
+                    >
+                      <HugeiconsIcon
+                        icon={Search01Icon}
+                        size={12}
+                        strokeWidth={2}
+                      />
+                      <span className="font-mono tabular-nums">
+                        {z.scale.toFixed(1)}×
+                      </span>
+                      <span className="opacity-70">
+                        {z.focus ? "Manual" : "Auto"}
+                      </span>
+                      <EdgeHandle
+                        side="start"
+                        onPointerDown={dragZoom(z, span, "start")}
+                      />
+                      <EdgeHandle
+                        side="end"
+                        onPointerDown={dragZoom(z, span, "end")}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Track>
+            </Row>
+
+            {/* Mic, under each recording clip */}
+            {micUrl ? (
               <Row
-                // biome-ignore lint/suspicious/noArrayIndexKey: the lane number is its identity
-                key={`a${lane}`}
-                height={LANE + 6}
+                height={MIC}
                 header={
                   <TrackHeader
-                    name={`A${lane + (micUrl ? 2 : 1)}`}
-                    hint="Music"
-                    color="bg-teal-500"
+                    name="A1"
+                    hint="Mic"
+                    color="bg-emerald-600"
+                    voice
                     toggle={{
-                      on: !muted,
-                      label: muted ? "Unmute track" : "Mute track",
-                      icon: muted ? VolumeMute01Icon : VolumeHighIcon,
-                      onClick: () => toggleLane("muted", lane),
+                      on: !edit.tracks.micMuted,
+                      label: edit.tracks.micMuted ? "Unmute mic" : "Mute mic",
+                      icon: edit.tracks.micMuted
+                        ? VolumeMute01Icon
+                        : VolumeHighIcon,
+                      onClick: () =>
+                        change((ed) => ({
+                          ...ed,
+                          tracks: {
+                            ...ed.tracks,
+                            micMuted: !ed.tracks.micMuted,
+                          },
+                        })),
                     }}
                   />
                 }
               >
-                <Track width={trackWidth} dim={muted}>
-                  {edit.audio
-                    .filter((a) => a.lane === lane)
-                    .map((a) => (
-                      <TimelineItemMenu
-                        key={a.id}
-                        selection={{ kind: "audio", id: a.id }}
-                      >
-                        <Block
-                          left={x(a.start)}
-                          width={x(a.duration)}
-                          selected={isSel("audio", a.id)}
-                          className="bg-teal-800/80 text-white ring-1 ring-teal-400/40"
-                          onPointerDown={dragFree(
-                            "audio",
-                            a,
-                            "move",
-                            audioLanes,
-                          )}
-                          onStart={dragFree("audio", a, "start", audioLanes)}
-                          onEnd={dragFree("audio", a, "end", audioLanes)}
-                          background={
-                            <Waveform
-                              url={assetUrl(edit, a.asset)}
-                              from={
-                                a.asset === MIC_ASSET
-                                  ? a.in - mediaOffset
-                                  : a.in
-                              }
-                              duration={a.duration}
-                              width={Math.max(6, x(a.duration))}
-                              height={LANE + 2}
-                              color="rgba(94, 234, 212, 0.75)"
-                            />
-                          }
-                        >
-                          ♪ {assetName(a.asset)}
-                        </Block>
-                      </TimelineItemMenu>
-                    ))}
+                <Track width={trackWidth} dim={edit.tracks.micMuted}>
+                  {spans.map((p) => (
+                    <div
+                      key={`mic-${p.clip.id}`}
+                      className={cn(
+                        "absolute inset-y-0 overflow-hidden rounded-md bg-emerald-900/60 ring-1 ring-emerald-500/30",
+                        p.clip.muted && "opacity-30",
+                      )}
+                      style={{
+                        left: x(p.start),
+                        width: Math.max(2, x(p.end - p.start)),
+                      }}
+                      onPointerDown={(e) =>
+                        toolPress(e, { kind: "clip", id: p.clip.id }) ||
+                        seekDrag(e)
+                      }
+                    >
+                      <Waveform
+                        url={micUrl}
+                        from={p.clip.in - mediaOffset}
+                        duration={p.end - p.start}
+                        speed={p.clip.speed}
+                        width={Math.max(2, x(p.end - p.start))}
+                        height={MIC - 4}
+                        color="rgba(110, 231, 183, 0.85)"
+                      />
+                    </div>
+                  ))}
                 </Track>
               </Row>
-            );
-          })}
+            ) : null}
 
-          <Playhead x={(t) => HEADER + GUTTER + x(t)} />
-          {blade !== null && tool === "blade" ? (
-            <div
-              className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-rose-400/80"
-              style={{ left: HEADER + GUTTER + x(blade) }}
-            />
-          ) : null}
+            {/* Music lanes */}
+            {Array.from({ length: audioLanes }, (_, lane) => {
+              const muted = edit.tracks.muted.includes(lane);
+              return (
+                <Row
+                  // biome-ignore lint/suspicious/noArrayIndexKey: the lane number is its identity
+                  key={`a${lane}`}
+                  height={LANE + 6}
+                  header={
+                    <TrackHeader
+                      name={`A${lane + (micUrl ? 2 : 1)}`}
+                      hint={`Audio ${lane + (micUrl ? 2 : 1)}`}
+                      color="bg-emerald-600"
+                      voice
+                      toggle={{
+                        on: !muted,
+                        label: muted ? "Unmute track" : "Mute track",
+                        icon: muted ? VolumeMute01Icon : VolumeHighIcon,
+                        onClick: () => toggleLane("muted", lane),
+                      }}
+                    />
+                  }
+                >
+                  <Track width={trackWidth} dim={muted}>
+                    {edit.audio
+                      .filter((a) => a.lane === lane)
+                      .map((a) => (
+                        <TimelineItemMenu
+                          key={a.id}
+                          selection={{ kind: "audio", id: a.id }}
+                        >
+                          <Block
+                            data-ai-item={a.id}
+                            left={x(a.start)}
+                            width={x(a.duration)}
+                            selected={isSel("audio", a.id)}
+                            className="bg-[#2f6b3a] text-white ring-1 ring-emerald-400/30"
+                            onPointerDown={dragFree(
+                              "audio",
+                              a,
+                              "move",
+                              audioLanes,
+                            )}
+                            onStart={dragFree("audio", a, "start", audioLanes)}
+                            onEnd={dragFree("audio", a, "end", audioLanes)}
+                            background={
+                              <Waveform
+                                url={assetUrl(edit, a.asset)}
+                                from={
+                                  a.asset === MIC_ASSET
+                                    ? a.in - mediaOffset
+                                    : a.in
+                                }
+                                duration={a.duration}
+                                width={Math.max(6, x(a.duration))}
+                                height={LANE + 2}
+                                color="rgba(134, 239, 172, 0.8)"
+                              />
+                            }
+                          >
+                            ♪ {assetName(a.asset)}
+                          </Block>
+                        </TimelineItemMenu>
+                      ))}
+                  </Track>
+                </Row>
+              );
+            })}
+
+            {/* An empty audio track: drop sounds or record a voice-over */}
+            <Row
+              height={LANE + 6}
+              header={
+                <TrackHeader
+                  name={`A${audioLanes + (micUrl ? 2 : 1)}`}
+                  hint={`Audio ${audioLanes + (micUrl ? 2 : 1)}`}
+                  color="bg-emerald-600"
+                  voice
+                />
+              }
+            >
+              <Track width={trackWidth}>
+                <span className="pointer-events-none absolute inset-0 flex items-center pl-3 text-[11px] text-muted-foreground/70">
+                  Drop a sound here, or record a voice-over with the mic button
+                </span>
+              </Track>
+            </Row>
+
+            <Playhead x={(t) => HEADER + GUTTER + x(t)} />
+            {blade !== null && tool === "blade" ? (
+              <div
+                className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-rose-400/80"
+                style={{ left: HEADER + GUTTER + x(blade) }}
+              />
+            ) : null}
+          </div>
         </div>
+        <StatusBar />
       </div>
     </div>
+  );
+}
+
+const HINTS: Record<string, string> = {
+  select:
+    "Click to select, drag to move or trim. Drop media from the Project panel onto a track.",
+  blade:
+    "Click a clip to cut it at that frame. V returns to the selection tool.",
+  hand: "Drag to scroll the timeline. V returns to the selection tool.",
+};
+
+function StatusBar() {
+  const tool = usePlayback((s) => s.tool);
+  return (
+    <footer className="flex h-6 shrink-0 items-center border-t border-white/5 px-3 text-[11px] text-muted-foreground">
+      <span className="truncate">{HINTS[tool] ?? ""}</span>
+    </footer>
   );
 }
 
@@ -987,10 +1072,10 @@ const DEVICE_COLORS = [
 ];
 
 const OVERLAY_COLOR: Record<Overlay["kind"], string> = {
-  text: "bg-gradient-to-b from-sky-500 to-sky-700 text-white",
-  image: "bg-gradient-to-b from-emerald-500 to-emerald-700 text-white",
-  video: "bg-gradient-to-b from-emerald-600 to-emerald-800 text-white",
-  shape: "bg-gradient-to-b from-rose-500 to-rose-700 text-white",
+  text: "bg-[#9c4d7c] text-white",
+  image: "bg-[#6f5a9e] text-white",
+  video: "bg-[#2b6c8c] text-white",
+  shape: "bg-[#a0583f] text-white",
   blur: "bg-[repeating-linear-gradient(45deg,rgba(148,163,184,0.55)_0_6px,rgba(100,116,139,0.55)_6px_12px)] text-white",
 };
 
@@ -1052,6 +1137,8 @@ function TrackHeader({
   hint,
   color,
   toggle,
+  target,
+  voice,
 }: {
   name: string;
   hint?: string;
@@ -1062,16 +1149,28 @@ function TrackHeader({
     icon: typeof ViewIcon;
     onClick: () => void;
   };
+  // The track new clips go to (Premiere's blue target).
+  target?: boolean;
+  // An audio track: it can record a voice-over.
+  voice?: boolean;
 }) {
   return (
     <div className="flex w-full items-center gap-1.5 pr-1.5">
-      <span className={cn("h-4 w-1 rounded-full", color)} />
-      <span className="text-[11px] font-semibold">{name}</span>
+      <span
+        className={cn(
+          "flex h-6 w-7 shrink-0 items-center justify-center rounded-sm text-[10.5px] font-semibold text-white",
+          target ? color : "bg-white/10",
+        )}
+      >
+        {name}
+      </span>
       {hint ? (
-        <span className="truncate text-[10px] text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
           {hint}
         </span>
-      ) : null}
+      ) : (
+        <span className="flex-1" />
+      )}
       {toggle ? (
         <button
           type="button"
@@ -1079,13 +1178,14 @@ function TrackHeader({
           title={toggle.label}
           onClick={toggle.onClick}
           className={cn(
-            "ml-auto flex size-6 items-center justify-center rounded-md hover:bg-white/10",
+            "flex size-5 items-center justify-center rounded hover:bg-white/10",
             toggle.on ? "text-muted-foreground" : "text-rose-300",
           )}
         >
-          <HugeiconsIcon icon={toggle.icon} size={13} strokeWidth={1.75} />
+          <HugeiconsIcon icon={toggle.icon} size={12} strokeWidth={1.75} />
         </button>
       ) : null}
+      {voice ? <VoiceOverButton /> : null}
     </div>
   );
 }
@@ -1296,7 +1396,7 @@ function Playhead({ x }: { x: (t: number) => number }) {
   const time = usePlayback((s) => s.time);
   return (
     <div
-      className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-violet-400"
+      className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-sky-400"
       style={{ left: x(time) }}
     />
   );
@@ -1306,10 +1406,10 @@ function PlayheadKnob({ x }: { x: (t: number) => number }) {
   const time = usePlayback((s) => s.time);
   return (
     <div
-      className="pointer-events-none absolute inset-y-0 w-px bg-violet-400"
+      className="pointer-events-none absolute inset-y-0 w-px bg-sky-400"
       style={{ left: x(time) }}
     >
-      <div className="absolute bottom-0 left-1/2 h-3 w-2.5 -translate-x-1/2 rounded-b-sm bg-violet-400 [clip-path:polygon(0_0,100%_0,100%_60%,50%_100%,0_60%)]" />
+      <div className="absolute bottom-0 left-1/2 h-3 w-2.5 -translate-x-1/2 rounded-b-sm bg-sky-400 [clip-path:polygon(0_0,100%_0,100%_60%,50%_100%,0_60%)]" />
     </div>
   );
 }
@@ -1317,8 +1417,8 @@ function PlayheadKnob({ x }: { x: (t: number) => number }) {
 function Timecode() {
   const time = usePlayback((s) => s.time);
   return (
-    <span className="font-mono text-[11px] font-semibold text-violet-300 tabular-nums">
-      {formatTime(time, true)}
+    <span className="font-mono text-[13px] font-semibold text-sky-400 tabular-nums">
+      {timecode(time)}
     </span>
   );
 }

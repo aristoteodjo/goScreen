@@ -137,6 +137,13 @@ function follow(
 }
 
 /** Puts the recording, its companions and every imported media at timeline time T. */
+// Off while a voice-over records: the speakers would bleed into the mic.
+let monitorOff = false;
+export function setMonitorMuted(muted: boolean) {
+  monitorOff = muted;
+  syncMedia(usePlayback.getState().time, usePlayback.getState().playing);
+}
+
 function syncMedia(t: number, playing: boolean) {
   const { video, camera, mic, mediaOffset } = useSession.getState();
   const { edit } = useEdit.getState();
@@ -154,7 +161,7 @@ function syncMedia(t: number, playing: boolean) {
       rate,
     );
   if (mic) {
-    mic.muted = (rec?.muted ?? true) || edit.tracks.micMuted;
+    mic.muted = monitorOff || (rec?.muted ?? true) || edit.tracks.micMuted;
     follow(mic, source === null ? null : source - mediaOffset, playing, rate);
   }
   for (const [id, { el }] of pooledEntries()) {
@@ -173,7 +180,7 @@ function syncMedia(t: number, playing: boolean) {
         : null;
     el.volume = Math.min(1, item.volume);
     // A muted music lane is silent (video overlays are muted by the painter).
-    if (a) el.muted = edit.tracks.muted.includes(a.lane);
+    if (a) el.muted = monitorOff || edit.tracks.muted.includes(a.lane);
     follow(el, local, playing);
   }
 }

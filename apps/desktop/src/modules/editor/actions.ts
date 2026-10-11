@@ -525,8 +525,21 @@ export const editActions = {
     change((ed) => ({ ...ed, clips: moveClip(ed.clips, id, toIndex) }));
   },
 
-  /** Picks image, video or audio files and adds each at the playhead. */
-  async importMedia(kinds: ("image" | "video" | "audio")[]) {
+  /** Adds a project asset at `at` (the playhead by default). */
+  async placeAsset(id: string, at?: number) {
+    const edit = useEdit.getState().edit;
+    const asset = edit.assets.find((a) => a.id === id);
+    const url = asset ? useSession.getState().assetUrls[asset.file] : undefined;
+    if (!asset || !url) return;
+    if (at !== undefined) player.seek(at);
+    await placeAsset(asset, url);
+  },
+
+  /** Picks image, video or audio files; adds each at the playhead, or only to the project. */
+  async importMedia(
+    kinds: ("image" | "video" | "audio")[],
+    { place = true }: { place?: boolean } = {},
+  ) {
     const extensions = {
       image: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
       video: ["mp4", "mov", "m4v", "webm"],
@@ -544,7 +557,7 @@ export const editActions = {
       try {
         const asset = await ipc.assetImport(videoPath, path);
         useSession.getState().addAssetUrl(asset.file, asset.url);
-        await addAsset(asset);
+        await addAsset(asset, place);
       } catch (e) {
         toast.error("Could not add this file", {
           description: e instanceof Error ? e.message : String(e),
@@ -554,13 +567,59 @@ export const editActions = {
   },
 };
 
-async function addAsset(asset: {
-  id: string;
-  name: string;
-  kind: "image" | "video" | "audio";
-  file: string;
-  url: string;
-}) {
+/** A recorded voice-over: its file joins the assets, its clip the audio lanes. */
+export function addVoiceOver(
+  asset: { id: string; name: string; file: string; url: string },
+  place: { start: number; in: number; duration: number },
+) {
+  useSession.getState().addAssetUrl(asset.file, asset.url);
+  const edit = useEdit.getState().edit;
+  const takes = edit.assets.filter((a) =>
+    a.name.startsWith("Voice-over"),
+  ).length;
+  const name = takes ? `Voice-over ${takes + 1}` : "Voice-over";
+  const duration = Math.max(0.2, place.duration);
+  const clip: AudioClip = {
+    id: newId("aud"),
+    lane: freeLane(edit.audio, place.start, duration),
+    start: place.start,
+    duration,
+    asset: asset.id,
+    in: place.in,
+    volume: 1,
+    fadeIn: 0.05,
+    fadeOut: 0.15,
+  };
+  change(
+    (ed) => ({
+      ...ed,
+      assets: [
+        ...ed.assets,
+        {
+          id: asset.id,
+          name,
+          kind: "audio",
+          file: asset.file,
+          duration: place.in + duration,
+        },
+      ],
+      audio: [...ed.audio, clip],
+    }),
+    "voice-over",
+  );
+  usePlayback.getState().select({ kind: "audio", id: clip.id });
+}
+
+async function addAsset(
+  asset: {
+    id: string;
+    name: string;
+    kind: "image" | "video" | "audio";
+    file: string;
+    url: string;
+  },
+  place = true,
+) {
   const duration =
     asset.kind === "image"
       ? null
@@ -573,7 +632,19 @@ async function addAsset(asset: {
     duration,
   };
   change((ed) => ({ ...ed, assets: [...ed.assets, record] }));
+  if (place) await placeAsset(record, asset.url);
+}
 
+/** Puts a project asset on the timeline at the playhead (a new use of it). */
+async function placeAsset(
+  asset: {
+    id: string;
+    kind: "image" | "video" | "audio";
+    duration: number | null;
+  },
+  url: string,
+) {
+  const duration = asset.duration;
   if (asset.kind === "audio") {
     const edit = useEdit.getState().edit;
     const start = now();
@@ -600,7 +671,7 @@ async function addAsset(asset: {
   // Media keep their own aspect; the box is sized against the output.
   const { source } = useSession.getState();
   const out = source ?? { width: 16, height: 9 };
-  const natural = await naturalSize(asset.kind, asset.url).catch(() => ({
+  const natural = await naturalSize(asset.kind, url).catch(() => ({
     width: 16,
     height: 9,
   }));
@@ -628,7 +699,7 @@ async function addAsset(asset: {
     });
 }
 
-function naturalSize(
+export function naturalSize(
   kind: "image" | "video",
   url: string,
 ): Promise<{ width: number; height: number }> {

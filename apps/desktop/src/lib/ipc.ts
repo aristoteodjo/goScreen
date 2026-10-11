@@ -275,6 +275,19 @@ export const ipc = {
       .parse(
         await invoke("export_finish", { videoPath, clicks, volume, pieces }),
       ),
+  /** Starts the mic for a voice-over; resolves once sound is recording. */
+  voiceOverStart: async (videoPath: string, microphone: number) =>
+    z
+      .object({ lead: z.number().nonnegative() })
+      .parse(await invoke("voiceover_start", { videoPath, microphone })),
+  /** Stops the voice-over; returns the cleaned take, added to the assets. */
+  voiceOverStop: async () =>
+    z
+      .object({ asset: importedAssetSchema, silent: z.boolean() })
+      .parse(await invoke("voiceover_stop")),
+  voiceOverCancel: async () => {
+    await invoke("voiceover_cancel");
+  },
   assetImport: async (videoPath: string, source: string) =>
     importedAssetSchema.parse(
       await invoke("asset_import", { videoPath, source }),

@@ -34,7 +34,13 @@ type DialogState = {
   at: { x: number; y: number } | null;
   // Editing an existing block layer instead of adding one.
   editing: string | null;
-  show: (o?: { at?: { x: number; y: number }; editing?: string }) => void;
+  // A block chosen from the Project panel: opens on its settings.
+  block: string | null;
+  show: (o?: {
+    at?: { x: number; y: number };
+    editing?: string;
+    block?: string;
+  }) => void;
   close: () => void;
 };
 
@@ -42,9 +48,15 @@ export const useBlocksDialog = create<DialogState>((set) => ({
   open: false,
   at: null,
   editing: null,
+  block: null,
   show: (o) =>
-    set({ open: true, at: o?.at ?? null, editing: o?.editing ?? null }),
-  close: () => set({ open: false, editing: null }),
+    set({
+      open: true,
+      at: o?.at ?? null,
+      editing: o?.editing ?? null,
+      block: o?.block ?? null,
+    }),
+  close: () => set({ open: false, editing: null, block: null }),
 }));
 
 /** A block playing in a sandboxed frame, scaled into its card; it loops. */
@@ -98,9 +110,16 @@ function Live({
   );
 }
 
+/** A block playing live in a card (Project panel, gallery). */
+export function BlockThumb({ block, width }: { block: Block; width: number }) {
+  const edit = useEdit((s) => s.edit);
+  return <Live block={block} props={brandProps(edit, block)} width={width} />;
+}
+
 export function BlocksDialog() {
   const open = useBlocksDialog((s) => s.open);
   const editing = useBlocksDialog((s) => s.editing);
+  const preset = useBlocksDialog((s) => s.block);
   const at = useBlocksDialog((s) => s.at);
   const { close } = useBlocksDialog.getState();
   const edit = useEdit((s) => s.edit);
@@ -117,10 +136,18 @@ export function BlocksDialog() {
       setPicked(editingLayer.source.block);
       setProps(editingLayer.source.props);
     } else {
-      setPicked(null);
-      setProps({});
+      const chosen = preset ? blockById(preset) : undefined;
+      setPicked(chosen?.id ?? null);
+      setProps(
+        chosen
+          ? {
+              ...resolveProps(chosen, {}),
+              ...brandProps(useEdit.getState().edit, chosen),
+            }
+          : {},
+      );
     }
-  }, [open, editingLayer]);
+  }, [open, editingLayer, preset]);
 
   const block = picked ? blockById(picked) : undefined;
 

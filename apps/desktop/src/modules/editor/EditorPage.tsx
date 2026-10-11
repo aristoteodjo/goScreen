@@ -1,3 +1,4 @@
+import { useTabTitle } from "@/modules/tabs/tabs";
 import {
   ASPECT_OPTIONS,
   type AspectId,
@@ -7,7 +8,6 @@ import {
   DEFAULT_EDIT,
   type EditState,
   EMPTY_RECORDING,
-  formatTime,
   outputSize,
   parseEditState,
   parseRecordingFile,
@@ -17,12 +17,15 @@ import {
 import {
   ArrowDown01Icon,
   ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Home01Icon,
+  Mic01Icon,
+  Scissor01Icon,
   NextIcon,
   PauseIcon,
   PlayIcon,
   PreviousIcon,
   RedoIcon,
-  SquareArrowExpand01Icon,
   UndoIcon,
   Upload04Icon,
 } from "@hugeicons/core-free-icons";
@@ -57,11 +60,18 @@ import { initialLayers } from "./devices";
 import { EditorPalette } from "./EditorPalette";
 import { BlocksDialog } from "./BlocksDialog";
 import { ExportDialog } from "./ExportDialog";
-import { PanelContent, PanelRail } from "./Panels";
+import { cn } from "@/lib/utils";
+import { editActions } from "./actions";
+import { PanelFrame } from "./PanelFrame";
+import { Inspector } from "./Panels";
+import { ProjectPanel } from "./ProjectPanel";
+import { startVoiceOver, VoiceOverOverlay } from "./voiceover";
+import { WORKSPACES, type WorkspaceId, useWorkspace } from "./workspace";
 import { Preview } from "./Preview";
 import { player, requestPaint, useSession } from "./session";
 import { type Quality, timelineEnd, useEdit, usePlayback } from "./store";
 import { Timeline } from "./Timeline";
+import { timecode } from "./timecode";
 import { useEditorShortcuts } from "./useEditorShortcuts";
 
 const SAVE_DELAY = 800;
@@ -129,6 +139,8 @@ export function EditorPage({ video }: { video: string }) {
   );
 
   useAutosave(recording.data?.videoPath ?? null);
+  useTabTitle(recording.data?.name);
+  useCanvasFonts();
   useEditorShortcuts(openExport);
 
   useEffect(
@@ -234,45 +246,129 @@ export function EditorPage({ video }: { video: string }) {
   );
 }
 
-// Panel sizes survive reloads; numbers are px, strings are %.
+// Premiere's layout: Project | Program | Effect Controls over the timeline.
+// Panel sizes survive reloads, per workspace; numbers are px, strings are %.
+const SIZES: Record<
+  WorkspaceId,
+  { top: string; project: string; program: string; inspector: string }
+> = {
+  edit: { top: "58", project: "24", program: "48", inspector: "28" },
+  animation: { top: "56", project: "20", program: "44", inspector: "36" },
+  film: { top: "62", project: "22", program: "50", inspector: "28" },
+  audio: { top: "46", project: "26", program: "44", inspector: "30" },
+};
+
 function EditorLayout() {
-  const rows = useDefaultLayout({ id: "editor-rows", storage: safeStorage });
-  const cols = useDefaultLayout({ id: "editor-cols", storage: safeStorage });
+  const workspace = useWorkspace((s) => s.workspace);
+  return <WorkspaceLayout key={workspace} workspace={workspace} />;
+}
+
+function WorkspaceLayout({ workspace }: { workspace: WorkspaceId }) {
+  const rows = useDefaultLayout({
+    id: `editor-rows-${workspace}`,
+    storage: safeStorage,
+  });
+  const cols = useDefaultLayout({
+    id: `editor-cols-${workspace}`,
+    storage: safeStorage,
+  });
+  const size = SIZES[workspace];
   return (
     <ResizablePanelGroup
       orientation="vertical"
-      className="min-h-0 flex-1"
+      className="min-h-0 flex-1 gap-[3px] p-[3px] pt-0"
       {...rows}
     >
-      <ResizablePanel id="top" minSize={220}>
-        <ResizablePanelGroup orientation="horizontal" {...cols}>
-          <ResizablePanel id="preview" minSize="35">
-            <div className="flex h-full min-w-0 flex-col px-4 pt-2">
-              <PreviewHeader />
-              <Preview />
-              <Transport />
-            </div>
+      <ResizablePanel id="top" defaultSize={size.top} minSize={200}>
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="gap-[3px]"
+          {...cols}
+        >
+          <ResizablePanel
+            id="project"
+            defaultSize={size.project}
+            minSize={180}
+            className="overflow-hidden rounded-md"
+          >
+            <ProjectPanel />
           </ResizablePanel>
-          <ResizableHandle withHandle />
+          <ResizableHandle className="bg-transparent" />
+          <ResizablePanel
+            id="program"
+            defaultSize={size.program}
+            minSize="25"
+            className="overflow-hidden rounded-md"
+          >
+            <ProgramMonitor />
+          </ResizablePanel>
+          <ResizableHandle className="bg-transparent" />
           <ResizablePanel
             id="inspector"
-            defaultSize={380}
-            minSize={300}
-            maxSize={640}
+            defaultSize={size.inspector}
+            minSize={260}
+            className="overflow-hidden rounded-md"
           >
-            <div className="flex h-full gap-1 py-2 pr-3">
-              <PanelRail />
-              <PanelContent />
-            </div>
+            <Inspector />
           </ResizablePanel>
         </ResizablePanelGroup>
       </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel id="timeline" defaultSize={300} minSize={150}>
+      <ResizableHandle className="bg-transparent" />
+      <ResizablePanel
+        id="timeline"
+        defaultSize={`${100 - Number(size.top)}`}
+        minSize={150}
+        className="overflow-hidden rounded-md bg-[var(--panel)]"
+      >
         <Timeline />
       </ResizablePanel>
     </ResizablePanelGroup>
   );
+}
+
+function ProgramMonitor() {
+  return (
+    <PanelFrame
+      ai="program"
+      tabs={[{ id: "program", label: "Program" }]}
+      active="program"
+      actions={<ViewZoomMenu />}
+      bodyClassName="flex flex-col"
+    >
+      <div className="relative flex min-h-0 flex-1 flex-col px-2">
+        <Preview />
+        <VoiceOverOverlay />
+      </div>
+      <MonitorBar />
+      <Transport />
+    </PanelFrame>
+  );
+}
+
+/**
+ * The canvas draws with whatever fonts are loaded: a web font used only by
+ * the montage would show as a fallback until something loads it. Every
+ * family the edit names is loaded, then the frame is drawn again.
+ */
+function useCanvasFonts() {
+  const families = useEdit((s) => {
+    const set = new Set<string>(['"JetBrains Mono"']);
+    for (const o of s.edit.overlays)
+      if (o.kind === "text") set.add(o.style.font);
+    for (const c of s.edit.clips) if (c.kind === "slide") set.add(c.font);
+    return [...set].sort().join("|");
+  });
+  useEffect(() => {
+    if (!document.fonts) return;
+    const loads = families
+      .split("|")
+      .flatMap((f) =>
+        [400, 500, 800].map((w) =>
+          document.fonts.load(`${w} 32px ${f}`).catch(() => []),
+        ),
+      );
+    void Promise.all(loads).then(requestPaint);
+  }, [families]);
 }
 
 // localStorage can throw (private mode); layouts are a convenience.
@@ -299,6 +395,7 @@ function useAutosave(videoPath: string | null) {
     const save = (edit: EditState) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
+        pending = null;
         ipc.editSave(videoPath, edit).catch((e) => {
           if (warned) return;
           warned = true;
@@ -306,12 +403,17 @@ function useAutosave(videoPath: string | null) {
         });
       }, SAVE_DELAY);
     };
+    let pending: EditState | null = null;
     const off = useEdit.subscribe((s, prev) => {
-      if (s.edit !== prev.edit) save(s.edit);
+      if (s.edit === prev.edit) return;
+      pending = s.edit;
+      save(s.edit);
     });
     return () => {
       off();
       clearTimeout(timer);
+      // Leaving (another tab, another page) saves what is still waiting.
+      if (pending) void ipc.editSave(videoPath, pending).catch(() => {});
     };
   }, [videoPath]);
 }
@@ -349,14 +451,15 @@ function TopBar({ name, onExport }: { name: string; onExport: () => void }) {
   const navigate = useNavigate();
   const canUndo = useEdit((s) => s.past.length > 0);
   const canRedo = useEdit((s) => s.future.length > 0);
+  const workspace = useWorkspace((s) => s.workspace);
   return (
     <header
       data-tauri-drag-region
-      className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20"
+      className="flex h-11 shrink-0 items-center gap-1 pr-3 pl-3"
     >
       <IconButton
-        label="Back"
-        icon={ArrowLeft01Icon}
+        label="Home"
+        icon={Home01Icon}
         onClick={() =>
           // Back where the video was opened from: a project, the studio...
           window.history.length > 1
@@ -364,13 +467,56 @@ function TopBar({ name, onExport }: { name: string; onExport: () => void }) {
             : navigate({ to: "/" })
         }
       />
+      <nav className="ml-2 flex items-center gap-1 text-[13px]">
+        <button
+          type="button"
+          onClick={() =>
+            void editActions.importMedia(["image", "video", "audio"], {
+              place: false,
+            })
+          }
+          className="rounded px-2 py-1 text-muted-foreground hover:text-foreground"
+        >
+          Import
+        </button>
+        <span className="rounded px-2 py-1 text-foreground underline decoration-1 underline-offset-[6px]">
+          Edit
+        </span>
+        <button
+          type="button"
+          onClick={onExport}
+          className="rounded px-2 py-1 text-muted-foreground hover:text-foreground"
+        >
+          Export
+        </button>
+      </nav>
       <h1
         data-tauri-drag-region
-        className="flex-1 truncate text-center text-[13px] font-medium"
+        className="flex-1 truncate px-4 text-center text-[13px] font-medium"
       >
         {name}
-        <span className="text-muted-foreground">.mp4</span>
+        <span className="text-muted-foreground"> · Edited</span>
       </h1>
+      <nav
+        aria-label="Workspaces"
+        className="mr-2 flex items-center gap-0.5 text-[12px]"
+      >
+        {WORKSPACES.map((w) => (
+          <button
+            key={w.id}
+            type="button"
+            onClick={() => useWorkspace.getState().setWorkspace(w.id)}
+            className={cn(
+              "rounded px-2 py-1 tracking-wide uppercase",
+              workspace === w.id
+                ? "text-sky-300"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {w.label}
+          </button>
+        ))}
+      </nav>
       <IconButton
         label="Undo"
         icon={UndoIcon}
@@ -385,8 +531,9 @@ function TopBar({ name, onExport }: { name: string; onExport: () => void }) {
       />
       <Button
         size="sm"
+        data-ai="export"
         onClick={onExport}
-        className="ml-2 gap-1.5 bg-violet-600 text-white hover:bg-violet-500"
+        className="ml-2 gap-1.5 bg-sky-600 text-white hover:bg-sky-500"
       >
         <HugeiconsIcon icon={Upload04Icon} strokeWidth={2} />
         Export
@@ -397,23 +544,32 @@ function TopBar({ name, onExport }: { name: string; onExport: () => void }) {
 
 const QUALITIES: { value: Quality; label: string; hint: string }[] = [
   { value: 1, label: "Full", hint: "Sharpest" },
-  { value: 0.5, label: "Half", hint: "Faster" },
-  { value: 0.25, label: "Quarter", hint: "Fastest" },
+  { value: 0.5, label: "1/2", hint: "Faster" },
+  { value: 0.25, label: "1/4", hint: "Fastest" },
 ];
 
-function PreviewHeader() {
+/** Under the monitor, Premiere style: playhead timecode, format, quality, length. */
+function MonitorBar() {
   const aspect = useEdit((s) => s.edit.aspect);
   const change = useEdit((s) => s.change);
   const quality = usePlayback((s) => s.quality);
   const setQuality = usePlayback((s) => s.setQuality);
+  const time = usePlayback((s) => s.time);
+  const end = useEdit((s) => timelineEnd(s.edit));
   const current = ASPECT_OPTIONS.find((a) => a.id === aspect);
 
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between">
+    <div className="flex h-9 shrink-0 items-center gap-2 px-3">
+      <span className="w-24 font-mono text-[14px] text-sky-400 tabular-nums">
+        {timecode(time)}
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-[13px]">
-            <HugeiconsIcon icon={SquareArrowExpand01Icon} strokeWidth={1.75} />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-[12px]"
+          >
             {current?.label}
             {current?.ratio ? (
               <span className="text-muted-foreground">{current.ratio}</span>
@@ -445,39 +601,39 @@ function PreviewHeader() {
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="flex items-center gap-1">
-        <ViewZoomMenu />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-1.5 text-[13px]">
-              Preview quality
-              <span className="text-muted-foreground">
-                {QUALITIES.find((q) => q.value === quality)?.label}
-              </span>
-              <HugeiconsIcon
-                icon={ArrowDown01Icon}
-                strokeWidth={1.75}
-                className="opacity-60"
-              />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuRadioGroup
-              value={String(quality)}
-              onValueChange={(v) => setQuality(Number(v) as Quality)}
-            >
-              {QUALITIES.map((q) => (
-                <DropdownMenuRadioItem key={q.value} value={String(q.value)}>
-                  {q.label}
-                  <span className="ml-auto text-muted-foreground">
-                    {q.hint}
-                  </span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-[12px]"
+            title="Playback resolution"
+          >
+            {QUALITIES.find((q) => q.value === quality)?.label}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              strokeWidth={1.75}
+              className="opacity-60"
+            />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-44">
+          <DropdownMenuRadioGroup
+            value={String(quality)}
+            onValueChange={(v) => setQuality(Number(v) as Quality)}
+          >
+            {QUALITIES.map((q) => (
+              <DropdownMenuRadioItem key={q.value} value={String(q.value)}>
+                {q.label}
+                <span className="ml-auto text-muted-foreground">{q.hint}</span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <span className="ml-auto font-mono text-[14px] text-foreground/90 tabular-nums">
+        {timecode(end)}
+      </span>
     </div>
   );
 }
@@ -525,26 +681,26 @@ function ViewZoomMenu() {
 }
 
 function Transport() {
-  const time = usePlayback((s) => s.time);
   const playing = usePlayback((s) => s.playing);
-  const end = useEdit((s) => timelineEnd(s.edit));
-
+  const frame = 1 / 30;
   return (
-    <div className="flex h-14 shrink-0 items-center justify-center gap-3">
-      <span className="w-20 text-right font-mono text-[12px] text-muted-foreground tabular-nums">
-        {formatTime(time, true)}
-      </span>
+    <div className="flex h-11 shrink-0 items-center justify-center gap-1 border-t border-white/5">
       <IconButton
-        label="Go to start (Cmd ←)"
+        label="Go to start (⌘ ←)"
         icon={PreviousIcon}
         onClick={player.first}
+      />
+      <IconButton
+        label="Step back one frame (←)"
+        icon={ArrowLeft01Icon}
+        onClick={() => player.step(-frame)}
       />
       <Button
         variant="ghost"
         size="icon"
-        aria-label={playing ? "Pause" : "Play"}
+        aria-label={playing ? "Pause (Space)" : "Play (Space)"}
         onClick={player.toggle}
-        className="rounded-full border border-white/15"
+        className="mx-1"
       >
         <HugeiconsIcon
           icon={playing ? PauseIcon : PlayIcon}
@@ -552,13 +708,26 @@ function Transport() {
         />
       </Button>
       <IconButton
-        label="Go to end (Cmd →)"
+        label="Step forward one frame (→)"
+        icon={ArrowRight01Icon}
+        onClick={() => player.step(frame)}
+      />
+      <IconButton
+        label="Go to end (⌘ →)"
         icon={NextIcon}
         onClick={player.last}
       />
-      <span className="w-20 font-mono text-[12px] text-muted-foreground tabular-nums">
-        {formatTime(end, true)}
-      </span>
+      <span className="mx-2 h-4 w-px bg-white/10" />
+      <IconButton
+        label="Split at the playhead (S)"
+        icon={Scissor01Icon}
+        onClick={editActions.splitAtPlayhead}
+      />
+      <IconButton
+        label="Record a voice-over from the playhead"
+        icon={Mic01Icon}
+        onClick={() => void startVoiceOver()}
+      />
     </div>
   );
 }

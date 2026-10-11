@@ -12,6 +12,7 @@ pub fn run() {
         .manage(recording::RecordingState::default())
         .manage(android::AndroidState::default())
         .manage(media::MediaState::default())
+        .manage(media::voiceover::VoiceOverState::default())
         .manage(export::ExportState::default())
         .manage(scenario::ScenarioState::default())
         .manage(control::ControlState::default())
@@ -32,6 +33,9 @@ pub fn run() {
             android::commands::android_input,
             media::recording_open,
             media::asset_import,
+            media::voiceover::voiceover_start,
+            media::voiceover::voiceover_stop,
+            media::voiceover::voiceover_cancel,
             media::edit_save,
             media::recordings_list,
             modules::site::site_pages,
@@ -75,6 +79,7 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 recording::shutdown(&app.state::<recording::RecordingState>());
+                media::voiceover::shutdown(&app.state::<media::voiceover::VoiceOverState>());
             }
         });
 }

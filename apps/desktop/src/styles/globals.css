@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource-variable/bricolage-grotesque";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -55,6 +57,9 @@
   --foreground: oklch(0.95 0.003 260);
   --stage: oklch(0.12 0.003 260);
   --card: oklch(0.195 0.005 260);
+  --panel: oklch(0.2 0.003 260);
+  /* Height of the tab strip above every page. */
+  --app-top: 2.25rem;
   --card-foreground: oklch(0.95 0.003 260);
   --popover: oklch(0.2 0.005 260);
   --popover-foreground: oklch(0.95 0.003 260);
@@ -103,5 +108,17 @@
   textarea {
     user-select: text;
     -webkit-user-select: text;
+  }
+}
+
+/* The AI cursor's click. */
+@keyframes ai-ripple {
+  from {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
   }
 }

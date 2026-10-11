@@ -21,14 +21,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
 import { FilmPanel } from "./FilmPanel";
+import { PanelFrame } from "./PanelFrame";
 import { CameraPanel, DevicesPanel } from "./LayerPanels";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { ProposalsPanel } from "./ProposalsPanel";
@@ -47,66 +43,108 @@ const PANELS: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] = [
   { id: "audio", label: "Audio", icon: VolumeHighIcon },
 ];
 
-/** Panels this recording has something for. */
-function usePanels() {
+type Tab = "controls" | "film" | "look" | "audio" | "proposals";
+
+const LOOK: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] =
+  PANELS.filter((p) =>
+    ["background", "touch", "zoom", "camera", "devices"].includes(p.id),
+  );
+
+const tabOf = (panel: Panel): Tab =>
+  panel === "clip" || panel === "overlay" || panel === "music"
+    ? "controls"
+    : panel === "film" || panel === "audio" || panel === "proposals"
+      ? panel
+      : "look";
+
+/** Look panels this recording has something for. */
+function useLook() {
   const layered = useSession((s) => s.layers.length > 0);
   const hasCamera = useSession((s) => s.cameraUrl !== null);
-  const hasFilm = useEdit((s) => s.edit.film !== undefined);
-  return PANELS.filter(
-    (p) =>
-      (p.id !== "devices" || layered) &&
-      (p.id !== "camera" || hasCamera) &&
-      (p.id !== "film" || hasFilm),
+  return LOOK.filter(
+    (p) => (p.id !== "devices" || layered) && (p.id !== "camera" || hasCamera),
   );
 }
 
-export function PanelRail() {
+/**
+ * The right-hand panel, After Effects / Premiere style: Effect Controls of
+ * the selection, the film's settings, its look, its sound, the assistant.
+ */
+export function Inspector() {
   const panel = usePlayback((s) => s.panel);
+  const selection = usePlayback((s) => s.selection);
   const setPanel = usePlayback((s) => s.setPanel);
-  const panels = usePanels();
-  return (
-    <nav className="flex w-12 shrink-0 flex-col items-center gap-1 pt-2">
-      {panels.map((p) => (
-        <Tooltip key={p.id}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={p.label}
-              onClick={() => setPanel(p.id)}
-              className={cn(
-                "relative flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground",
-                panel === p.id && "text-violet-300",
-              )}
-            >
-              <HugeiconsIcon icon={p.icon} size={18} strokeWidth={1.75} />
-              {panel === p.id ? (
-                <span className="absolute right-0.5 size-1 rounded-full bg-violet-400" />
-              ) : null}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">{p.label}</TooltipContent>
-        </Tooltip>
-      ))}
-    </nav>
-  );
-}
+  const look = useLook();
+  const tab = tabOf(panel);
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "controls", label: "Effect Controls" },
+    { id: "film", label: "Film" },
+    { id: "look", label: "Look" },
+    { id: "audio", label: "Audio" },
+    { id: "proposals", label: "Assistant" },
+  ];
+  const open = (t: Tab) => {
+    if (t === "controls")
+      setPanel(
+        selection?.kind === "overlay"
+          ? "overlay"
+          : selection?.kind === "audio"
+            ? "music"
+            : "clip",
+      );
+    else if (t === "look")
+      setPanel(look.some((l) => l.id === panel) ? panel : "background");
+    else setPanel(t);
+  };
 
-export function PanelContent() {
-  const panel = usePlayback((s) => s.panel);
   return (
-    <aside className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border bg-card/60 p-5">
-      {panel === "film" ? <FilmPanel /> : null}
-      {panel === "proposals" ? <ProposalsPanel /> : null}
-      {panel === "devices" ? <DevicesPanel /> : null}
-      {panel === "camera" ? <CameraPanel /> : null}
-      {panel === "background" ? <BackgroundPanel /> : null}
-      {panel === "touch" ? <TouchPanel /> : null}
-      {panel === "zoom" ? <ZoomPanel /> : null}
-      {panel === "audio" ? <AudioPanel /> : null}
-      {panel === "clip" ? <ClipPanel /> : null}
-      {panel === "overlay" ? <OverlayPanel /> : null}
-      {panel === "music" ? <MusicPanel /> : null}
-    </aside>
+    <PanelFrame ai="inspector" tabs={tabs} active={tab} onTab={open}>
+      <div className="absolute inset-0 flex flex-col">
+        {tab === "look" ? (
+          <nav className="flex shrink-0 flex-wrap gap-1 px-3 pb-2">
+            {look.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => setPanel(l.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                  panel === l.id && "bg-white/10 text-foreground",
+                )}
+              >
+                <HugeiconsIcon icon={l.icon} size={13} strokeWidth={1.75} />
+                {l.label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-6">
+          {tab === "controls" && !selection ? (
+            <p className="pt-6 text-center text-[12px] text-muted-foreground">
+              Select a clip, a layer or a sound on the timeline to see its
+              controls.
+            </p>
+          ) : null}
+          {tab === "controls" && selection?.kind === "clip" ? (
+            <ClipPanel />
+          ) : null}
+          {tab === "controls" && selection?.kind === "overlay" ? (
+            <OverlayPanel />
+          ) : null}
+          {tab === "controls" && selection?.kind === "audio" ? (
+            <MusicPanel />
+          ) : null}
+          {panel === "film" ? <FilmPanel /> : null}
+          {panel === "proposals" ? <ProposalsPanel /> : null}
+          {panel === "devices" ? <DevicesPanel /> : null}
+          {panel === "camera" ? <CameraPanel /> : null}
+          {panel === "background" ? <BackgroundPanel /> : null}
+          {panel === "touch" ? <TouchPanel /> : null}
+          {panel === "zoom" ? <ZoomPanel /> : null}
+          {panel === "audio" ? <AudioPanel /> : null}
+        </div>
+      </div>
+    </PanelFrame>
   );
 }
 

@@ -62,10 +62,34 @@ export const SHAPES: { id: ShapeKind; label: string }[] = [
 ];
 
 /** Add content on the left, cut tools in the middle, timeline zoom on the right. */
+/** Premiere's tools column, left of the timeline. */
+export function TimelineTools() {
+  const tool = usePlayback((s) => s.tool);
+  return (
+    <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-white/5 pt-2">
+      {TOOLS.map((t) => (
+        <IconTool
+          key={t.id}
+          icon={t.icon}
+          label={t.label}
+          shortcut={t.key}
+          active={tool === t.id}
+          onClick={() => usePlayback.getState().setTool(t.id)}
+        />
+      ))}
+      <IconTool
+        icon={TextIcon}
+        label="Type: add a title"
+        shortcut="T"
+        onClick={() => editActions.addText(TEXT_PRESETS[0])}
+      />
+    </div>
+  );
+}
+
 export function TimelineToolbar() {
   const selection = usePlayback((s) => s.selection);
   const scale = usePlayback((s) => s.scale);
-  const tool = usePlayback((s) => s.tool);
   const snapping = usePlayback((s) => s.snapping);
 
   const zoomBy = (factor: number) => {
@@ -76,26 +100,17 @@ export function TimelineToolbar() {
   };
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-white/5 px-3">
-      <div className="mr-1 flex items-center rounded-lg bg-white/[0.04] p-0.5">
-        {TOOLS.map((t) => (
-          <IconTool
-            key={t.id}
-            icon={t.icon}
-            label={t.label}
-            shortcut={t.key}
-            active={tool === t.id}
-            onClick={() => usePlayback.getState().setTool(t.id)}
-          />
-        ))}
-        <IconTool
-          icon={MagnetIcon}
-          label={snapping ? "Snapping on" : "Snapping off"}
-          shortcut="N"
-          active={snapping}
-          onClick={() => usePlayback.getState().setSnapping(!snapping)}
-        />
-      </div>
+    <div className="flex h-10 shrink-0 items-center gap-1 border-b border-white/5 px-2">
+      <span className="mr-2 px-1 text-[12.5px] underline decoration-1 underline-offset-[5px]">
+        Timeline
+      </span>
+      <IconTool
+        icon={MagnetIcon}
+        label={snapping ? "Snapping on" : "Snapping off"}
+        shortcut="N"
+        active={snapping}
+        onClick={() => usePlayback.getState().setSnapping(!snapping)}
+      />
       <div className="mx-1 h-5 w-px bg-white/10" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -252,7 +267,7 @@ function IconTool({
           size="icon"
           className={cn(
             "size-8 text-muted-foreground",
-            active && "bg-violet-500/20 text-violet-200 hover:bg-violet-500/25",
+            active && "bg-sky-500/20 text-sky-200 hover:bg-sky-500/25",
           )}
           aria-label={label}
           aria-pressed={active}

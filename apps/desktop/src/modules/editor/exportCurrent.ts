@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
 import { ipc } from "@/lib/ipc";
 import { router } from "@/lib/router";
+import { openPlace } from "@/modules/tabs/tabs";
 import { exportVideo } from "./exportVideo";
 import { assetUrl, currentTimeline, player, useSession } from "./session";
 import { useEdit } from "./store";
@@ -35,7 +36,8 @@ export async function openForExport(video: string) {
   await win.unminimize().catch(() => {});
   await win.show().catch(() => {});
   await win.setFocus().catch(() => {});
-  await router.navigate({ to: "/editor", search: { video } });
+  openPlace({ to: "/editor", search: { video } });
+  await router.load();
   const until = Date.now() + 30_000;
   while (!(useSession.getState().videoPath === video && currentTimeline())) {
     if (Date.now() > until) throw new Error("The video did not load.");
