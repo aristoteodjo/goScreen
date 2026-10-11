@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   candidatesOrder,
+  composeArgs,
+  composeExt,
   extract,
   fillCode,
   fillRemembered,
   framesDue,
+  framesFor,
   fromGlass,
   glassPoint,
   journal,
@@ -122,4 +125,18 @@ test("targets prefer what a person reads over the page structure", () => {
   assert.deepEqual(candidatesOrder({ testId: "x", css: "a" })[0], {
     testId: "x",
   });
+});
+
+test("compositions keep their transparency per platform", () => {
+  const job = { fps: 30, out: "/o", transparent: true };
+  assert.ok(composeArgs(job, "darwin").includes("hevc_videotoolbox"));
+  assert.ok(composeArgs(job, "linux").includes("yuva420p"));
+  assert.ok(
+    composeArgs({ ...job, transparent: false }, "darwin").includes("libx264"),
+  );
+  assert.equal(composeExt(true, "darwin"), "mov");
+  assert.equal(composeExt(true, "win32"), "webm");
+  assert.equal(composeExt(false, "darwin"), "mp4");
+  assert.equal(framesFor(2, 30), 60);
+  assert.equal(framesFor(0, 30), 1);
 });

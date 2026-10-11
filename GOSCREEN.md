@@ -23,6 +23,7 @@ packages/
   device-engine/      Fonctions pures : géométrie, orientation, safe area, layout, styles
   content-source/     Contrat DeviceContentSource : d'où viennent les pixels d'un frame (web, android…)
   android-source/     Modèle AndroidDevice, provider ADB (via transport injecté), gestes, choix de profil
+  blocks/             Blocs de motion design (HTML/CSS animé, sans script), réglages décrits pour l'UI et l'IA
   render-engine/      Éditeur, cœur pur : EditState, caméra/zoom, touch rings, timeline, composeFrame,
                       animation par le temps (interpolate, spring)
   scenario/           Scénarios (zod, pur) : format, valeurs {{…}}, montage tiré d'une prise
@@ -245,6 +246,25 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   apparaissent en losanges sur les blocs de la timeline. Lecture tolérante (`schema.ts`) : une clé invalide est
   ignorée seule.
 - IA : `animation.presets`, `edit.animate` (préréglage, clés, animateur ou effacement, validés), `edit.addText`.
+
+### Blocs : compositions HTML (méthode HyperFrames)
+
+- Un **bloc** (`@goscreen/blocks`, pur et testé) est une petite page HTML animée **en CSS seulement** : titre
+  cinétique, bandeau nom/rôle, compteur, graphique en barres, liste cochée, appel à l'action, étapes, citation,
+  phrase surlignée, carte logo (plein cadre, opaque). Chaque bloc déclare ses réglages (texte, texte long,
+  couleur, nombre), sa boîte par défaut et sa durée. Les textes sont échappés et les couleurs doivent être `#rrggbb`.
+- **Rendu déterministe** (`scenario-runner/compose.mjs`) : Chrome sans fenêtre, réseau coupé ; pour chaque image,
+  toutes les animations (`document.getAnimations()`) sont mises en pause et placées au bon instant, puis capture
+  PNG -> FFmpeg. Transparence conservée : HEVC avec alpha (`.mov`, ce que WebKit affiche) sur macOS, VP9 alpha
+  (`.webm`) ailleurs ; blocs opaques en H.264. Commande Rust `block_render` (dimensions et durée bornées), puis
+  `asset_import`.
+- Le calque est une vidéo qui garde sa source (`VideoOverlay.source = { block, props }`) : « Edit block… » le rend
+  à nouveau avec d'autres réglages, à la même place.
+- **Galerie** (bouton Blocks de la timeline, clic droit sur l'aperçu « Add a block here… ») : chaque bloc joue en
+  direct dans sa carte (iframe `sandbox`, en boucle), **déjà aux couleurs du film** (accent des touches, couleur
+  des légendes pour les blocs dont le texte est posé sur la vidéo) ; formulaire de réglages avec aperçu en
+  direct ; ajout au curseur en une modification annulable.
+- IA : `blocks.list`, `edit.addBlock`, `edit.updateBlock`.
 
 ### IA aux commandes (MCP, CLI, skill)
 

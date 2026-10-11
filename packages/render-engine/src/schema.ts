@@ -399,6 +399,13 @@ const overlaySchema = z.discriminatedUnion("kind", [
     in: z.number().min(0),
     volume: z.number().min(0).max(2).catch(1),
     radius: z.number().min(0).catch(0),
+    source: z
+      .object({
+        block: z.string().min(1),
+        props: z.record(z.string(), z.union([z.string(), z.number()])),
+      })
+      .optional()
+      .catch(undefined),
   }),
   z.object({
     ...overlayBase,

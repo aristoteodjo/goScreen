@@ -398,6 +398,79 @@ fn run_runner(
     }
 }
 
+/// The compose script next to the runner.
+fn compose_path() -> Result<PathBuf, String> {
+    let runner = runner_path()?;
+    let path = runner.with_file_name("compose.mjs");
+    if path.is_file() { Ok(path) } else { Err(format!("Block renderer not found at {}.", path.display())) }
+}
+
+/// The file type a block video gets: alpha needs HEVC (.mov) on macOS
+/// (what WebKit plays with transparency), VP9 (.webm) elsewhere.
+pub fn block_ext(transparent: bool) -> &'static str {
+    if !transparent {
+        "mp4"
+    } else if cfg!(target_os = "macos") {
+        "mov"
+    } else {
+        "webm"
+    }
+}
+
+/// Renders a block (HTML composition) to a video in the temp folder, frame
+/// by frame in headless Chrome; returns its path, ready for `asset_import`.
+#[tauri::command(async)]
+pub fn block_render(
+    html: String,
+    width: u32,
+    height: u32,
+    fps: u32,
+    duration: f64,
+    transparent: bool,
+) -> Result<String, String> {
+    if !(2..=4096).contains(&width) || !(2..=4096).contains(&height) {
+        return Err("Block size out of range.".into());
+    }
+    if !(0.1..=60.0).contains(&duration) || !(1..=60).contains(&fps) {
+        return Err("Block length or frame rate out of range.".into());
+    }
+    let node = locate_node().ok_or("Node.js is required to render blocks.")?;
+    let script = compose_path()?;
+    let ffmpeg = ffmpeg::locate().ok_or("FFmpeg not found. Install it (brew install ffmpeg).")?;
+    let id = uuid::Uuid::new_v4();
+    let out = std::env::temp_dir().join(format!("goscreen-block-{id}.{}", block_ext(transparent)));
+    let job_file = std::env::temp_dir().join(format!("goscreen-block-{id}.json"));
+    let job = serde_json::json!({
+        "html": html,
+        "width": width / 2 * 2,
+        "height": height / 2 * 2,
+        "fps": fps,
+        "duration": duration,
+        "transparent": transparent,
+        "out": out.to_string_lossy(),
+        "ffmpeg": ffmpeg.to_string_lossy(),
+    });
+    write_private(&job_file, job.to_string().as_bytes()).map_err(|e| e.to_string())?;
+    let output = Command::new(&node)
+        .arg(&script)
+        .arg(&job_file)
+        .current_dir(script.parent().unwrap_or(Path::new(".")))
+        .stdin(Stdio::null())
+        .output();
+    let _ = std::fs::remove_file(&job_file);
+    let output = output.map_err(|e| format!("start {}: {e}", node.display()))?;
+    let last = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(progress_line)
+        .last();
+    match last.as_ref().and_then(|e| e.get("type")).and_then(Value::as_str) {
+        Some("done") if out.is_file() => Ok(out.to_string_lossy().into_owned()),
+        _ => Err(last
+            .and_then(|e| e.get("message").and_then(Value::as_str).map(str::to_string))
+            .unwrap_or_else(|| String::from_utf8_lossy(&output.stderr).trim().chars().take(400).collect())),
+    }
+}
+
 /// Stops the running scenario; the runner removes its partial video.
 #[tauri::command]
 pub fn scenario_cancel(state: State<'_, ScenarioState>) {

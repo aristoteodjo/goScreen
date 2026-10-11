@@ -26,6 +26,7 @@ import {
 } from "@goscreen/scenario";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
+import { BLOCKS } from "@goscreen/blocks";
 import { z } from "zod";
 import { ipc, projectsIpc } from "@/lib/ipc";
 import { queryClient } from "@/lib/queryClient";
@@ -38,6 +39,7 @@ import {
   player,
   useSession,
 } from "@/modules/editor/session";
+import { addBlock, updateBlock } from "@/modules/editor/blocks";
 import { useEdit } from "@/modules/editor/store";
 import { useFlowDoc } from "@/modules/flow/store";
 import {
@@ -696,6 +698,70 @@ export function registerCommands() {
       if (!checked) throw new Error("This text cannot be added.");
       await applyEdit(i.video, checked);
       return { overlay: o.id };
+    },
+  });
+  defineCommand({
+    name: "blocks.list",
+    title: "List blocks",
+    description:
+      "Motion-design blocks (HTML compositions): animated titles, lower thirds, counters, charts, checklists, calls to action, steps, quotes, highlights, logo cards; with their props and default box.",
+    input: z.object({}),
+    run: async () =>
+      BLOCKS.map((b) => ({
+        id: b.id,
+        label: b.label,
+        description: b.description,
+        box: b.box,
+        duration: b.duration,
+        transparent: b.transparent,
+        props: b.props,
+      })),
+  });
+  defineCommand({
+    name: "edit.addBlock",
+    title: "Add a block",
+    description:
+      "Renders a block with its props (colours default to the film's) and adds it as a layer at a timeline time. Box in fractions of the frame; defaults to the block's own.",
+    input: z.object({
+      video,
+      block: z.string().min(1),
+      props: z
+        .record(z.string(), z.union([z.string(), z.number()]))
+        .default({}),
+      start: z.number().min(0),
+      duration: z.number().min(0.5).max(60).optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      width: z.number().positive().max(1).optional(),
+      height: z.number().positive().max(1).optional(),
+    }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const { video: path, block, props, start, ...place } = i;
+      const result = await addBlock(path, edit, block, props, start, place);
+      await applyEdit(path, result.edit);
+      return { overlay: result.overlay };
+    },
+  });
+  defineCommand({
+    name: "edit.updateBlock",
+    title: "Change a block",
+    description:
+      "Renders a block layer again with new props (same place and timing).",
+    input: z.object({
+      video,
+      overlay: z.string().min(1),
+      props: z.record(z.string(), z.union([z.string(), z.number()])),
+    }),
+    run: async (i) => {
+      const next = await updateBlock(
+        i.video,
+        await currentEdit(i.video),
+        i.overlay,
+        i.props,
+      );
+      await applyEdit(i.video, next);
+      return { overlay: i.overlay };
     },
   });
   defineCommand({

@@ -55,6 +55,7 @@ import { ipc } from "@/lib/ipc";
 import { VIEW_ZOOMS } from "./commands";
 import { initialLayers } from "./devices";
 import { EditorPalette } from "./EditorPalette";
+import { BlocksDialog } from "./BlocksDialog";
 import { ExportDialog } from "./ExportDialog";
 import { PanelContent, PanelRail } from "./Panels";
 import { Preview } from "./Preview";
@@ -227,6 +228,7 @@ export function EditorPage({ video }: { video: string }) {
         </>
       )}
       <ExportDialog open={exporting} onOpenChange={setExporting} />
+      <BlocksDialog />
       <EditorPalette openExport={openExport} />
     </div>
   );

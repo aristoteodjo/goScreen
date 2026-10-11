@@ -296,6 +296,19 @@ export const ipc = {
     scenarioOutcomeSchema.parse(
       await invoke("scenario_live", { job, project }),
     ),
+  /** Renders a block (HTML composition) to a temp video; returns its path. */
+  blockRender: async (job: {
+    html: string;
+    width: number;
+    height: number;
+    fps: number;
+    duration: number;
+    transparent: boolean;
+  }) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("block_render", job)),
   /** Describes a page (after optional steps) for an AI. */
   siteInspect: async (job: unknown) =>
     scenarioOutcomeSchema.parse(await invoke("site_inspect", { job })),

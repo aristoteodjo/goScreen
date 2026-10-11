@@ -27,6 +27,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
 import { AnimatePanel } from "./AnimatePanel";
+import { useBlocksDialog } from "./BlocksDialog";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
 import { useEdit, usePlayback } from "./store";
@@ -570,6 +571,23 @@ export function OverlayPanel() {
           onReset={() => set({ rotation: 0 })}
         />
       </Section>
+      {overlay.kind === "video" && overlay.source ? (
+        <Section
+          title="Block"
+          hint={`${overlay.source.block}: change its texts or colours and render it again.`}
+        >
+          <Button
+            size="sm"
+            variant="secondary"
+            className="self-start"
+            onClick={() =>
+              useBlocksDialog.getState().show({ editing: overlay.id })
+            }
+          >
+            Edit block…
+          </Button>
+        </Section>
+      ) : null}
       <AnimatePanel overlay={overlay} set={set} />
       <DeleteButton label="Delete overlay" />
     </>

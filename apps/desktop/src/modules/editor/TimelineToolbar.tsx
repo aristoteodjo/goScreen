@@ -6,6 +6,7 @@ import {
   Delete02Icon,
   FitToScreenIcon,
   HandGrabIcon,
+  DashboardSquare01Icon,
   Image01Icon,
   Knife01Icon,
   MagnetIcon,
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { editActions, TEXT_PRESETS } from "./actions";
+import { useBlocksDialog } from "./BlocksDialog";
 import { type Tool, usePlayback } from "./store";
 
 const TOOLS: {
@@ -143,6 +145,11 @@ export function TimelineToolbar() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ToolButton
+        icon={DashboardSquare01Icon}
+        label="Blocks"
+        onClick={() => useBlocksDialog.getState().show()}
+      />
       <ToolButton
         icon={PresentationBarChart01Icon}
         label="Slide"

@@ -15,6 +15,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { registry } from "@/lib/registry";
+import { useBlocksDialog } from "./BlocksDialog";
 import { editActions, TEXT_PRESETS } from "./actions";
 import { useEdit, usePlayback } from "./store";
 
@@ -229,6 +230,9 @@ function EmptyItems({ at }: { at?: { x: number; y: number } }) {
       </ContextMenuItem>
       <ContextMenuItem onClick={() => editActions.captionScenes()}>
         Caption every scene
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => useBlocksDialog.getState().show({ at })}>
+        Add a block here…
       </ContextMenuItem>
     </>
   );

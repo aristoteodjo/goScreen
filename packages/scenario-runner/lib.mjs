@@ -101,3 +101,74 @@ export function journal({ device, size, pointers, chapters }) {
     chapters,
   };
 }
+
+/** Frames of a composition (at least one). */
+export function framesFor(duration, fps) {
+  return Math.max(1, Math.round(duration * fps));
+}
+
+/**
+ * FFmpeg arguments for a composition. Transparent ones keep their alpha:
+ * HEVC with alpha (.mov, what WebKit plays) on macOS, VP9 with alpha (.webm)
+ * elsewhere; opaque ones are plain H.264.
+ */
+export function composeArgs({ fps, out, transparent }, os = process.platform) {
+  const input = [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-y",
+    "-f",
+    "image2pipe",
+    "-framerate",
+    String(fps),
+    "-c:v",
+    "png",
+    "-i",
+    "-",
+  ];
+  if (!transparent)
+    return [
+      ...input,
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-crf",
+      "16",
+      "-movflags",
+      "+faststart",
+      out,
+    ];
+  if (os === "darwin")
+    return [
+      ...input,
+      "-c:v",
+      "hevc_videotoolbox",
+      "-alpha_quality",
+      "0.9",
+      "-allow_sw",
+      "1",
+      "-b:v",
+      "12M",
+      "-tag:v",
+      "hvc1",
+      out,
+    ];
+  return [
+    ...input,
+    "-c:v",
+    "libvpx-vp9",
+    "-pix_fmt",
+    "yuva420p",
+    "-b:v",
+    "6M",
+    "-auto-alt-ref",
+    "0",
+    out,
+  ];
+}
+
+/** The file extension a composition gets. */
+export const composeExt = (transparent, os = process.platform) =>
+  !transparent ? "mp4" : os === "darwin" ? "mov" : "webm";

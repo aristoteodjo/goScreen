@@ -235,6 +235,8 @@ export type VideoOverlay = OverlayBase & {
   in: number;
   volume: number;
   radius: number;
+  // A rendered block (HTML composition): what to render it again from.
+  source?: { block: string; props: Record<string, string | number> };
 };
 export type ShapeKind = "arrow" | "rect" | "ellipse" | "highlight";
 export type ShapeOverlay = OverlayBase & {

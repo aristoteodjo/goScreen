@@ -74,6 +74,12 @@ open it.
    or writes keyframes (`{x,y,scale,rotation,opacity,blur}: [{t,value,ease}]`,
    eases `linear|hold|in|out|in-out|back|elastic|spring|{bezier}`) or a text
    animator. One animated element per scene is plenty.
+   Motion-design blocks (`blocks_list`): kinetic title, lower third, stat
+   counter, bar chart, checklist, call to action, steps, quote, highlighted
+   sentence, logo card. `edit_addBlock` renders one at a time and box you
+   choose (colours follow the film), `edit_updateBlock` changes its props. A
+   good VSL opens on a kinetic title or logo card, uses a counter or chart for
+   proof, and ends on a call to action.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees.
 

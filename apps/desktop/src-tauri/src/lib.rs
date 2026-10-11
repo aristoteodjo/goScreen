@@ -47,6 +47,7 @@ pub fn run() {
             control::control_info,
             scenario::scenario_live,
             scenario::site_inspect,
+            scenario::block_render,
             scenario::scenario_live_send,
             scenario::scenario_live_stop,
             projects::projects_list,
