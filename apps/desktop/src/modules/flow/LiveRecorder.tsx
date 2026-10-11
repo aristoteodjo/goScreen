@@ -179,8 +179,11 @@ function Live({
     }
     let unlisten: (() => void) | null = null;
     let alive = true;
-    void (async () => {
-      unlisten = await listen("scenario-live", (e) => {
+    let started = false;
+    // Deferred: React's development double mount would otherwise open two
+    // pages, and the second would fail with "already open".
+    const start = setTimeout(async () => {
+      const stopListening = await listen("scenario-live", (e) => {
         const p = eventSchema.safeParse(e.payload);
         if (!p.success || !alive) return;
         const ev = p.data;
@@ -221,20 +224,35 @@ function Live({
             break;
         }
       });
+      if (!alive) {
+        stopListening();
+        return;
+      }
+      unlisten = stopListening;
+      started = true;
       try {
-        await ipc.liveStart({ scenario: resolved.scenario, device }, project);
+        const outcome = await ipc.liveStart(
+          { scenario: resolved.scenario, device },
+          project,
+        );
+        if (alive && outcome.status === "failed")
+          toast.error("The live page stopped", {
+            description: outcome.message,
+          });
       } catch (e) {
-        toast.error("The live page could not open", {
-          description: message(e),
-        });
+        if (alive)
+          toast.error("The live page could not open", {
+            description: message(e),
+          });
       } finally {
         if (alive) setPhase("closed");
       }
-    })();
+    }, 0);
     return () => {
       alive = false;
+      clearTimeout(start);
       unlisten?.();
-      void ipc.liveStop().catch(() => {});
+      if (started) void ipc.liveStop().catch(() => {});
     };
   }, [nodeId, project, vsl, append]);
 
