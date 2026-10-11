@@ -1,4 +1,5 @@
 pub mod android;
+pub mod control;
 pub mod export;
 pub mod local_http;
 pub mod media;

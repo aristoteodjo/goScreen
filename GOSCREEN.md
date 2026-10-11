@@ -225,6 +225,36 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   « Caption every scene » ; piste **Video** (ex-« V1 », la piste principale : clips et cartons) : carton, légendes
   des scènes, zoom sur chaque clic, retirer les zooms ; studio : « Start a scenario on this page ».
 
+### IA aux commandes (MCP, CLI, skill)
+
+Une IA (Claude ou tout client MCP) pilote goScreen avec **les mêmes commandes que les boutons**, sur les mêmes
+données ; la personne voit tout et garde la main (⌘Z annule une modification de montage faite par l'IA).
+
+- **Commandes typées** (`modules/control/`) : `defineCommand({ name, title, description, input: zod, destructive })`,
+  validées avant de tourner, publiées en JSON Schema (`control.catalog`). Familles : `app` (état, afficher un
+  écran), `devices`, `projects`, `vsl` (lire, créer, enregistrer le flow validé, valeurs), `site.inspect`,
+  `tasks` (simuler, tourner, attendre, arrêter), `edit` (lire, enregistrer, reconstruire le montage), `export`
+  (exporter, arrêter), `help.formats`. Une modification sur un flow ou un montage ouvert s'affiche aussitôt.
+- **`site.inspect`** : le runner ouvre la page sur l'appareil émulé (ou l'état après un parcours jusqu'à un
+  nœud) et rend le titre, les intertitres, le texte visible, les iframes et chaque élément actionnable avec
+  une cible vérifiée (`inspect.mjs`, mêmes fonctions que l'enregistrement en direct), plus une capture.
+- **Serveur de contrôle** (Rust, `modules/control/`) : 127.0.0.1 seulement, port libre, jeton 128 bits dans
+  `<config>/goScreen/control.json` (0600) ; toute requête avec un en-tête `Origin` (une page web) est refusée.
+  Une requête devient l'événement `control-request` ; le studio l'exécute et répond par `control_reply`
+  (30 min au plus, pour attendre un tournage).
+- **`packages/mcp-server`** (Node, sans dépendance) : `server.mjs` (MCP stdio : `initialize`, `tools/list` tiré
+  du catalogue de l'app, `tools/call` ; les points deviennent `_` ; captures rendues en images ; app fermée =
+  erreur d'outil lisible) et `cli.mjs` (`goscreen <commande> '<json>'`). `node:http` et pas `fetch` (qui
+  abandonne après 5 min). Testés de bout en bout contre un faux serveur.
+- **Skill** `skills/goscreen/SKILL.md` : le modèle (projet, VSL, nœuds, étapes, cibles), le déroulé (inspecter,
+  s'accorder avec la personne, créer, simuler, corriger, tourner, retoucher, exporter) et les règles (demander
+  avant d'agir sur un vrai site).
+- Studio : pastille « Connect an AI » en bas à gauche (état, commandes prêtes à copier pour Claude Code, Claude
+  Desktop et la CLI, journal de ce que l'IA a fait).
+- L'export suit la fenêtre : `backgroundThrottling: "disabled"`, la fenêtre passe au premier plan, et un
+  export qui n'avance plus pendant 30 s s'arrête avec un message clair (macOS ne charge pas la vidéo d'une
+  fenêtre cachée).
+
 ### Animation par le temps (méthode Remotion, sans dépendance)
 
 Remotion n'est pas sous MIT : on reprend sa méthode, pas sa bibliothèque. Chaque valeur animée est une

@@ -8,17 +8,22 @@ import { candidatesOrder, fromGlass } from "./lib.mjs";
 
 const FRAME_EVERY_MS = 120;
 
-// Runs in the page: what sits at a point, and every way to name it.
-function describeAt({ x, y }) {
-  const ACTIONABLE =
-    "button, a[href], input, select, textarea, summary, label, [role=button], [role=link], [role=option], [role=tab], [role=menuitem], [role=checkbox], [role=radio], [role=switch], [role=combobox], [role=textbox], [contenteditable=true]";
+export const ACTIONABLE =
+  "button, a[href], input, select, textarea, summary, label, [role=button], [role=link], [role=option], [role=tab], [role=menuitem], [role=checkbox], [role=radio], [role=switch], [role=combobox], [role=textbox], [contenteditable=true]";
+
+// Runs in the page: what sits at a point (an iframe is reported as such).
+function probeAt({ x, y }) {
   const hit = document.elementFromPoint(x, y);
   if (!hit) return null;
   if (hit.tagName === "IFRAME") {
     const r = hit.getBoundingClientRect();
     return { frame: true, x: x - r.left, y: y - r.top };
   }
-  const el = hit.closest(ACTIONABLE) || hit;
+  return { frame: false };
+}
+
+// Runs in the page, on one element: every way to name it.
+export function describeElement(el) {
   const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
   const short = (s) => (s.length > 80 ? "" : s);
   const tag = el.tagName.toLowerCase();
@@ -121,7 +126,7 @@ function describeAt({ x, y }) {
 }
 
 // Which candidate finds exactly this element in Playwright (first wins).
-async function chooseTarget(root, info, handle) {
+export async function chooseTarget(root, info, handle) {
   for (const target of candidatesOrder(info.candidates)) {
     const loc =
       target.testId !== undefined
@@ -168,7 +173,7 @@ async function pick(page, u, v) {
   let frame = page.mainFrame();
   let frameCss;
   let offset = { x: 0, y: 0 };
-  let info = await frame.evaluate(describeAt, point);
+  let info = await frame.evaluate(probeAt, point);
   // Payment widgets and embeds: look inside the iframe once.
   if (info?.frame) {
     const iframe = await frame.evaluateHandle(
@@ -192,7 +197,7 @@ async function pick(page, u, v) {
     offset = r;
     point = { x: info.x, y: info.y };
     frame = inner;
-    info = await frame.evaluate(describeAt, point);
+    info = await frame.evaluate(probeAt, point);
   }
   if (!info || info.frame) return null;
   const handle = await frame.evaluateHandle(
@@ -200,11 +205,9 @@ async function pick(page, u, v) {
       const hit = document.elementFromPoint(x, y);
       return hit?.closest(sel) || hit;
     },
-    {
-      ...point,
-      sel: "button, a[href], input, select, textarea, summary, label, [role=button], [role=link], [role=option], [role=tab], [role=menuitem], [role=checkbox], [role=radio], [role=switch], [role=combobox], [role=textbox], [contenteditable=true]",
-    },
+    { ...point, sel: ACTIONABLE },
   );
+  info = await handle.evaluate(describeElement);
   // The frame itself answers for its own elements (same selectors as the
   // frame locator the runner will use).
   const target = await chooseTarget(frame, info, handle);

@@ -183,6 +183,8 @@ async function run(task: Task) {
         });
       return;
     }
+    if (outcome.status !== "done" && outcome.status !== "simulated")
+      throw new Error("Unexpected answer from the runner.");
     if (outcome.status === "simulated") {
       patch(task.id, { status: "done", index: scenario.steps.length, scenes });
       toast.success(`${task.label}: every step played`);

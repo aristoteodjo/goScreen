@@ -134,7 +134,8 @@ export function buildScenarioEdit(
           weight: 800,
           color: film.ink,
           align: "center",
-          background: null,
+          // Zooms slide the page under the caption: a plate keeps it legible.
+          background: film.zoom > 1 ? film.background : null,
         },
       });
     zooms.push(...sceneZooms(take, scene, film.zoom, i));
@@ -142,9 +143,21 @@ export function buildScenarioEdit(
   });
   if (film.outro) clips.push(card("outro", film, film.outro, locale));
 
-  // Leave room for the caption above or below the device.
+  // Leave room for the caption above or below the device. In a wide frame
+  // the device fills the height, so it is drawn smaller there.
+  const captioned = film.captions !== "none";
+  const wide = film.aspect !== "9:16";
   const y =
-    film.captions === "top" ? 0.56 : film.captions === "bottom" ? 0.44 : 0.5;
+    film.captions === "top"
+      ? wide
+        ? 0.58
+        : 0.56
+      : film.captions === "bottom"
+        ? wide
+          ? 0.42
+          : 0.44
+        : 0.5;
+  const scale = captioned && wide ? 0.8 : 1;
   return {
     ...DEFAULT_EDIT,
     aspect: film.aspect,
@@ -162,7 +175,7 @@ export function buildScenarioEdit(
       frame: true,
       x: 0.5,
       y,
-      scale: 1,
+      scale,
       rotation: 0,
       hidden: false,
     })),

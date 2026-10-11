@@ -35,6 +35,15 @@ pub struct Slot {
 pub struct ScenarioState {
     run: Slot,
     live: Slot,
+    inspect: Slot,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Record,
+    Dry,
+    Live,
+    Inspect,
 }
 
 #[derive(Serialize)]
@@ -46,6 +55,10 @@ pub enum ScenarioOutcome {
         video_path: String,
         interactions_path: String,
         duration_ms: u64,
+    },
+    /// Inspect mode: the page described for an AI.
+    Inspected {
+        page: Value,
     },
     /// A dry run (no video): every step played.
     Simulated {
@@ -171,7 +184,15 @@ pub fn scenario_run(
     project: Option<String>,
     dry: Option<bool>,
 ) -> Result<ScenarioOutcome, String> {
-    run_runner(&app, &state.run, job, project, dry.unwrap_or(false), false)
+    let mode = if dry.unwrap_or(false) { Mode::Dry } else { Mode::Record };
+    run_runner(&app, &state.run, job, project, mode)
+}
+
+/// Plays `job`'s steps (often none), then describes the page: outline, text,
+/// every actionable element with a checked target, and a screenshot.
+#[tauri::command(async)]
+pub fn site_inspect(app: AppHandle, state: State<'_, ScenarioState>, job: Value) -> Result<ScenarioOutcome, String> {
+    run_runner(&app, &state.inspect, job, None, Mode::Inspect)
 }
 
 /// Replays `job`'s steps, then streams the page to the studio and takes its
@@ -183,7 +204,7 @@ pub fn scenario_live(
     job: Value,
     project: Option<String>,
 ) -> Result<ScenarioOutcome, String> {
-    run_runner(&app, &state.live, job, project, true, true)
+    run_runner(&app, &state.live, job, project, Mode::Live)
 }
 
 /// One command for the live runner (`tap`, `type`, `inspect`...), as JSON.
@@ -223,10 +244,16 @@ fn run_runner(
     slot: &Slot,
     job: Value,
     project: Option<String>,
-    dry: bool,
-    live: bool,
+    mode: Mode,
 ) -> Result<ScenarioOutcome, String> {
-    let event_name = if live { LIVE_EVENT } else { PROGRESS_EVENT };
+    let live = mode == Mode::Live;
+    let dry = mode != Mode::Record;
+    // Inspections are quiet: their progress would look like a task's.
+    let event_name = match mode {
+        Mode::Live => Some(LIVE_EVENT),
+        Mode::Inspect => None,
+        _ => Some(PROGRESS_EVENT),
+    };
     let Value::Object(mut job) = job else { return Err("Invalid scenario job.".into()) };
     let name = job
         .get("scenario")
@@ -256,14 +283,15 @@ fn run_runner(
     job.insert("fps".into(), Value::from(30));
     job.insert("dry".into(), Value::Bool(dry));
     job.insert("live".into(), Value::Bool(live));
+    job.insert("inspect".into(), Value::Bool(mode == Mode::Inspect));
 
     {
         let mut pid = slot.pid.lock().map_err(|_| "scenario state poisoned")?;
         if pid.is_some() {
-            return Err(if live {
-                "The live page is already open.".into()
-            } else {
-                "A scenario is already running.".into()
+            return Err(match mode {
+                Mode::Live => "The live page is already open.".into(),
+                Mode::Inspect => "A page is already being inspected.".into(),
+                _ => "A scenario is already running.".into(),
             });
         }
         // Holds the slot until the child is known.
@@ -322,10 +350,17 @@ fn run_runner(
     });
 
     let mut last: Option<Map<String, Value>> = None;
+    let mut inspected: Option<Value> = None;
     if let Some(out) = child.stdout.take() {
         for line in BufReader::new(out).lines().map_while(Result::ok) {
             let Some(event) = progress_line(&line) else { continue };
-            let _ = app.emit(event_name, Value::Object(event.clone()));
+            if event.get("type").and_then(Value::as_str) == Some("inspected") {
+                inspected = event.get("page").cloned();
+                continue;
+            }
+            if let Some(name) = event_name {
+                let _ = app.emit(name, Value::Object(event.clone()));
+            }
             if matches!(event.get("type").and_then(Value::as_str), Some("done" | "error")) {
                 last = Some(event);
             }
@@ -338,6 +373,10 @@ fn run_runner(
 
     let kind = last.as_ref().and_then(|e| e.get("type")).and_then(Value::as_str);
     match (kind, last.as_ref()) {
+        (Some("done"), Some(_)) if mode == Mode::Inspect => match inspected {
+            Some(page) => Ok(ScenarioOutcome::Inspected { page }),
+            None => Err("The page could not be described.".into()),
+        },
         (Some("done"), Some(e)) if dry => Ok(ScenarioOutcome::Simulated {
             duration_ms: (e.get("duration").and_then(Value::as_f64).unwrap_or(0.0) * 1000.0) as u64,
         }),

@@ -74,6 +74,10 @@ const scenarioOutcomeSchema = z.discriminatedUnion("status", [
     durationMs: z.number().nonnegative(),
   }),
   z.object({
+    status: z.literal("inspected"),
+    page: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
     status: z.literal("simulated"),
     durationMs: z.number().nonnegative(),
   }),
@@ -292,6 +296,23 @@ export const ipc = {
     scenarioOutcomeSchema.parse(
       await invoke("scenario_live", { job, project }),
     ),
+  /** Describes a page (after optional steps) for an AI. */
+  siteInspect: async (job: unknown) =>
+    scenarioOutcomeSchema.parse(await invoke("site_inspect", { job })),
+  controlInfo: async () =>
+    z
+      .object({
+        port: z.number(),
+        file: z.string(),
+        mcpServer: z.string(),
+        cli: z.string(),
+        skill: z.string(),
+      })
+      .nullable()
+      .parse(await invoke("control_info")),
+  controlReply: async (id: string, answer: unknown) => {
+    await invoke("control_reply", { id, answer });
+  },
   liveSend: async (command: Record<string, unknown>) => {
     await invoke("scenario_live_send", { command });
   },

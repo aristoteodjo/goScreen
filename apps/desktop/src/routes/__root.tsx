@@ -1,4 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { ControlBridge } from "@/modules/control/ControlBridge";
 import { TasksPanel } from "@/modules/tasks/TasksPanel";
 
 export const Route = createRootRoute({
@@ -6,6 +7,7 @@ export const Route = createRootRoute({
     <>
       <Outlet />
       <TasksPanel />
+      <ControlBridge />
     </>
   ),
 });

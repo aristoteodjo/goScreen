@@ -10,6 +10,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright-core";
+import { inspectPage } from "./inspect.mjs";
 import { serveLive } from "./live.mjs";
 import {
   extract,
@@ -33,7 +34,9 @@ const fps = job.fps ?? 30;
 // A simulation plays every step without filming: no screencast, no FFmpeg.
 // Live: play the steps, then hand the page to the studio (no video).
 const live = job.live === true;
-const dry = job.dry === true || live;
+// Inspect: play the steps, then describe the page for an AI (no video).
+const inspect = job.inspect === true;
+const dry = job.dry === true || live || inspect;
 const PREVIEW_EVERY_MS = 1500;
 const size = videoSize(device.width, device.height, device.dpr);
 const viewport = { width: device.width, height: device.height };
@@ -496,7 +499,7 @@ async function main() {
       try {
         await play(rec, scenario.steps[index]);
       } catch (e) {
-        if (!live) throw e;
+        if (!live && !inspect) throw e;
         // Live: stop replaying and let the user fix it on the page.
         emit({
           type: "warn",
@@ -505,6 +508,13 @@ async function main() {
         });
         break;
       }
+    }
+    if (inspect) {
+      await rec.stop();
+      await sleep(600);
+      emit({ type: "inspected", page: await inspectPage(rec.page) });
+      emit({ type: "done", duration: 0 });
+      return;
     }
     if (live) {
       await rec.stop();

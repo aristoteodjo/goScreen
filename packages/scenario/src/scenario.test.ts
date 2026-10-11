@@ -262,3 +262,26 @@ describe("values in targets", () => {
     expect(b.do === "tap" && b.target.css).toBe("a[href$='/{{order}}']");
   });
 });
+
+describe("device placement", () => {
+  it("draws the device smaller in wide captioned frames", () => {
+    const wide = buildScenarioEdit(
+      take,
+      filmSchema.parse({ aspect: "16:9" }),
+      "en",
+    );
+    const tall = buildScenarioEdit(
+      take,
+      filmSchema.parse({ aspect: "9:16" }),
+      "en",
+    );
+    const bare = buildScenarioEdit(
+      take,
+      filmSchema.parse({ aspect: "16:9", captions: "none" }),
+      "en",
+    );
+    expect(wide.layers?.[0].scale).toBeLessThan(1);
+    expect(tall.layers?.[0].scale).toBe(1);
+    expect(bare.layers?.[0].scale).toBe(1);
+  });
+});

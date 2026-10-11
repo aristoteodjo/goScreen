@@ -1,0 +1,14 @@
+{
+  "name": "@goscreen/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lets an AI drive goScreen: an MCP server (stdio) and a CLI, both relaying to the running app.",
+  "bin": {
+    "goscreen-mcp": "./server.mjs",
+    "goscreen": "./cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
