@@ -383,6 +383,10 @@ n'en sait rien.
 - Lecture : chaque média suit l'horloge de la timeline, mais un élément qui joue n'est recalé qu'au-delà de
   0,3 s de dérive, jamais pendant un saut ni dans la seconde qui suit (`drift.ts`, pur et testé) : recaler un
   élément qui redémarre le fait sauter en boucle et rend une voix off incompréhensible.
+- Les clips audio (voix off générée ou enregistrée, musique) ne passent pas par un élément `<audio>` dans la
+  preview : chaque fichier est décodé une fois et programmé sur l'horloge Web Audio (`voices.ts`, plan pur et
+  testé dans `voicePlan.ts` : départ, décalage dans le fichier, fondus et volume comme à l'export). Un `<audio>`
+  lu en flux depuis le serveur média calait et laissait des blancs. Seule la voix détachée du micro garde un élément.
   La vidéo est servie par un serveur média local (Range + CORS) pour que le canvas ne soit pas « tainted ».
 - Serveurs locaux de l'app (média, flux Android) : URL à jeton aléatoire 128 bits, CORS limité à l'origine
   du studio, toute autre `Origin` refusée (`local_http.rs`). Les sites prévisualisés vivent aussi sur 127.0.0.1.

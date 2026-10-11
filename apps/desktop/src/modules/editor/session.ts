@@ -14,6 +14,7 @@ import { geometryOf } from "./devices";
 import { shouldSeek } from "./drift";
 import { pooledEntries } from "./media";
 import { timelineEnd, useEdit, usePlayback } from "./store";
+import { startVoices, stopVoices } from "./voices";
 
 type Opened = {
   videoPath: string;
@@ -151,6 +152,28 @@ let monitorOff = false;
 export function setMonitorMuted(muted: boolean) {
   monitorOff = muted;
   syncMedia(usePlayback.getState().time, usePlayback.getState().playing);
+  restartVoices();
+}
+
+/** Audio clips sound through Web Audio (voices.ts); a detached mic voice keeps its element. */
+function voicesFrom(t: number) {
+  const { edit } = useEdit.getState();
+  startVoices(
+    edit.audio,
+    t,
+    (clip) => assetUrl(edit, clip.asset),
+    (clip) =>
+      clip.asset === MIC_ASSET ||
+      monitorOff ||
+      edit.tracks.muted.includes(clip.lane),
+  );
+}
+
+/** The audio clips changed during playback: schedule them again from now. */
+export function restartVoices() {
+  const { playing, time } = usePlayback.getState();
+  if (playing) voicesFrom(time);
+  else stopVoices();
 }
 
 function syncMedia(t: number, playing: boolean) {
@@ -176,6 +199,7 @@ function syncMedia(t: number, playing: boolean) {
   for (const [id, { el }] of pooledEntries()) {
     const o = edit.overlays.find((x) => x.id === id);
     const a = o ? null : edit.audio.find((x) => x.id === id);
+    if (a && a.asset !== MIC_ASSET) continue;
     const item =
       o?.kind === "video"
         ? { start: o.start, duration: o.duration, in: o.in, volume: o.volume }
@@ -205,6 +229,7 @@ function tick() {
     usePlayback.getState().setTime(end);
     usePlayback.getState().setPlaying(false);
     syncMedia(end, false);
+    stopVoices();
     painter?.();
     return;
   }
@@ -223,6 +248,7 @@ export const player = {
     usePlayback.getState().setTime(t);
     usePlayback.getState().setPlaying(true);
     syncMedia(t, true);
+    voicesFrom(t);
     cancelAnimationFrame(loop);
     loop = requestAnimationFrame(tick);
   },
@@ -230,6 +256,7 @@ export const player = {
     cancelAnimationFrame(loop);
     usePlayback.getState().setPlaying(false);
     syncMedia(usePlayback.getState().time, false);
+    stopVoices();
   },
   toggle() {
     if (usePlayback.getState().playing) player.pause();
@@ -241,6 +268,7 @@ export const player = {
     usePlayback.getState().setTime(clamped);
     anchor = { wall: performance.now(), t: clamped };
     syncMedia(clamped, usePlayback.getState().playing);
+    restartVoices();
     requestPaint();
   },
   step(dt: number) {

@@ -4,6 +4,7 @@ import {
   type EditState,
   fitInto,
   hitLayer,
+  MIC_ASSET,
   type Overlay,
   outputSize,
   type Point,
@@ -27,11 +28,13 @@ import {
   assetUrl,
   currentTimeline,
   requestPaint,
+  restartVoices,
   setPainter,
   useSession,
 } from "./session";
 import { previewStill } from "./stills";
 import { useEdit, usePlayback } from "./store";
+import { preloadVoices } from "./voices";
 
 /** Live media for overlays, from the preview pools. */
 function previewSources(
@@ -65,13 +68,19 @@ function syncPool(edit: EditState) {
     alive.add(o.id);
     pooled(o.id, "video", url, requestPaint);
   }
+  const voices: string[] = [];
   for (const a of edit.audio) {
     const url = assetUrl(edit, a.asset);
     if (!url) continue;
+    if (a.asset !== MIC_ASSET) {
+      voices.push(url);
+      continue;
+    }
     alive.add(a.id);
     pooled(a.id, "audio", url, requestPaint);
   }
   prunePool(alive);
+  preloadVoices(voices);
 }
 
 /** Top-most overlay under an output point at time t. */
@@ -234,6 +243,11 @@ export function Preview() {
         s.edit.audio !== prev.edit.audio
       )
         syncPool(s.edit);
+      if (
+        s.edit.audio !== prev.edit.audio ||
+        s.edit.tracks !== prev.edit.tracks
+      )
+        restartVoices();
     });
     const offAssets = useSession.subscribe((s, prev) => {
       if (s.assetUrls !== prev.assetUrls) syncPool(useEdit.getState().edit);

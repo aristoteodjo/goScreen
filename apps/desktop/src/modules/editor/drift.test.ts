@@ -6,7 +6,12 @@ const settled = { playing: true, seeking: false, msSinceSeek: 10_000 };
 describe("shouldSeek", () => {
   it("lands exactly on the playhead while paused", () => {
     expect(
-      shouldSeek({ playing: false, drift: 0.05, seeking: false, msSinceSeek: 0 }),
+      shouldSeek({
+        playing: false,
+        drift: 0.05,
+        seeking: false,
+        msSinceSeek: 0,
+      }),
     ).toBe(true);
     expect(
       shouldSeek({ playing: false, drift: 0, seeking: false, msSinceSeek: 0 }),
