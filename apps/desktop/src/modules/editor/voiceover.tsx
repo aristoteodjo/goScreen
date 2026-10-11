@@ -96,7 +96,7 @@ async function pickMicrophone() {
     useVoiceMic.getState().name ?? useCaptureSettings.getState().microphone;
   const silent: string[] = [];
   for (const mic of rankMicrophones(devices.microphones, wanted)) {
-    const db = await ipc.microphoneLevel(mic.index).catch(() => -91);
+    const db = await ipc.microphoneLevel(mic.name).catch(() => -91);
     if (db > LIVE_DB) return { mic, silent };
     silent.push(mic.name);
   }
@@ -147,7 +147,7 @@ export async function startVoiceOver() {
   set({ phase: "countdown", count: PRE_ROLL, mic: mic.name });
   // The mic warms up during the pre-roll.
   const started = ipc
-    .voiceOverStart(videoPath, mic.index)
+    .voiceOverStart(videoPath, mic.name)
     .then((r) => ({ lead: r.lead, wall: performance.now() }));
   for (let n = PRE_ROLL; n > 0; n -= 1) {
     set({ count: n });

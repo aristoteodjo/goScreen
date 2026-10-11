@@ -14,6 +14,7 @@ use super::capture::{encode_args, window_crop, PixelRect, ScreenCaptureProvider,
 use super::companion::{self, CaptureDevices};
 use super::ffmpeg;
 use super::permissions;
+use crate::modules::media::mic::{self, MicCapture};
 
 const STDERR_TAIL: usize = 40;
 
@@ -47,13 +48,65 @@ struct Session {
     companion: Option<Companion>,
 }
 
-/// Camera and/or microphone process and where its files land.
+/// Camera (FFmpeg) and/or microphone (native capture) and where their files land.
 struct Companion {
-    child: Child,
+    child: Option<Child>,
+    voice: Option<NativeMic>,
     camera: Option<PathBuf>,
     mic: Option<PathBuf>,
     /// First companion output relative to the first screen frame.
     offset_ms: f64,
+}
+
+/// The mic is captured natively to a WAV, then lined up with the companion's
+/// first output when it becomes `<stem>.mic.m4a`.
+struct NativeMic {
+    capture: MicCapture,
+    raw: PathBuf,
+    /// Milliseconds the first sample came after the companion's reference.
+    shift_ms: f64,
+}
+
+fn signed_ms(a: Instant, b: Instant) -> f64 {
+    if a >= b {
+        a.duration_since(b).as_secs_f64() * 1000.0
+    } else {
+        -(b.duration_since(a).as_secs_f64() * 1000.0)
+    }
+}
+
+/// FFmpeg filter that moves a voice by `shift_ms` (later if positive).
+pub fn shift_filter(shift_ms: f64) -> String {
+    if shift_ms >= 0.0 {
+        format!("adelay={}:all=1", shift_ms.round() as i64)
+    } else {
+        format!("atrim=start={:.3},asetpts=PTS-STARTPTS", -shift_ms / 1000.0)
+    }
+}
+
+/// Stops the camera and the mic; the mic's WAV becomes `<stem>.mic.m4a`.
+fn finish_companion(c: &mut Companion) {
+    if let Some(child) = c.child.as_mut() {
+        finish(child);
+    }
+    let (Some(voice), Some(out)) = (c.voice.take(), c.mic.as_ref()) else { return };
+    if let Err(e) = voice.capture.finish() {
+        log::warn!("microphone: {e}");
+    }
+    let Some(bin) = ffmpeg::locate() else { return };
+    let ok = Command::new(bin)
+        .args(["-hide_banner", "-loglevel", "error", "-y", "-i"])
+        .arg(&voice.raw)
+        .args(["-af", &shift_filter(voice.shift_ms), "-ac", "1", "-c:a", "aac", "-b:a", "160k"])
+        .arg(out)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if ok {
+        let _ = std::fs::remove_file(&voice.raw);
+    } else {
+        log::warn!("microphone: could not convert {}", voice.raw.display());
+    }
 }
 
 #[derive(Default)]
@@ -213,35 +266,67 @@ pub fn capture_devices() -> Result<CaptureDevices, String> {
     Ok(companion::parse_avfoundation_devices(&avfoundation_listing(&bin)))
 }
 
-/// Starts the camera/mic FFmpeg and waits for its first output. A failure
-/// here never blocks the screen recording: it comes back as a warning.
-fn start_companion(bin: &Path, video: &Path, camera: Option<u32>, mic: Option<u32>, screen_zero: Instant) -> Result<Option<Companion>, String> {
-    let Some((args, outputs)) = companion::companion_args(camera, mic, video) else { return Ok(None) };
+/// Starts the mic (native) and the camera (FFmpeg) and waits for their first
+/// output. A failure here never blocks the screen recording: it comes back
+/// as a warning.
+fn start_companion(bin: &Path, video: &Path, camera: Option<u32>, microphone: Option<u32>, screen_zero: Instant) -> Result<Option<Companion>, String> {
+    if camera.is_none() && microphone.is_none() {
+        return Ok(None);
+    }
     if !cfg!(target_os = "macos") {
         return Err("Camera and microphone capture are only available on macOS for now.".into());
     }
-    let spawned = Instant::now();
-    let mut child = companion::spawn(bin, &args).map_err(|e| format!("camera/mic: {e}"))?;
-    orphan::remember(child.id());
-    let first = loop {
-        let ready = outputs.camera.iter().chain(outputs.mic.iter()).any(|p| p.exists());
-        if ready {
-            break Instant::now();
+    // FFmpeg's avfoundation audio input loses about a tenth of the samples:
+    // the voice is captured natively, by the device's name.
+    let voice = match microphone {
+        Some(index) => {
+            let name = companion::parse_avfoundation_devices(&avfoundation_listing(bin))
+                .microphones
+                .into_iter()
+                .find(|m| m.index == index)
+                .map(|m| m.name);
+            let raw = video.with_extension("mic.capture.wav");
+            let capture = mic::start(name.as_deref(), &raw, FIRST_FRAME_TIMEOUT).map_err(|e| {
+                log::warn!("microphone: {e}");
+                permissions::companion_message()
+            })?;
+            let first = Instant::now() - Duration::from_secs_f64(capture.seconds());
+            Some((capture, raw, first))
         }
-        let exited = matches!(child.try_wait(), Ok(Some(_)));
-        if exited || spawned.elapsed() > FIRST_FRAME_TIMEOUT {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(permissions::companion_message());
+        None => None,
+    };
+    let mut camera_out = None;
+    let mut camera_first = None;
+    let mut child = None;
+    if let Some((args, outputs)) = companion::companion_args(camera, None, video) {
+        let spawned = Instant::now();
+        let mut c = companion::spawn(bin, &args).map_err(|e| format!("camera: {e}"))?;
+        orphan::remember(c.id());
+        loop {
+            if outputs.camera.as_ref().is_some_and(|p| p.exists()) {
+                camera_first = Some(Instant::now());
+                break;
+            }
+            let exited = matches!(c.try_wait(), Ok(Some(_)));
+            if exited || spawned.elapsed() > FIRST_FRAME_TIMEOUT {
+                let _ = c.kill();
+                let _ = c.wait();
+                if let Some((capture, raw, _)) = voice {
+                    let _ = capture.finish();
+                    let _ = std::fs::remove_file(raw);
+                }
+                return Err(permissions::companion_message());
+            }
+            std::thread::sleep(Duration::from_millis(15));
         }
-        std::thread::sleep(Duration::from_millis(15));
-    };
-    let offset_ms = if first >= screen_zero {
-        first.duration_since(screen_zero).as_secs_f64() * 1000.0
-    } else {
-        -(screen_zero.duration_since(first).as_secs_f64() * 1000.0)
-    };
-    Ok(Some(Companion { child, camera: outputs.camera, mic: outputs.mic, offset_ms }))
+        camera_out = outputs.camera;
+        child = Some(c);
+    }
+    let reference = camera_first.or(voice.as_ref().map(|v| v.2)).unwrap_or(screen_zero);
+    let offset_ms = signed_ms(reference, screen_zero);
+    let mic_out = voice.as_ref().map(|_| video.with_extension("mic.m4a"));
+    let voice = voice.map(|(capture, raw, first)| NativeMic { capture, raw, shift_ms: signed_ms(first, reference) });
+    Ok(Some(Companion { child, voice, camera: camera_out, mic: mic_out, offset_ms }))
 }
 
 /// Region grab through FFmpeg. Returns once the first frame is on disk.
@@ -405,7 +490,7 @@ fn wait_for(child: &mut Child, timeout: Duration) -> bool {
 pub fn shutdown(state: &RecordingState) {
     if let Some(mut session) = state.0.lock().ok().and_then(|mut s| s.take()) {
         if let Some(c) = session.companion.as_mut() {
-            finish(&mut c.child);
+            finish_companion(c);
         }
         let _ = session.screen.finish();
         orphan::forget();
@@ -487,7 +572,7 @@ pub fn recording_stop(
 
     let screen = session.screen.finish();
     let companion = session.companion.take().map(|mut c| {
-        finish(&mut c.child);
+        finish_companion(&mut c);
         c
     });
     orphan::forget();
@@ -579,4 +664,16 @@ pub async fn screenshot_capture(window: WebviewWindow, region: CaptureRegion) ->
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lines_the_voice_up_with_the_camera() {
+        assert_eq!(shift_filter(120.4), "adelay=120:all=1");
+        assert_eq!(shift_filter(0.0), "adelay=0:all=1");
+        assert_eq!(shift_filter(-250.0), "atrim=start=0.250,asetpts=PTS-STARTPTS");
+    }
 }

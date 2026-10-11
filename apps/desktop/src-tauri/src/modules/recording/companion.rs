@@ -64,6 +64,9 @@ pub struct Outputs {
 /// voice lost, drifting out of sync). The audio is also re-timed on its
 /// capture timestamps, so any gap that still happens becomes silence instead
 /// of shifting everything after it.
+///
+/// The studio now records the mic natively (`media::mic`): avfoundation lost
+/// samples even on its own input. Only the camera still goes through here.
 pub fn companion_args(camera: Option<u32>, mic: Option<u32>, video: &Path) -> Option<(Vec<String>, Outputs)> {
     if camera.is_none() && mic.is_none() {
         return None;

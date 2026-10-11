@@ -37,7 +37,7 @@ pub fn run() {
             media::recording_open,
             media::asset_import,
             media::silence::audio_silences,
-            media::silence::microphone_level,
+            media::voiceover::microphone_level,
             media::voiceover::voiceover_start,
             media::voiceover::voiceover_stop,
             media::voiceover::voiceover_cancel,

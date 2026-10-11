@@ -424,6 +424,13 @@ n'en sait rien.
   annule. La prise est nettoyée par la même chaîne que la voix du studio (`VOICE_CHAIN`), copiée dans
   `<stem>.assets/`, posée au point de départ (`in` = avance du fichier) : volume, fondus, coupe et déplacement
   comme tout son.
+- **Capture du micro native** (`media/mic.rs`, cpal sur CoreAudio, WAV 32 bits flottant mono) : FFmpeg 8.1
+  (avfoundation) perdait environ 12 % des échantillons sur ce Mac, même micro seul ; `aresample=async=1` les
+  remplaçait par des trous de 70 à 90 ms par seconde, d'où une voix hachée et incompréhensible. Voix off et
+  narration du studio passent maintenant par cette capture (test `keeps_every_sample`, ignoré par défaut car il
+  faut un micro : 7,912 s d'horloge pour 7,925 s enregistrées). Au studio, le WAV est recalé sur la caméra
+  (`shift_filter` : `adelay` ou `atrim`) en devenant `<stem>.mic.m4a`, l'`offsetMs` unique ne change pas.
+  FFmpeg ne garde que la caméra et le nettoyage (`-ac 1` : le WAV mono nomme son canal « FL », refusé par l'AAC).
 - **Choix du micro** : menu « Best microphone » à côté du bouton du panneau Projet (mémorisé à part du studio).
   Avant chaque prise, chaque micro est écouté 0,8 s (`microphone_level`) dans l'ordre : choisi, intégré, autres,
   virtuels (Teams, Zoom, BlackHole…) en dernier ; le premier qui entend plus de -85 dB enregistre. Si tous sont

@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use serde::Serialize;
 
 use super::{asset_file, recording_path};
-use crate::modules::recording::{ffmpeg, voice};
+use crate::modules::recording::ffmpeg;
 
 /// A stretch of silence, in seconds of the file. `end` is `None` when the
 /// silence runs to the end of the file.
@@ -77,36 +77,6 @@ pub fn audio_silences(video_path: String, file: String, threshold_db: f64, min_s
         return Err("The sound could not be read.".into());
     }
     Ok(parse_silences(&String::from_utf8_lossy(&out.stderr)))
-}
-
-/// Loudest level a microphone hears in a short listen, in dB. A device that
-/// is listed but not live (a meeting app's virtual mic, an iPhone out of
-/// reach) gives pure digital silence, around -91 dB.
-#[tauri::command(async)]
-pub fn microphone_level(microphone: u32) -> Result<f64, String> {
-    let bin = ffmpeg::locate().ok_or("FFmpeg was not found. Install it (brew install ffmpeg).")?;
-    let mut child = Command::new(bin)
-        .args(["-hide_banner", "-nostats", "-f", "avfoundation", "-i"])
-        .arg(format!("none:{microphone}"))
-        .args(["-t", "0.8", "-af", "volumedetect", "-f", "null", "-"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("start the microphone: {e}"))?;
-    // A device that never delivers a sample would hang FFmpeg.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
-    while std::time::Instant::now() < deadline {
-        if let Ok(Some(_)) = child.try_wait() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    if matches!(child.try_wait(), Ok(None)) {
-        let _ = child.kill();
-    }
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    Ok(voice::peak_db(&String::from_utf8_lossy(&out.stderr)).unwrap_or(-91.0))
 }
 
 #[cfg(test)]

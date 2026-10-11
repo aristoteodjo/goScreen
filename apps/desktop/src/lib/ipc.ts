@@ -279,7 +279,7 @@ export const ipc = {
         await invoke("export_finish", { videoPath, clicks, volume, pieces }),
       ),
   /** Starts the mic for a voice-over; resolves once sound is recording. */
-  voiceOverStart: async (videoPath: string, microphone: number) =>
+  voiceOverStart: async (videoPath: string, microphone: string) =>
     z
       .object({ lead: z.number().nonnegative() })
       .parse(await invoke("voiceover_start", { videoPath, microphone })),
@@ -289,7 +289,7 @@ export const ipc = {
       .object({ asset: importedAssetSchema, silent: z.boolean() })
       .parse(await invoke("voiceover_stop")),
   /** Loudest level the microphone hears in a short listen, in dB. */
-  microphoneLevel: async (microphone: number) =>
+  microphoneLevel: async (microphone: string) =>
     z.number().parse(await invoke("microphone_level", { microphone })),
   /** Silent stretches of an asset, in seconds of the file (end null: to the end). */
   audioSilences: async (

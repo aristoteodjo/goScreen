@@ -21,7 +21,9 @@ pub fn raw_path(mic: &Path) -> PathBuf {
 pub fn enhance_args(raw: &Path, out: &Path) -> Vec<String> {
     let mut args: Vec<String> = ["-hide_banner", "-loglevel", "error", "-y", "-i"].map(String::from).to_vec();
     args.push(raw.to_string_lossy().into_owned());
-    args.extend(["-af", VOICE_CHAIN, "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"].map(String::from));
+    // A voice is mono; a native capture's WAV names its one channel "FL",
+    // which the AAC encoder refuses.
+    args.extend(["-af", VOICE_CHAIN, "-ac", "1", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"].map(String::from));
     args.push(out.to_string_lossy().into_owned());
     args
 }
