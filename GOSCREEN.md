@@ -260,7 +260,8 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   suite sans toucher au montage à l'écran (`exportVariants`, panneau Film « Export several formats »).
 - L'export hors du dialogue (IA, variantes) passe par `exportCurrent` : une exportation à la fois, garde-fou de
   30 s si la fenêtre est cachée.
-- IA : `edit.setFilm` (seulement les champs à changer), `export.variants`, `edit.addMedia` (image, vidéo ou son par chemin absolu).
+- IA : `edit.setFilm` (seulement les champs à changer), `export.variants`, `edit.addMedia` (image, vidéo ou son par chemin absolu),
+  `edit.cleanSilences` (pauses d'un son, ou de toutes les voix off et du micro).
 - **Rendu « vitrine »** (`film.look = "showcase"`, par défaut, celui des VSL OEUF D'OR) : appareil avec sa coque à
   75 % de la hauteur en 9:16 (à droite en 16:9), au-dessus un sur-titre de chapitre (`film.label` : « ACHETEUR ·
   2/11 », pastille d'accent, JetBrains Mono espacé) et le titre de la scène aligné à gauche, disque d'accent à
@@ -423,6 +424,20 @@ n'en sait rien.
   annule. La prise est nettoyée par la même chaîne que la voix du studio (`VOICE_CHAIN`), copiée dans
   `<stem>.assets/`, posée au point de départ (`in` = avance du fichier) : volume, fondus, coupe et déplacement
   comme tout son.
+- **Choix du micro** : menu « Best microphone » à côté du bouton du panneau Projet (mémorisé à part du studio).
+  Avant chaque prise, chaque micro est écouté 0,8 s (`microphone_level`) dans l'ordre : choisi, intégré, autres,
+  virtuels (Teams, Zoom, BlackHole…) en dernier ; le premier qui entend plus de -85 dB enregistre. Si tous sont
+  muets, c'est macOS qui retient le micro : le message nomme l'application à autoriser
+  (`responsible_app_name`) et ouvre le réglage.
+- **Autorisations en développement** (`dev_privacy.rs`, debug macOS seulement) : lancé par Portly ou un terminal,
+  goScreen se relance une fois « désolidarisé » (`responsibility_spawnattrs_setdisclaim`) pour que macOS demande
+  micro, caméra et écran au nom de goScreen (son `Info.plist` est embarqué), comme l'application finale. Sans cela,
+  macOS interroge Portly, qui ne déclare pas le micro et reçoit du silence sans fenêtre de demande.
+- **Silences** (`silences.ts`, pur et testé ; Rust `media/silence.rs`, `silencedetect`) : dans les contrôles d'un
+  son, « Remove pauses » découpe le clip autour de chaque pause et « Trim silent ends » ne coupe que l'attente
+  avant le premier mot et après le dernier. Les morceaux gardent leur temps, la voix reste calée sur l'image.
+  Seuil et durée de pause réglables ; longueur minimale d'un son jugée avant la marge. Chaque prise de voix off
+  est rognée à ses bouts automatiquement. Marche aussi sur la piste Mic d'un enregistrement.
 
 ### Onglets et IA visible
 

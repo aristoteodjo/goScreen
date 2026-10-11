@@ -1,12 +1,27 @@
-import { Mic01Icon, StopIcon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDown01Icon,
+  Mic01Icon,
+  StopIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ipc } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useCaptureSettings } from "@/modules/recording/settings";
-import { addVoiceOver } from "./actions";
+import { addVoiceOver, cleanSilences } from "./actions";
 import { player, setMonitorMuted, useSession } from "./session";
 import { timelineEnd, useEdit, usePlayback } from "./store";
 
@@ -14,7 +29,7 @@ import { timelineEnd, useEdit, usePlayback } from "./store";
 // (speakers off, so they do not bleed into the mic) while the voice records;
 // stop with the button, Space or at the end. The take lands at the playhead.
 
-type Phase = "idle" | "countdown" | "recording" | "saving";
+type Phase = "idle" | "checking" | "countdown" | "recording" | "saving";
 
 type VoiceOver = {
   phase: Phase;
@@ -39,11 +54,53 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 let take = { fileAt: 0, wall: 0 };
 let unwatch: (() => void) | null = null;
 
+/** The voice-over's own microphone choice (null: the best one that hears). */
+export const useVoiceMic = create<{
+  name: string | null;
+  setName: (name: string | null) => void;
+}>()(
+  persist((set) => ({ name: null, setName: (name) => set({ name }) }), {
+    name: "goscreen.voiceover.mic",
+    storage: createJSONStorage(() => localStorage),
+    partialize: (s) => ({ name: s.name }),
+  }),
+);
+
+// Devices meeting and streaming apps install: listed like a mic, but they
+// carry no voice unless a call is running (digital silence).
+const VIRTUAL =
+  /teams|zoom|blackhole|loopback|soundflower|krisp|virtual|aggregate|obs|webex|discord/i;
+const BUILT_IN = /macbook|built-in|internal|imac/i;
+// Pure digital silence is around -91 dB; a quiet room is near -60.
+const LIVE_DB = -85;
+
+type Mic = { index: number; name: string };
+
+/** Microphones in the order to try: the chosen one, built-in, others, virtual last. */
+export function rankMicrophones(mics: Mic[], wanted: string | null): Mic[] {
+  const score = (m: Mic) =>
+    m.name === wanted
+      ? 0
+      : VIRTUAL.test(m.name)
+        ? 3
+        : BUILT_IN.test(m.name)
+          ? 1
+          : 2;
+  return [...mics].sort((a, b) => score(a) - score(b) || a.index - b.index);
+}
+
+/** The first microphone that actually hears something, and those that did not. */
 async function pickMicrophone() {
   const devices = await ipc.captureDevices();
-  const wanted = useCaptureSettings.getState().microphone;
-  const mics = devices.microphones;
-  return mics.find((m) => m.name === wanted) ?? mics[0] ?? null;
+  const wanted =
+    useVoiceMic.getState().name ?? useCaptureSettings.getState().microphone;
+  const silent: string[] = [];
+  for (const mic of rankMicrophones(devices.microphones, wanted)) {
+    const db = await ipc.microphoneLevel(mic.index).catch(() => -91);
+    if (db > LIVE_DB) return { mic, silent };
+    silent.push(mic.name);
+  }
+  return { mic: null, silent };
 }
 
 export async function startVoiceOver() {
@@ -53,17 +110,40 @@ export async function startVoiceOver() {
   const end = timelineEnd(useEdit.getState().edit);
   if (usePlayback.getState().time >= end - 0.2) player.seek(0);
   player.pause();
-  let mic: Awaited<ReturnType<typeof pickMicrophone>>;
+  set({ phase: "checking", mic: "" });
+  let picked: Awaited<ReturnType<typeof pickMicrophone>>;
   try {
-    mic = await pickMicrophone();
+    picked = await pickMicrophone();
   } catch (e) {
+    set({ phase: "idle" });
     toast.error("Microphones could not be listed", { description: message(e) });
     return;
   }
+  if (useVoiceOver.getState().phase !== "checking") return;
+  const { mic, silent } = picked;
   if (!mic) {
-    toast.error("No microphone found.");
+    set({ phase: "idle" });
+    if (silent.length === 0) {
+      toast.error("No microphone is connected.");
+      return;
+    }
+    // Every device silent, the built-in one included: macOS is withholding
+    // the microphone, from the app that launched goScreen.
+    const app = await ipc.responsibleApp().catch(() => "goScreen");
+    toast.error(`macOS gives "${app}" no microphone`, {
+      description: `Every microphone recorded silence (${silent.join(", ")}). Allow "${app}" in System Settings, Privacy & Security, Microphone, then quit and reopen it.`,
+      duration: 15000,
+      action: {
+        label: "Open settings",
+        onClick: () => void ipc.openPrivacySettings("microphone"),
+      },
+    });
     return;
   }
+  if (silent.length)
+    toast.info(`Recording with ${mic.name}`, {
+      description: `${silent.join(", ")} heard nothing (a virtual or disconnected device).`,
+    });
   set({ phase: "countdown", count: PRE_ROLL, mic: mic.name });
   // The mic warms up during the pre-roll.
   const started = ipc
@@ -105,7 +185,7 @@ export async function startVoiceOver() {
 
 export async function stopVoiceOver() {
   const { phase, start } = useVoiceOver.getState();
-  if (phase === "countdown") {
+  if (phase === "countdown" || phase === "checking") {
     set({ phase: "idle" });
     return;
   }
@@ -118,11 +198,14 @@ export async function stopVoiceOver() {
   set({ phase: "saving" });
   try {
     const result = await ipc.voiceOverStop();
-    addVoiceOver(result.asset, {
+    const id = addVoiceOver(result.asset, {
       start,
       in: take.fileAt,
       duration: Math.min(length, timelineEnd(useEdit.getState().edit) - start),
     });
+    // The wait before the first word and after the last goes; the voice
+    // keeps its place against the picture.
+    if (!result.silent) await cleanSilences(id, "trim").catch(() => {});
     if (result.silent)
       toast.warning("The voice-over is silent", {
         description:
@@ -196,11 +279,13 @@ export function VoiceOverOverlay() {
             phase === "recording" && "animate-pulse",
           )}
         />
-        {phase === "saving"
-          ? "Cleaning the voice…"
-          : phase === "countdown"
-            ? `Voice-over · ${mic}`
-            : `Recording · ${(time - start).toFixed(1)} s`}
+        {phase === "checking"
+          ? "Checking the microphone…"
+          : phase === "saving"
+            ? "Cleaning the voice…"
+            : phase === "countdown"
+              ? `Voice-over · ${mic}`
+              : `Recording · ${(time - start).toFixed(1)} s`}
         {phase !== "saving" ? (
           <Button
             size="sm"
@@ -213,5 +298,68 @@ export function VoiceOverOverlay() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** Which microphone the voice-over uses. */
+export function VoiceOverMicMenu({ className }: { className?: string }) {
+  const name = useVoiceMic((s) => s.name);
+  const setName = useVoiceMic((s) => s.setName);
+  const [mics, setMics] = useState<Mic[] | null>(null);
+  return (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open)
+          ipc
+            .captureDevices()
+            .then((d) => setMics(d.microphones))
+            .catch(() => setMics([]));
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title="Microphone for voice-overs"
+          className={cn(
+            "flex h-7 max-w-40 items-center gap-1 rounded px-1.5 text-[11px] text-muted-foreground hover:bg-white/10 hover:text-foreground",
+            className,
+          )}
+        >
+          <span className="truncate">{name ?? "Best microphone"}</span>
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            size={11}
+            className="shrink-0 opacity-60"
+          />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="end" className="w-64">
+        <DropdownMenuLabel>Voice-over microphone</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup
+          value={name ?? ""}
+          onValueChange={(v) => setName(v || null)}
+        >
+          <DropdownMenuRadioItem value="">
+            Best microphone (checked before each take)
+          </DropdownMenuRadioItem>
+          {(mics ?? []).map((m) => (
+            <DropdownMenuRadioItem key={m.index} value={m.name}>
+              {m.name}
+              {VIRTUAL.test(m.name) ? (
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  virtual
+                </span>
+              ) : null}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {mics === null ? (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            Looking for microphones…
+          </p>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

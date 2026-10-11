@@ -12,6 +12,9 @@ import {
   TRANSITION_KINDS,
   type TransitionKind,
 } from "@goscreen/render-engine";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,11 +28,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { editActions } from "./actions";
 import { AnimatePanel } from "./AnimatePanel";
+import { cleanSilences, editActions, type SilenceMode } from "./actions";
 import { useBlocksDialog } from "./BlocksDialog";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
+import { SILENCE_DEFAULTS } from "./silences";
 import { useEdit, usePlayback } from "./store";
 import { SHAPES } from "./TimelineToolbar";
 
@@ -761,7 +765,81 @@ export function MusicPanel() {
           onChange={(fadeOut) => set({ fadeOut }, "fade-out")}
         />
       </Section>
-      <DeleteButton label="Delete music" />
+      <SilenceSection clipId={clip.id} />
+      <DeleteButton
+        label={
+          name?.startsWith("Voice-over") ? "Delete voice-over" : "Delete sound"
+        }
+      />
     </>
+  );
+}
+
+/** Pauses of a sound: cut them all, or only the wait at both ends. */
+function SilenceSection({ clipId }: { clipId: string }) {
+  const [thresholdDb, setThreshold] = useState(SILENCE_DEFAULTS.thresholdDb);
+  const [minSilence, setMinSilence] = useState(SILENCE_DEFAULTS.minSilence);
+  const clean = useMutation({
+    mutationFn: (mode: SilenceMode) =>
+      cleanSilences(clipId, mode, { thresholdDb, minSilence }),
+    onSuccess: (pieces, mode) => {
+      if (typeof pieces !== "number") return;
+      toast.success(
+        mode === "trim"
+          ? "Silent ends trimmed"
+          : pieces > 1
+            ? `Pauses removed: ${pieces} pieces, each at its original time`
+            : "No pause long enough to cut",
+      );
+    },
+    onError: (e) =>
+      toast.error("The silences could not be cut", {
+        description: e instanceof Error ? e.message : String(e),
+      }),
+  });
+  return (
+    <Section
+      title="Silences"
+      hint="Pieces stay at their time, so the voice keeps its sync with the picture."
+    >
+      <p className="text-[11px] text-muted-foreground">Silence below</p>
+      <SliderRow
+        value={thresholdDb}
+        min={-60}
+        max={-25}
+        step={1}
+        format={(v) => `${v} dB`}
+        onChange={setThreshold}
+      />
+      <p className="text-[11px] text-muted-foreground">Pauses longer than</p>
+      <SliderRow
+        value={minSilence}
+        min={0.2}
+        max={2}
+        step={0.05}
+        format={(v) => `${v.toFixed(2)} s`}
+        onChange={setMinSilence}
+      />
+      <div className="flex gap-2 pt-1">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+          disabled={clean.isPending}
+          onClick={() => clean.mutate("strip")}
+        >
+          Remove pauses
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+          disabled={clean.isPending}
+          onClick={() => clean.mutate("trim")}
+        >
+          Trim silent ends
+        </Button>
+      </div>
+    </Section>
   );
 }

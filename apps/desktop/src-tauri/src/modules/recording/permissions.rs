@@ -54,6 +54,12 @@ pub fn companion_message() -> String {
     )
 }
 
+/// The app to allow in System Settings for this process's permissions.
+#[tauri::command(async)]
+pub fn responsible_app_name() -> String {
+    responsible_app()
+}
+
 /// Opens System Settings on one privacy pane. The pane is a closed list.
 #[tauri::command]
 pub fn open_privacy_settings(pane: String) -> Result<(), String> {

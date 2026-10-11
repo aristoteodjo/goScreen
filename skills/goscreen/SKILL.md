@@ -91,7 +91,9 @@ open it.
    Media the person gives you (logo, product shot, music, a voice-over
    recorded elsewhere): `edit_addMedia` with the file's absolute path. The
    person records their own voice-over in the editor (mic button on any
-   audio track): suggest it, do not wait for it.
+   audio track): suggest it, do not wait for it. Once a voice is there,
+   `edit_cleanSilences` cuts its pauses (mode "strip") or only the wait at
+   both ends ("trim"); pieces keep their time, so the voice stays in sync.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees, or `export_variants` for several formats at once (9:16 for
    stories, 16:9 for web, 1:1 and 4:5 for feeds). The goScreen window must

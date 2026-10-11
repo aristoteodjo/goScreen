@@ -25,7 +25,7 @@ import { PanelFrame } from "./PanelFrame";
 import { player, useSession } from "./session";
 import { useEdit, usePlayback } from "./store";
 import { SHAPES } from "./TimelineToolbar";
-import { VoiceOverButton } from "./voiceover";
+import { VoiceOverButton, VoiceOverMicMenu } from "./voiceover";
 import { type LeftTab, useWorkspace } from "./workspace";
 
 // The Project panel, Premiere style: the film's media in a bin (drag them
@@ -158,7 +158,7 @@ function MediaBin() {
           Import…
         </Button>
         <div className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-          Voice-over
+          <VoiceOverMicMenu />
           <VoiceOverButton className="size-7" />
         </div>
       </footer>

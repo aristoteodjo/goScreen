@@ -218,6 +218,9 @@ export const ipc = {
     recordingStartedSchema.parse(
       await invoke("recording_start", { region, fps, ...media }),
     ),
+  /** The app macOS asks about for this process (Portly or a terminal in dev). */
+  responsibleApp: async () =>
+    z.string().parse(await invoke("responsible_app_name")),
   openPrivacySettings: async (pane: "screen" | "camera" | "microphone") => {
     await invoke("open_privacy_settings", { pane });
   },
@@ -285,6 +288,24 @@ export const ipc = {
     z
       .object({ asset: importedAssetSchema, silent: z.boolean() })
       .parse(await invoke("voiceover_stop")),
+  /** Loudest level the microphone hears in a short listen, in dB. */
+  microphoneLevel: async (microphone: number) =>
+    z.number().parse(await invoke("microphone_level", { microphone })),
+  /** Silent stretches of an asset, in seconds of the file (end null: to the end). */
+  audioSilences: async (
+    videoPath: string,
+    file: string,
+    thresholdDb: number,
+    minSilence: number,
+  ) =>
+    z.array(z.object({ start: z.number(), end: z.number().nullable() })).parse(
+      await invoke("audio_silences", {
+        videoPath,
+        file,
+        thresholdDb,
+        minSilence,
+      }),
+    ),
   voiceOverCancel: async () => {
     await invoke("voiceover_cancel");
   },

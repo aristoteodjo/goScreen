@@ -1,11 +1,11 @@
-import { naturalSize } from "@/modules/editor/actions";
-import { probeDuration } from "@/modules/editor/media";
-import { openPlace } from "@/modules/tabs/tabs";
+import { BLOCKS } from "@goscreen/blocks";
 import {
   ANIMATION_PRESETS,
+  type AudioClip,
   applyPreset,
   clearAnimation,
   type EditState,
+  MIC_ASSET,
   type Overlay,
   parseEditState,
   parseRecordingFile,
@@ -29,12 +29,13 @@ import {
   scenarioSchema,
   stepSchema,
 } from "@goscreen/scenario";
-import { BLOCKS } from "@goscreen/blocks";
 import { z } from "zod";
 import { ipc, projectsIpc } from "@/lib/ipc";
 import { queryClient } from "@/lib/queryClient";
 import { registry } from "@/lib/registry";
 import { router } from "@/lib/router";
+import { naturalSize } from "@/modules/editor/actions";
+import { addBlock, updateBlock } from "@/modules/editor/blocks";
 import {
   exportCurrent,
   exportRunning,
@@ -42,10 +43,14 @@ import {
   openForExport,
   stopExport,
 } from "@/modules/editor/exportCurrent";
+import { probeDuration } from "@/modules/editor/media";
 import { useSession } from "@/modules/editor/session";
-import { addBlock, updateBlock } from "@/modules/editor/blocks";
-import { useEdit } from "@/modules/editor/store";
-import { useFlowDoc } from "@/modules/flow/store";
+import {
+  SILENCE_DEFAULTS,
+  stripSilences,
+  trimSilentEnds,
+} from "@/modules/editor/silences";
+import { newId, useEdit } from "@/modules/editor/store";
 import {
   record,
   setValue,
@@ -53,6 +58,8 @@ import {
   valuesKey,
   valuesOf,
 } from "@/modules/flow/runs";
+import { useFlowDoc } from "@/modules/flow/store";
+import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand } from "./registry";
@@ -153,6 +160,11 @@ export function registerCommands() {
     input: z.object({}),
     run: async () => ({
       location: router.state.location.href,
+      tabs: useTabs.getState().tabs.map((t) => ({
+        title: t.title,
+        href: t.href,
+        active: t.id === useTabs.getState().active,
+      })),
       tasks: useTasks.getState().tasks.slice(0, 10).map(taskView),
     }),
   });
@@ -640,6 +652,71 @@ export function registerCommands() {
         throw new Error("This animation cannot be read.");
       await applyEdit(i.video, checked);
       return { overlay: result };
+    },
+  });
+  defineCommand({
+    name: "edit.cleanSilences",
+    title: "Cut the silences of a sound",
+    description:
+      'Cuts the pauses of an audio clip (a voice-over, the recording\'s mic, music): mode "strip" splits it around every pause longer than minSilence, "trim" only cuts the wait before the first word and after the last. Pieces keep their timeline time, so a voice stays in sync with the picture. Without clip: every voice-over and mic clip of the montage. Returns the clips it made.',
+    input: z.object({
+      video,
+      clip: z.string().optional(),
+      mode: z.enum(["strip", "trim"]).default("strip"),
+      thresholdDb: z
+        .number()
+        .min(-80)
+        .max(-10)
+        .default(SILENCE_DEFAULTS.thresholdDb),
+      minSilence: z
+        .number()
+        .min(0.05)
+        .max(10)
+        .default(SILENCE_DEFAULTS.minSilence),
+    }),
+    run: async (i) => {
+      let edit = await currentEdit(i.video);
+      const voices = edit.audio.filter((a) =>
+        i.clip
+          ? a.id === i.clip
+          : a.asset === MIC_ASSET ||
+            edit.assets
+              .find((x) => x.id === a.asset)
+              ?.name.startsWith("Voice-over"),
+      );
+      if (voices.length === 0)
+        throw new Error(
+          i.clip ? `No audio clip ${i.clip}.` : "No voice-over or mic clip.",
+        );
+      const made: Record<string, string[]> = {};
+      for (const clip of voices) {
+        const file =
+          clip.asset === MIC_ASSET
+            ? ":mic"
+            : edit.assets.find((x) => x.id === clip.asset)?.file;
+        if (!file) continue;
+        const silences = await ipc.audioSilences(
+          i.video,
+          file,
+          i.thresholdDb,
+          i.minSilence,
+        );
+        const o = { ...SILENCE_DEFAULTS, ...i };
+        const pieces =
+          i.mode === "strip"
+            ? stripSilences(clip, silences, o, () => newId("aud"))
+            : [trimSilentEnds(clip, silences, o)].filter(
+                (c): c is AudioClip => c !== null,
+              );
+        if (pieces.length === 0) continue;
+        made[clip.id] = pieces.map((p) => p.id);
+        edit = {
+          ...edit,
+          audio: edit.audio.flatMap((a) => (a.id === clip.id ? pieces : [a])),
+        };
+      }
+      await applyEdit(i.video, edit);
+      return { clips: made, item: Object.values(made)[0]?.[0] };
     },
   });
   defineCommand({

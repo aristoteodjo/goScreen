@@ -26,6 +26,7 @@ use tokio::sync::{mpsc, OnceCell};
 
 use super::local_http;
 
+pub mod silence;
 pub mod voiceover;
 
 const CHUNK: usize = 256 * 1024;

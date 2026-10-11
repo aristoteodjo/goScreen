@@ -29,6 +29,12 @@ import { ipc } from "@/lib/ipc";
 import { probeDuration } from "./media";
 import { player, useSession } from "./session";
 import {
+  SILENCE_DEFAULTS,
+  type SilenceOptions,
+  stripSilences,
+  trimSilentEnds,
+} from "./silences";
+import {
   newId,
   type Selection,
   timelineEnd,
@@ -608,6 +614,55 @@ export function addVoiceOver(
     "voice-over",
   );
   usePlayback.getState().select({ kind: "audio", id: clip.id });
+  return clip.id;
+}
+
+export type SilenceMode = "strip" | "trim";
+
+/**
+ * Cuts the pauses of an audio clip ("strip": every pause, "trim": only before
+ * the first word and after the last). The pieces keep their time, so a voice
+ * stays in sync with the picture. Returns how many pieces remain.
+ */
+export async function cleanSilences(
+  clipId: string,
+  mode: SilenceMode,
+  options: Partial<SilenceOptions> = {},
+): Promise<number> {
+  const { videoPath } = useSession.getState();
+  const edit = useEdit.getState().edit;
+  const clip = edit.audio.find((a) => a.id === clipId);
+  if (!videoPath || !clip)
+    throw new Error("This sound is no longer in the edit.");
+  const file =
+    clip.asset === MIC_ASSET
+      ? ":mic"
+      : edit.assets.find((a) => a.id === clip.asset)?.file;
+  if (!file) throw new Error("This sound's file is missing.");
+  const o = { ...SILENCE_DEFAULTS, ...options };
+  const silences = await ipc.audioSilences(
+    videoPath,
+    file,
+    o.thresholdDb,
+    o.minSilence,
+  );
+  // The clip may have moved while FFmpeg listened.
+  const now = useEdit.getState().edit.audio.find((a) => a.id === clipId);
+  if (!now) throw new Error("This sound is no longer in the edit.");
+  const pieces =
+    mode === "strip"
+      ? stripSilences(now, silences, o, () => newId("aud"))
+      : [trimSilentEnds(now, silences, o)].filter(
+          (c): c is AudioClip => c !== null,
+        );
+  if (pieces.length === 0)
+    throw new Error("Only silence was found: lower the threshold.");
+  change((ed) => ({
+    ...ed,
+    audio: ed.audio.flatMap((a) => (a.id === clipId ? pieces : [a])),
+  }));
+  usePlayback.getState().select({ kind: "audio", id: pieces[0].id });
+  return pieces.length;
 }
 
 async function addAsset(

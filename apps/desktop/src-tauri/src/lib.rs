@@ -1,3 +1,5 @@
+#[cfg(all(debug_assertions, target_os = "macos"))]
+pub mod dev_privacy;
 pub mod modules;
 
 use modules::{android, control, export, media, projects, proxy, recording, scenario};
@@ -25,6 +27,7 @@ pub fn run() {
             recording::commands::screenshot_capture,
             recording::commands::capture_devices,
             recording::permissions::open_privacy_settings,
+            recording::permissions::responsible_app_name,
             android::commands::android_status,
             android::commands::android_devices,
             android::commands::android_device_info,
@@ -33,6 +36,8 @@ pub fn run() {
             android::commands::android_input,
             media::recording_open,
             media::asset_import,
+            media::silence::audio_silences,
+            media::silence::microphone_level,
             media::voiceover::voiceover_start,
             media::voiceover::voiceover_stop,
             media::voiceover::voiceover_cancel,
