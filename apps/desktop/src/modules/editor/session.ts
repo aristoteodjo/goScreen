@@ -11,6 +11,7 @@ import {
 } from "@goscreen/render-engine";
 import { create } from "zustand";
 import { geometryOf } from "./devices";
+import { shouldSeek } from "./drift";
 import { pooledEntries } from "./media";
 import { timelineEnd, useEdit, usePlayback } from "./store";
 
@@ -111,9 +112,7 @@ export function assetUrl(edit: EditState, id: string): string | null {
   return file ? (useSession.getState().assetUrls[file] ?? null) : null;
 }
 
-// Media follow the timeline clock. Small drift is left alone: seeking a
-// playing element stutters.
-const DRIFT = 0.2;
+const lastSeek = new WeakMap<HTMLMediaElement, number>();
 
 function follow(
   m: HTMLMediaElement,
@@ -130,8 +129,18 @@ function follow(
     return;
   }
   if (m.playbackRate !== rate) m.playbackRate = rate;
-  if (!playing || Math.abs(m.currentTime - local) > DRIFT)
+  const now = performance.now();
+  // An element about to start lands exactly on the playhead first.
+  const seek = shouldSeek({
+    playing: playing && !m.paused,
+    drift: Math.abs(m.currentTime - local),
+    seeking: m.seeking,
+    msSinceSeek: now - (lastSeek.get(m) ?? -Infinity),
+  });
+  if (seek) {
     m.currentTime = local;
+    lastSeek.set(m, now);
+  }
   if (playing && m.paused) void m.play().catch(() => {});
   if (!playing && !m.paused) m.pause();
 }

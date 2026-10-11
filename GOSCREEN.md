@@ -380,6 +380,9 @@ n'en sait rien.
 - Non destructif : le MP4 n'est jamais modifié ; les effets vivent dans `*.edit.json` (autosave, parse
   champ par champ avec repli).
 - Un seul rendu : `composeFrame` (pur) + `drawFrame` (Canvas2D) servent la preview et l'export.
+- Lecture : chaque média suit l'horloge de la timeline, mais un élément qui joue n'est recalé qu'au-delà de
+  0,3 s de dérive, jamais pendant un saut ni dans la seconde qui suit (`drift.ts`, pur et testé) : recaler un
+  élément qui redémarre le fait sauter en boucle et rend une voix off incompréhensible.
   La vidéo est servie par un serveur média local (Range + CORS) pour que le canvas ne soit pas « tainted ».
 - Serveurs locaux de l'app (média, flux Android) : URL à jeton aléatoire 128 bits, CORS limité à l'origine
   du studio, toute autre `Origin` refusée (`local_http.rs`). Les sites prévisualisés vivent aussi sur 127.0.0.1.
