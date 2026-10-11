@@ -137,6 +137,19 @@ function NodePanel({ node }: { node: FlowNode }) {
           </Field>
         )}
       </Section>
+      <Section title="On the site">
+        <Button
+          size="sm"
+          onClick={() => useFlowDoc.getState().setLive(node.id)}
+        >
+          Record actions on the site
+        </Button>
+        <p className="text-[11px] text-muted-foreground">
+          Opens the page as it is after the scenes before this one, then adds
+          each click, typing and scroll you make as a step. No need to read the
+          site's code.
+        </p>
+      </Section>
       <Section title={`Steps (${node.steps.length})`}>
         <StepsEditor
           steps={node.steps}

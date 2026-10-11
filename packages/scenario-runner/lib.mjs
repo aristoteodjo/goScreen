@@ -55,6 +55,27 @@ export function extract(text, match) {
   return (m[1] ?? m[0]).trim();
 }
 
+/** Glass fractions -> page (layout) pixels, through the visual viewport. */
+export function fromGlass(u, v, vv) {
+  return { x: vv.x + u * vv.width, y: vv.y + v * vv.height };
+}
+
+/**
+ * Ways to name an element, most robust first: a test id, then what a person
+ * reads (role and name, label, placeholder, text), then structure (id, path).
+ */
+export function candidatesOrder(c) {
+  const out = [];
+  if (c.testId) out.push({ testId: c.testId });
+  if (c.role) out.push({ role: c.role.role, name: c.role.name });
+  if (c.label) out.push({ label: c.label });
+  if (c.placeholder) out.push({ placeholder: c.placeholder });
+  if (c.text) out.push({ text: c.text });
+  if (c.id) out.push({ css: c.id });
+  if (c.css) out.push({ css: c.css });
+  return out;
+}
+
 /** The interactions journal (v3) of a device take. */
 export function journal({ device, size, pointers, chapters }) {
   return {

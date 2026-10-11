@@ -287,6 +287,17 @@ export const ipc = {
         dry: options.dry ?? false,
       }),
     ),
+  /** Replays, then serves the page live; resolves when the live page closes. */
+  liveStart: async (job: unknown, project: string | null) =>
+    scenarioOutcomeSchema.parse(
+      await invoke("scenario_live", { job, project }),
+    ),
+  liveSend: async (command: Record<string, unknown>) => {
+    await invoke("scenario_live_send", { command });
+  },
+  liveStop: async () => {
+    await invoke("scenario_live_stop");
+  },
   scenarioCancel: async () => {
     await invoke("scenario_cancel");
   },

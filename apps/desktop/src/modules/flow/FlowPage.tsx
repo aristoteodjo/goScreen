@@ -49,6 +49,7 @@ import { queryClient } from "@/lib/queryClient";
 import { projectKeys } from "@/modules/projects/ProjectsHome";
 import { useTasks } from "@/modules/tasks/store";
 import { Inspector } from "./Inspector";
+import { LiveRecorder } from "./LiveRecorder";
 import { type NodeStatus, nodeTypes } from "./nodes";
 import { record, simulate } from "./runs";
 import { flowActions, useFlowDoc } from "./store";
@@ -94,6 +95,7 @@ export function FlowPage({ project, vsl }: { project: string; vsl: string }) {
         </ReactFlowProvider>
         <Inspector project={project} vsl={vsl} />
       </div>
+      <LiveRecorder project={project} vsl={vsl} />
     </div>
   );
 }
@@ -428,6 +430,9 @@ function NodeMenu({
       </ContextMenuSub>
       {id !== START ? (
         <>
+          <ContextMenuItem onClick={() => useFlowDoc.getState().setLive(id)}>
+            Record actions on the site
+          </ContextMenuItem>
           <ContextMenuItem onClick={() => run(upTo)}>
             Simulate up to here
           </ContextMenuItem>

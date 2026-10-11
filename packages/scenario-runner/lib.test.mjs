@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  candidatesOrder,
   extract,
   fillCode,
   fillRemembered,
   framesDue,
+  fromGlass,
   glassPoint,
   journal,
   needsCode,
@@ -95,4 +97,29 @@ test("remember keeps the first group, the match or the text", () => {
   assert.equal(extract("Code : K7Q-9MX", "[A-Z0-9]{3}-[A-Z0-9]{3}"), "K7Q-9MX");
   assert.equal(extract("  plain \n", undefined), "plain");
   assert.throws(() => extract("abc", "\\d+"), /Nothing matches/);
+});
+
+test("glass points land in the visual viewport", () => {
+  assert.deepEqual(
+    fromGlass(0.5, 0.25, { x: 10, y: 100, width: 400, height: 800 }),
+    { x: 210, y: 300 },
+  );
+});
+
+test("targets prefer what a person reads over the page structure", () => {
+  const order = candidatesOrder({
+    role: { role: "button", name: "Pay" },
+    text: "Pay",
+    id: "#pay",
+    css: "main > button",
+  });
+  assert.deepEqual(order, [
+    { role: "button", name: "Pay" },
+    { text: "Pay" },
+    { css: "#pay" },
+    { css: "main > button" },
+  ]);
+  assert.deepEqual(candidatesOrder({ testId: "x", css: "a" })[0], {
+    testId: "x",
+  });
 });

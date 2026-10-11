@@ -201,6 +201,17 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   `flowFromScenario` (import), `layoutFlow` (« Tidy up »). Tourner plusieurs parcours les joue bout à bout dans
   une seule prise : chaque parcours après le premier repart du Départ dans des sessions neuves (`pathN`), pour
   ne jamais partager un panier ou une connexion. Sauvegarde automatique (600 ms).
+- **Enregistrer sur le site** (« Record actions on the site », bouton du nœud ou clic droit ;
+  `LiveRecorder.tsx`, `scenario-runner/live.mjs`) : le runner rejoue le parcours jusqu'à ce nœud (ses étapes
+  comprises), puis diffuse la page (screencast ~8 i/s, événements `scenario-live`) et reçoit les commandes du
+  studio sur son entrée standard (`scenario_live_send`). Un clic est joué sur le site et revient en étape ; la
+  cible est trouvée par le runner (`describeAt` dans la page, puis `chooseTarget` garde la première façon de
+  nommer l'élément qui le trouve dans Playwright : test id, rôle + nom, label, placeholder, texte, id stable,
+  chemin CSS ; `nth` si plusieurs éléments portent le même nom ; iframes comprises, `frame`). Survol = cadre et
+  nom de la cible ; « Pick only » choisit sans cliquer (attendre, défiler jusqu'à, retenir le texte, cocher) ;
+  saisie de texte ou de `{{valeurs}}` (la valeur est tapée, l'étape garde `{{nom}}`), code reçu, Entrée, molette
+  = une étape de défilement par geste. Canal séparé des tâches de fond (un `Slot` Rust chacun). Testé de bout en
+  bout (`live.test.mjs`, page locale).
 - **Simuler** joue un parcours sans filmer (`dry` : ni screencast ni FFmpeg) et colore les nœuds : vert = passé,
   orange = en cours, rouge = l'étape a échoué ici (`origins` relie chaque étape à son nœud).
 - **Tâches de fond** (`modules/tasks/`) : simulations et tournages passent par une file (le runner joue un

@@ -12,6 +12,9 @@ type FlowState = {
   flow: Flow | null;
   dirty: boolean;
   selected: string | null;
+  // The node whose steps are being recorded on the live site.
+  live: string | null;
+  setLive: (id: string | null) => void;
   load: (flow: Flow) => void;
   saved: () => void;
   update: (change: (flow: Flow) => Flow) => void;
@@ -22,7 +25,9 @@ export const useFlowDoc = create<FlowState>((set) => ({
   flow: null,
   dirty: false,
   selected: null,
-  load: (flow) => set({ flow, dirty: false, selected: null }),
+  live: null,
+  setLive: (live) => set({ live }),
+  load: (flow) => set({ flow, dirty: false, selected: null, live: null }),
   saved: () => set({ dirty: false }),
   update: (change) =>
     set((s) => (s.flow ? { flow: change(s.flow), dirty: true } : s)),

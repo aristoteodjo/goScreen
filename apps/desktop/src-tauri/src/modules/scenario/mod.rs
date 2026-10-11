@@ -6,7 +6,8 @@
 use std::{
     io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    io::Write,
+    process::{ChildStdin, Command, Stdio},
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -20,9 +21,20 @@ use super::recording::ffmpeg;
 pub const PROGRESS_EVENT: &str = "scenario-progress";
 const STDERR_TAIL: usize = 4000;
 
+pub const LIVE_EVENT: &str = "scenario-live";
+
+/// One runner process at a time per slot: background takes and the live
+/// editor each have theirs, so editing never waits for a recording.
+#[derive(Default)]
+pub struct Slot {
+    pid: Mutex<Option<u32>>,
+    stdin: Mutex<Option<ChildStdin>>,
+}
+
 #[derive(Default)]
 pub struct ScenarioState {
-    pid: Mutex<Option<u32>>,
+    run: Slot,
+    live: Slot,
 }
 
 #[derive(Serialize)]
@@ -159,7 +171,62 @@ pub fn scenario_run(
     project: Option<String>,
     dry: Option<bool>,
 ) -> Result<ScenarioOutcome, String> {
-    let dry = dry.unwrap_or(false);
+    run_runner(&app, &state.run, job, project, dry.unwrap_or(false), false)
+}
+
+/// Replays `job`'s steps, then streams the page to the studio and takes its
+/// commands (`scenario_live_send`) until `scenario_live_stop`.
+#[tauri::command(async)]
+pub fn scenario_live(
+    app: AppHandle,
+    state: State<'_, ScenarioState>,
+    job: Value,
+    project: Option<String>,
+) -> Result<ScenarioOutcome, String> {
+    run_runner(&app, &state.live, job, project, true, true)
+}
+
+/// One command for the live runner (`tap`, `type`, `inspect`...), as JSON.
+#[tauri::command]
+pub fn scenario_live_send(state: State<'_, ScenarioState>, command: Value) -> Result<(), String> {
+    if !command.is_object() {
+        return Err("Invalid command.".into());
+    }
+    let mut stdin = state.live.stdin.lock().map_err(|_| "live state poisoned")?;
+    let pipe = stdin.as_mut().ok_or("The live page is closed.")?;
+    let mut line = serde_json::to_vec(&command).map_err(|e| e.to_string())?;
+    line.push(b'\n');
+    pipe.write_all(&line).and_then(|_| pipe.flush()).map_err(|e| format!("The live page stopped: {e}"))
+}
+
+/// Asks the live runner to finish; kills it if it no longer listens.
+#[tauri::command]
+pub fn scenario_live_stop(state: State<'_, ScenarioState>) {
+    let sent = scenario_live_send(state.clone(), serde_json::json!({ "cmd": "stop" })).is_ok();
+    if !sent {
+        stop_slot(&state.live);
+    }
+}
+
+fn stop_slot(slot: &Slot) {
+    if let Ok(pid) = slot.pid.lock() {
+        if let Some(pid) = *pid {
+            if pid != 0 {
+                kill(pid);
+            }
+        }
+    }
+}
+
+fn run_runner(
+    app: &AppHandle,
+    slot: &Slot,
+    job: Value,
+    project: Option<String>,
+    dry: bool,
+    live: bool,
+) -> Result<ScenarioOutcome, String> {
+    let event_name = if live { LIVE_EVENT } else { PROGRESS_EVENT };
     let Value::Object(mut job) = job else { return Err("Invalid scenario job.".into()) };
     let name = job
         .get("scenario")
@@ -188,18 +255,26 @@ pub fn scenario_run(
     job.insert("ffmpeg".into(), path(&ffmpeg));
     job.insert("fps".into(), Value::from(30));
     job.insert("dry".into(), Value::Bool(dry));
+    job.insert("live".into(), Value::Bool(live));
 
     {
-        let mut pid = state.pid.lock().map_err(|_| "scenario state poisoned")?;
+        let mut pid = slot.pid.lock().map_err(|_| "scenario state poisoned")?;
         if pid.is_some() {
-            return Err("A scenario is already running.".into());
+            return Err(if live {
+                "The live page is already open.".into()
+            } else {
+                "A scenario is already running.".into()
+            });
         }
         // Holds the slot until the child is known.
         *pid = Some(0);
     }
     let release = || {
-        if let Ok(mut pid) = state.pid.lock() {
+        if let Ok(mut pid) = slot.pid.lock() {
             *pid = None;
+        }
+        if let Ok(mut stdin) = slot.stdin.lock() {
+            *stdin = None;
         }
     };
 
@@ -214,7 +289,7 @@ pub fn scenario_run(
         .arg(&runner)
         .arg(&job_file)
         .current_dir(runner.parent().unwrap_or(Path::new(".")))
-        .stdin(Stdio::null())
+        .stdin(if live { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn();
@@ -226,8 +301,11 @@ pub fn scenario_run(
             return Err(format!("start {}: {e}", node.display()));
         }
     };
-    if let Ok(mut pid) = state.pid.lock() {
+    if let Ok(mut pid) = slot.pid.lock() {
         *pid = Some(child.id());
+    }
+    if let Ok(mut stdin) = slot.stdin.lock() {
+        *stdin = child.stdin.take();
     }
 
     let mut stderr = child.stderr.take();
@@ -247,7 +325,7 @@ pub fn scenario_run(
     if let Some(out) = child.stdout.take() {
         for line in BufReader::new(out).lines().map_while(Result::ok) {
             let Some(event) = progress_line(&line) else { continue };
-            let _ = app.emit(PROGRESS_EVENT, Value::Object(event.clone()));
+            let _ = app.emit(event_name, Value::Object(event.clone()));
             if matches!(event.get("type").and_then(Value::as_str), Some("done" | "error")) {
                 last = Some(event);
             }
@@ -284,13 +362,7 @@ pub fn scenario_run(
 /// Stops the running scenario; the runner removes its partial video.
 #[tauri::command]
 pub fn scenario_cancel(state: State<'_, ScenarioState>) {
-    if let Ok(pid) = state.pid.lock() {
-        if let Some(pid) = *pid {
-            if pid != 0 {
-                kill(pid);
-            }
-        }
-    }
+    stop_slot(&state.run);
 }
 
 #[cfg(test)]

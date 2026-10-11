@@ -10,6 +10,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright-core";
+import { serveLive } from "./live.mjs";
 import {
   extract,
   fillCode,
@@ -30,7 +31,9 @@ const job = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const { scenario, device } = job;
 const fps = job.fps ?? 30;
 // A simulation plays every step without filming: no screencast, no FFmpeg.
-const dry = job.dry === true;
+// Live: play the steps, then hand the page to the studio (no video).
+const live = job.live === true;
+const dry = job.dry === true || live;
 const PREVIEW_EVERY_MS = 1500;
 const size = videoSize(device.width, device.height, device.dpr);
 const viewport = { width: device.width, height: device.height };
@@ -490,7 +493,34 @@ async function main() {
     for (index = 0; index < total; index++) {
       if (cancelled) throw new Error("Cancelled.");
       emit({ type: "step", index, total });
-      await play(rec, scenario.steps[index]);
+      try {
+        await play(rec, scenario.steps[index]);
+      } catch (e) {
+        if (!live) throw e;
+        // Live: stop replaying and let the user fix it on the page.
+        emit({
+          type: "warn",
+          index,
+          message: `Replay stopped at step ${index + 1}: ${String(e?.message ?? e).split("\n")[0]}`,
+        });
+        break;
+      }
+    }
+    if (live) {
+      await rec.stop();
+      await serveLive({
+        emit,
+        viewport,
+        page: () => rec.page,
+        locate,
+        fill,
+        open,
+        play: (step) => play(rec, step),
+      });
+      emit({ type: "done", duration: 0 });
+      // stdin would keep the process alive once the studio is done.
+      process.stdin.destroy();
+      return;
     }
     await sleep(400);
     await rec.preview();
