@@ -158,6 +158,54 @@ export type OverlayBase = {
   exit: Animation;
   // Seconds each of the enter and exit motions take.
   motion: number;
+  // After Effects-style: values over time, per property (see animation.ts).
+  keyframes?: PropertyTracks;
+};
+
+/**
+ * How a value travels to the next keyframe. Named curves are cubic Béziers
+ * (CSS-like); "hold" jumps at the next key; spring and elastic overshoot.
+ */
+export type Ease =
+  | "linear"
+  | "hold"
+  | "in"
+  | "out"
+  | "in-out"
+  | "back"
+  | "elastic"
+  | "spring"
+  | { bezier: [number, number, number, number] };
+
+// `t` in seconds from the overlay's start; `ease` leads to the next key.
+export type Keyframe = { t: number; value: number; ease: Ease };
+
+// x, y: centre (fractions of the output); scale: factor; rotation: degrees;
+// opacity: 0..1; blur: fraction of the output's short side.
+export type AnimProp = "x" | "y" | "scale" | "rotation" | "opacity" | "blur";
+export type PropertyTracks = Partial<Record<AnimProp, Keyframe[]>>;
+
+/** Where each text unit starts before it settles (offsets in text sizes). */
+export type UnitState = {
+  opacity: number;
+  dx: number;
+  dy: number;
+  scale: number;
+  rotation: number;
+  blur: number;
+};
+
+/** After Effects-style text animator: units come in one after another. */
+export type TextAnimator = {
+  unit: "char" | "word" | "line";
+  order: "forward" | "reverse" | "center" | "random";
+  // Seconds between two units starting, and each unit's own duration.
+  stagger: number;
+  duration: number;
+  ease: Ease;
+  from: UnitState;
+  // Units leave the same way at the end.
+  exit: boolean;
 };
 
 export type TextStyle = {
@@ -174,6 +222,7 @@ export type TextOverlay = OverlayBase & {
   kind: "text";
   text: string;
   style: TextStyle;
+  animator?: TextAnimator | null;
 };
 export type ImageOverlay = OverlayBase & {
   kind: "image";

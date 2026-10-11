@@ -1,5 +1,9 @@
 import {
   activeOverlays,
+  animatorAt,
+  propsAt,
+  type TextAnimator,
+  unitsOf,
   type EditBackground,
   type Motion,
   type Overlay,
@@ -424,12 +428,26 @@ export function drawOverlays(
   for (const o of activeOverlays(overlays, t)) {
     const m = overlayMotion(o, t);
     if (m.opacity <= 0.001) continue;
-    const r = overlayBox(o, out);
+    // Keyframes move the overlay; the simple enter/exit motions add on top.
+    const p = propsAt(o, t);
+    if (p.opacity <= 0.001) continue;
+    const r = overlayBox({ ...o, x: p.x, y: p.y }, out);
     ctx.save();
-    ctx.globalAlpha = o.opacity;
-    applyMotion(ctx, m, r.x + r.width / 2, r.y + r.height / 2, out, o.rotation);
+    ctx.globalAlpha = p.opacity;
+    applyMotion(
+      ctx,
+      { ...m, scale: m.scale * p.scale },
+      r.x + r.width / 2,
+      r.y + r.height / 2,
+      out,
+      p.rotation,
+    );
     const short = Math.min(out.width, out.height);
+    if (p.blur > 0 && o.kind !== "blur")
+      ctx.filter = `blur(${(p.blur * short).toFixed(2)}px)`;
     if (o.kind === "blur") drawBlur(ctx, o, r, out);
+    else if (o.kind === "text" && o.animator)
+      drawAnimatedText(ctx, o, o.animator, t - o.start, r, out);
     else if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out);
     else if (o.kind === "shape") drawShape(ctx, o, m, r, out);
     else drawMedia(ctx, mediaOf(o), r, o.radius * short);
@@ -462,4 +480,94 @@ function drawTextOverlay(
     m,
     mode,
   );
+}
+
+/**
+ * Text drawn unit by unit (letters, words or lines), each with its own state
+ * from the animator: After Effects' text animators.
+ */
+function drawAnimatedText(
+  ctx: CanvasRenderingContext2D,
+  o: TextOverlay,
+  anim: TextAnimator,
+  local: number,
+  r: DOMRectLike,
+  out: Size,
+) {
+  const size = o.style.size * out.height;
+  ctx.font = `${o.style.weight} ${size * 0.8}px ${o.style.font}, -apple-system, system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  const lines = wrapLines(ctx, o.text, r.width);
+  const height = lines.length * size;
+  const top = r.y + r.height / 2 - height / 2;
+  const cx = r.x + r.width / 2;
+  const lineLeft = (line: string) => {
+    const w = ctx.measureText(line).width;
+    return o.style.align === "left"
+      ? r.x
+      : o.style.align === "right"
+        ? r.x + r.width - w
+        : cx - w / 2;
+  };
+  if (o.style.background) {
+    const widest = Math.max(1, ...lines.map((l) => ctx.measureText(l).width));
+    const left =
+      o.style.align === "left"
+        ? r.x
+        : o.style.align === "right"
+          ? r.x + r.width - widest
+          : cx - widest / 2;
+    const pad = size * 0.35;
+    ctx.fillStyle = o.style.background;
+    ctx.beginPath();
+    ctx.roundRect(
+      left - pad,
+      top - pad * 0.6,
+      widest + pad * 2,
+      height + pad * 1.2,
+      size * 0.3,
+    );
+    ctx.fill();
+  }
+
+  // Where each unit sits at rest: its left edge in the line, and its width.
+  const units = unitsOf(lines, anim.unit);
+  const placed: { text: string; x: number; y: number; w: number }[] = [];
+  const cursor = lines.map(() => 0);
+  for (const u of units) {
+    const line = lines[u.line];
+    const y = top + size * (u.line + 0.5);
+    if (anim.unit === "line") {
+      placed.push({
+        text: line,
+        x: lineLeft(line),
+        y,
+        w: ctx.measureText(line).width,
+      });
+      continue;
+    }
+    // Find the unit in its line after the previous one (spaces are skipped).
+    const at = line.indexOf(u.text, cursor[u.line]);
+    cursor[u.line] = at + u.text.length;
+    const x = lineLeft(line) + ctx.measureText(line.slice(0, at)).width;
+    placed.push({ text: u.text, x, y, w: ctx.measureText(u.text).width });
+  }
+
+  const states = animatorAt(anim, units.length, local, o.duration);
+  const short = Math.min(out.width, out.height);
+  ctx.fillStyle = o.style.color;
+  placed.forEach((p, i) => {
+    const s = states[i];
+    if (!s || s.opacity <= 0.001) return;
+    ctx.save();
+    ctx.globalAlpha *= s.opacity;
+    if (s.blur > 0) ctx.filter = `blur(${(s.blur * short).toFixed(2)}px)`;
+    const ux = p.x + p.w / 2 + s.dx * size;
+    const uy = p.y + s.dy * size;
+    ctx.translate(ux, uy);
+    if (s.rotation) ctx.rotate((s.rotation * Math.PI) / 180);
+    if (s.scale !== 1) ctx.scale(s.scale, s.scale);
+    ctx.fillText(p.text, -p.w / 2, 0);
+    ctx.restore();
+  });
 }

@@ -225,6 +225,27 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   « Caption every scene » ; piste **Video** (ex-« V1 », la piste principale : clips et cartons) : carton, légendes
   des scènes, zoom sur chaque clic, retirer les zooms ; studio : « Start a scenario on this page ».
 
+### Animation façon After Effects
+
+- **Images clés par propriété** (`render-engine/animation.ts`, pur et testé) sur tout calque : `x`, `y` (centre,
+  fractions), `scale`, `rotation` (degrés), `opacity`, `blur` (fraction du petit côté). Une clé `{ t, value, ease }`
+  (t en secondes depuis le début du calque) porte la courbe vers la suivante : `linear`, `hold`, `in`, `out`,
+  `in-out`, `back`, `elastic`, `spring` ou `{ bezier: [x1, y1, x2, y2] }` (même définition que CSS). `propsAt`
+  calcule les propriétés à un instant ; les animations d'entrée/sortie simples s'ajoutent par-dessus.
+- **Animateurs de texte** (`TextOverlay.animator`) : unités lettre, mot ou ligne ; ordre (premier→dernier,
+  inverse, depuis le centre, aléatoire déterministe) ; délai entre unités, durée, courbe ; état de départ
+  (opacité, décalage en tailles de texte, échelle, rotation, flou) ; sortie en miroir. `animatorAt` donne l'état
+  de chaque unité ; `drawAnimatedText` les dessine une à une.
+- **Préréglages** (`presets.ts`, `ANIMATION_PRESETS`) : 8 de texte (Words rise, Letters pop, Typewriter, Blur in,
+  Lines slide, Words spring, From the centre, Flicker) et 8 de mouvement (Drop in, Zoom in, Spin in, Slow zoom,
+  Pulse, Float, Shake, Blur reveal). Ils écrivent des clés ou un animateur ordinaires, donc tout reste éditable.
+- Éditeur, panneau d'un calque (`AnimatePanel.tsx`) : préréglages en un clic, animateur de texte, chronomètre par
+  propriété (active la piste), ◆ enregistre la valeur au curseur, saut à la clé précédente/suivante, **graphe de
+  valeur** (clés à glisser dans le temps et en valeur) et **éditeur de courbe** (deux poignées de Bézier). Les clés
+  apparaissent en losanges sur les blocs de la timeline. Lecture tolérante (`schema.ts`) : une clé invalide est
+  ignorée seule.
+- IA : `animation.presets`, `edit.animate` (préréglage, clés, animateur ou effacement, validés), `edit.addText`.
+
 ### IA aux commandes (MCP, CLI, skill)
 
 Une IA (Claude ou tout client MCP) pilote goScreen avec **les mêmes commandes que les boutons**, sur les mêmes

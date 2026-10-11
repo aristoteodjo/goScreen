@@ -68,6 +68,12 @@ open it.
 6. **Polish**: `edit_get`, then `edit_save` (captions, cards, zooms, speed of
    long clips, music already imported by the person), or `edit_rebuild` with
    other film settings. `app_show` the editor so the person can review.
+   Animate text and overlays the After Effects way: `animation_presets` lists
+   one-click animations (letters, words, lines; drop, zoom, pulse...);
+   `edit_addText` adds a title with a preset, `edit_animate` applies a preset
+   or writes keyframes (`{x,y,scale,rotation,opacity,blur}: [{t,value,ease}]`,
+   eases `linear|hold|in|out|in-out|back|elastic|spring|{bezier}`) or a text
+   animator. One animated element per scene is plenty.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees.
 

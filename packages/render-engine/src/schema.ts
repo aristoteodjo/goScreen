@@ -294,6 +294,66 @@ const slideClipSchema = z.object({
   animation,
 });
 
+const easeSchema = z.union([
+  z.enum([
+    "linear",
+    "hold",
+    "in",
+    "out",
+    "in-out",
+    "back",
+    "elastic",
+    "spring",
+  ]),
+  z.object({
+    bezier: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  }),
+]);
+
+const keyframeSchema = z.object({
+  t: z.number().min(0),
+  value: z.number(),
+  ease: easeSchema.catch("in-out"),
+});
+
+const track = lenient(keyframeSchema).optional();
+
+// Keyframes per property; a bad key is dropped alone.
+const keyframesSchema = z
+  .object({
+    x: track,
+    y: track,
+    scale: track,
+    rotation: track,
+    opacity: track,
+    blur: track,
+  })
+  .optional()
+  .catch(undefined);
+
+const unitStateSchema = z.object({
+  opacity: unit,
+  dx: z.number(),
+  dy: z.number(),
+  scale: z.number().min(0).max(10),
+  rotation: z.number(),
+  blur: z.number().min(0).max(0.2),
+});
+
+const animatorSchema = z
+  .object({
+    unit: z.enum(["char", "word", "line"]),
+    order: z.enum(["forward", "reverse", "center", "random"]),
+    stagger: z.number().min(0).max(5),
+    duration: z.number().min(0).max(10),
+    ease: easeSchema.catch("out"),
+    from: unitStateSchema,
+    exit: z.boolean().catch(false),
+  })
+  .nullable()
+  .optional()
+  .catch(null);
+
 const overlayBase = {
   id,
   lane: z.number().int().min(0).max(20),
@@ -308,6 +368,7 @@ const overlayBase = {
   enter: animation,
   exit: animation,
   motion: z.number().min(0).max(5).catch(0.4),
+  keyframes: keyframesSchema,
 };
 
 const overlaySchema = z.discriminatedUnion("kind", [
@@ -323,6 +384,7 @@ const overlaySchema = z.discriminatedUnion("kind", [
       align: z.enum(["left", "center", "right"]),
       background: color.nullable(),
     }),
+    animator: animatorSchema,
   }),
   z.object({
     ...overlayBase,

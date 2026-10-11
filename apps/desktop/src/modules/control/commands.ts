@@ -1,5 +1,9 @@
 import {
+  ANIMATION_PRESETS,
+  applyPreset,
+  clearAnimation,
   type EditState,
+  type Overlay,
   parseEditState,
   parseRecordingFile,
 } from "@goscreen/render-engine";
@@ -578,6 +582,123 @@ export function registerCommands() {
     },
   });
   defineCommand({
+    name: "animation.presets",
+    title: "List animation presets",
+    description:
+      "One-click animations: text animators (letters, words, lines) and motion keyframes, with what each does.",
+    input: z.object({}),
+    run: async () =>
+      ANIMATION_PRESETS.map((p) => ({
+        id: p.id,
+        label: p.label,
+        group: p.group,
+        description: p.description,
+      })),
+  });
+  defineCommand({
+    name: "edit.animate",
+    title: "Animate an overlay",
+    description:
+      "Applies a preset to an overlay of a montage, or sets its keyframes ({x,y,scale,rotation,opacity,blur}: [{t,value,ease}], t in seconds from the overlay start) and text animator, or clears them.",
+    input: z.object({
+      video,
+      overlay: z.string().min(1).describe("Overlay id (edit.get)"),
+      preset: z.string().optional(),
+      keyframes: z.unknown().optional(),
+      animator: z.unknown().optional(),
+      clear: z.boolean().default(false),
+    }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const o = edit.overlays.find((x) => x.id === i.overlay);
+      if (!o) throw new Error("No such overlay.");
+      let next: Overlay = i.clear ? clearAnimation(o) : o;
+      if (i.preset) next = applyPreset(next, i.preset);
+      if (i.keyframes !== undefined || i.animator !== undefined)
+        next = {
+          ...next,
+          ...(i.keyframes !== undefined ? { keyframes: i.keyframes } : {}),
+          ...(i.animator !== undefined && next.kind === "text"
+            ? { animator: i.animator, enter: "none" }
+            : {}),
+        } as Overlay;
+      // Validated like a saved file: a bad key or animator is reported.
+      const checked = parseEditState({
+        ...edit,
+        overlays: edit.overlays.map((x) => (x.id === o.id ? next : x)),
+      });
+      const result = checked?.overlays.find((x) => x.id === o.id);
+      if (!checked || !result)
+        throw new Error("This animation cannot be read.");
+      await applyEdit(i.video, checked);
+      return { overlay: result };
+    },
+  });
+  defineCommand({
+    name: "edit.addText",
+    title: "Add a text",
+    description:
+      "Adds a text overlay to a montage at a timeline time, optionally with an animation preset. Position and size are fractions of the frame.",
+    input: z.object({
+      video,
+      text: z.string().min(1),
+      start: z.number().min(0),
+      duration: z.number().positive().default(3),
+      x: z.number().default(0.5),
+      y: z.number().default(0.5),
+      width: z.number().positive().max(1).default(0.8),
+      size: z.number().positive().max(0.3).default(0.06),
+      color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .default("#ffffff"),
+      weight: z.number().min(100).max(900).default(800),
+      background: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .nullable()
+        .default(null),
+      preset: z.string().optional(),
+    }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const lane = Math.max(-1, ...edit.overlays.map((o) => o.lane)) + 1;
+      let o: Overlay = {
+        id: `ai-text-${Date.now().toString(36)}`,
+        kind: "text",
+        lane: Math.min(20, lane),
+        start: i.start,
+        duration: i.duration,
+        x: i.x,
+        y: i.y,
+        width: i.width,
+        height: i.size * 2,
+        rotation: 0,
+        opacity: 1,
+        enter: "fade",
+        exit: "fade",
+        motion: 0.4,
+        text: i.text,
+        style: {
+          font: "Inter",
+          size: i.size,
+          weight: i.weight,
+          color: i.color,
+          align: "center",
+          background: i.background,
+        },
+      };
+      if (i.preset) o = applyPreset(o, i.preset);
+      const checked = parseEditState({
+        ...edit,
+        overlays: [...edit.overlays, o],
+      });
+      if (!checked) throw new Error("This text cannot be added.");
+      await applyEdit(i.video, checked);
+      return { overlay: o.id };
+    },
+  });
+  defineCommand({
     name: "export.video",
     title: "Export a video",
     description:
@@ -689,6 +810,16 @@ export function registerCommands() {
 
 let exporting: AbortController | null = null;
 const STALL_MS = 30_000;
+
+/** The edit as the person sees it (open in the editor) or as saved. */
+async function currentEdit(videoPath: string): Promise<EditState> {
+  if (useSession.getState().videoPath === videoPath)
+    return useEdit.getState().edit;
+  const opened = await ipc.recordingOpen(videoPath);
+  const edit = parseEditState(opened.edit);
+  if (!edit) throw new Error("This video has no montage yet.");
+  return edit;
+}
 
 async function applyEdit(videoPath: string, edit: EditState) {
   const open = useSession.getState().videoPath === videoPath;

@@ -5,6 +5,7 @@ import {
   DEFAULT_TRANSITION,
   dropIndex,
   formatTime,
+  keyTimes,
   type MainClip,
   MIC_ASSET,
   type Overlay,
@@ -589,6 +590,11 @@ export function Timeline() {
                           width={x(o.duration)}
                           selected={isSel("overlay", o.id)}
                           className={OVERLAY_COLOR[o.kind]}
+                          background={
+                            o.keyframes ? (
+                              <KeyMarks times={keyTimes(o)} x={x} />
+                            ) : null
+                          }
                           onPointerDown={dragFree(
                             "overlay",
                             o,
@@ -1154,6 +1160,27 @@ function ClipLabel({ clip }: { clip: MainClip }) {
       <span className="font-mono text-[12px] font-semibold tabular-nums">
         {seconds}s
       </span>
+    </>
+  );
+}
+
+/** Keyframes of an overlay, as diamonds along its block. */
+function KeyMarks({
+  times,
+  x,
+}: {
+  times: number[];
+  x: (seconds: number) => number;
+}) {
+  return (
+    <>
+      {times.map((t) => (
+        <span
+          key={t}
+          className="pointer-events-none absolute bottom-0.5 size-1.5 -translate-x-1/2 rotate-45 bg-amber-200 ring-1 ring-black/40"
+          style={{ left: x(t) }}
+        />
+      ))}
     </>
   );
 }

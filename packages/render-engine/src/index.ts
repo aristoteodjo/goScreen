@@ -1,3 +1,21 @@
+export {
+  ANIM_PROPS,
+  animatorAt,
+  animatorLength,
+  baseValue,
+  cubicBezier,
+  EASE_CURVES,
+  eased,
+  keyTimes,
+  type OverlayProps,
+  propsAt,
+  REST,
+  setKey,
+  type TextUnit,
+  unitRanks,
+  unitsOf,
+  valueAt,
+} from "./animation";
 export { AUTO_SCALE, buildAutoZooms } from "./autoZoom";
 export {
   activeZoom,
@@ -35,6 +53,12 @@ export {
   spring,
   springSettle,
 } from "./keyframes";
+export {
+  ANIMATION_PRESETS,
+  type AnimationPreset,
+  applyPreset,
+  clearAnimation,
+} from "./presets";
 export { ASPECT_OPTIONS, contentRect, fitInto, outputSize } from "./layout";
 export {
   activeOverlays,
