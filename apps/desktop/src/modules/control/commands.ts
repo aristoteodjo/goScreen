@@ -8,6 +8,7 @@ import {
   parseRecordingFile,
 } from "@goscreen/render-engine";
 import {
+  applyFilm,
   buildScenarioEdit,
   compileFlow,
   type Flow,
@@ -24,21 +25,20 @@ import {
   scenarioSchema,
   stepSchema,
 } from "@goscreen/scenario";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { toast } from "sonner";
 import { BLOCKS } from "@goscreen/blocks";
 import { z } from "zod";
 import { ipc, projectsIpc } from "@/lib/ipc";
 import { queryClient } from "@/lib/queryClient";
 import { registry } from "@/lib/registry";
 import { router } from "@/lib/router";
-import { exportVideo } from "@/modules/editor/exportVideo";
 import {
-  assetUrl,
-  currentTimeline,
-  player,
-  useSession,
-} from "@/modules/editor/session";
+  exportCurrent,
+  exportRunning,
+  exportVariants,
+  openForExport,
+  stopExport,
+} from "@/modules/editor/exportCurrent";
+import { useSession } from "@/modules/editor/session";
 import { addBlock, updateBlock } from "@/modules/editor/blocks";
 import { useEdit } from "@/modules/editor/store";
 import { useFlowDoc } from "@/modules/flow/store";
@@ -765,6 +765,30 @@ export function registerCommands() {
     },
   });
   defineCommand({
+    name: "edit.setFilm",
+    title: "Change the film settings",
+    description:
+      "Changes a scenario montage's film settings (aspect, background, ink, accent, font, captions top|bottom|none, zoom, intro/outro cards). Only what came from the scenes changes; the person's own edits stay. Pass only the fields to change.",
+    input: z.object({ video, film: z.record(z.string(), z.unknown()) }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const current = filmSchema.safeParse(edit.film?.settings ?? {});
+      const next = filmSchema.safeParse({
+        ...(current.success ? current.data : {}),
+        ...i.film,
+      });
+      if (!next.success)
+        throw new Error(
+          next.error.issues
+            .map((x) => `${x.path.join(".")}: ${x.message}`)
+            .join("; "),
+        );
+      const applied = applyFilm(edit, next.data, edit.film?.locale ?? "en-US");
+      await applyEdit(i.video, applied);
+      return { film: next.data };
+    },
+  });
+  defineCommand({
     name: "export.video",
     title: "Export a video",
     description:
@@ -775,107 +799,50 @@ export function registerCommands() {
       fps: z.union([z.literal(30), z.literal(60)]).default(30),
     }),
     run: async (i) => {
-      if (exporting)
+      if (exportRunning())
         throw new Error(
           "An export is already running (export.cancel to stop it).",
         );
-      // The editor draws every frame: it must not be throttled behind
-      // other windows.
-      const win = getCurrentWindow();
-      await win.unminimize().catch(() => {});
-      await win.show().catch(() => {});
-      await win.setFocus().catch(() => {});
-      await router.navigate({ to: "/editor", search: { video: i.video } });
-      const until = Date.now() + 30_000;
-      while (
-        !(useSession.getState().videoPath === i.video && currentTimeline())
-      ) {
-        if (Date.now() > until) throw new Error("The video did not load.");
-        await sleep(200);
-      }
-      await sleep(500);
-      const s = useSession.getState();
-      const timeline = currentTimeline();
-      if (!s.videoUrl || !timeline) throw new Error("The video did not load.");
-      player.pause();
-      exporting = new AbortController();
-      const progress = toast.loading("The AI is exporting the video… 0%");
-      let shown = 0;
-      // macOS stops loading media in a window hidden behind others: if
-      // nothing moves for a while, say so instead of waiting forever.
-      let lastMove = Date.now();
-      let watchdog: ReturnType<typeof setInterval> | undefined;
-      const stalled = new Promise<never>((_, reject) => {
-        watchdog = setInterval(() => {
-          if (Date.now() - lastMove < STALL_MS) return;
-          exporting?.abort();
-          void ipc.exportCancel().catch(() => {});
-          reject(
-            new Error(
-              "The export does not move: bring the goScreen window to the front (not minimised, not hidden), then run export.video again.",
-            ),
-          );
-        }, 1000);
+      await openForExport(i.video);
+      const file = await exportCurrent({
+        resolution: i.resolution,
+        fps: i.fps,
+        label: "The AI is exporting",
       });
-      try {
-        const path = await Promise.race([
-          stalled,
-          exportVideo({
-            edit: useEdit.getState().edit,
-            timeline,
-            videoUrl: s.videoUrl,
-            videoPath: s.videoPath,
-            cameraUrl: s.cameraUrl,
-            mediaOffset: s.mediaOffset,
-            hasMic: s.micUrl !== null,
-            assetUrl: (a) => assetUrl(useEdit.getState().edit, a),
-            name: s.name,
-            longSide: { "720": 1280, "1080": 1920, "2160": 3840 }[i.resolution],
-            fps: i.fps,
-            signal: exporting.signal,
-            onProgress: (done) => {
-              lastMove = Date.now();
-              const pct = Math.round(done * 100);
-              if (pct === shown) return;
-              shown = pct;
-              toast.loading(`The AI is exporting the video… ${pct}%`, {
-                id: progress,
-              });
-            },
-          }),
-        ]);
-        toast.success("Video exported by the AI", { id: progress });
-        return { file: path };
-      } catch (e) {
-        toast.error("Export stopped", {
-          id: progress,
-          description: e instanceof Error ? e.message : String(e),
-        });
-        throw e;
-      } finally {
-        clearInterval(watchdog);
-        exporting = null;
-      }
+      return { file };
+    },
+  });
+  defineCommand({
+    name: "export.variants",
+    title: "Export several formats",
+    description:
+      "Exports the same film in several formats (9:16, 16:9, 1:1, 4:5), each laid out by the film's rules; returns one file per format. The montage on screen is not changed.",
+    input: z.object({
+      video,
+      formats: z.array(z.enum(["9:16", "16:9", "1:1", "4:5"])).min(1),
+      resolution: z.enum(["720", "1080", "2160"]).default("1080"),
+      fps: z.union([z.literal(30), z.literal(60)]).default(30),
+    }),
+    run: async (i) => {
+      if (exportRunning())
+        throw new Error(
+          "An export is already running (export.cancel to stop it).",
+        );
+      await openForExport(i.video);
+      return exportVariants(i.formats, {
+        resolution: i.resolution,
+        fps: i.fps,
+      });
     },
   });
   defineCommand({
     name: "export.cancel",
     title: "Stop the export",
-    description: "Stops the export started by export.video.",
+    description: "Stops the export in progress.",
     input: z.object({}),
-    run: async () => {
-      if (!exporting) return { stopped: false };
-      exporting.abort();
-      // A stuck export (media never loaded) must not block the next one.
-      exporting = null;
-      await ipc.exportCancel().catch(() => {});
-      return { stopped: true };
-    },
+    run: async () => ({ stopped: await stopExport() }),
   });
 }
-
-let exporting: AbortController | null = null;
-const STALL_MS = 30_000;
 
 /** The edit as the person sees it (open in the editor) or as saved. */
 async function currentEdit(videoPath: string): Promise<EditState> {

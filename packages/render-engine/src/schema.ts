@@ -445,6 +445,13 @@ const assetSchema = z.object({
 });
 
 const editSchema = z.object({
+  film: z
+    .object({
+      settings: z.record(z.string(), z.unknown()),
+      locale: z.string(),
+    })
+    .optional()
+    .catch(undefined),
   version: z.union([z.literal(1), z.literal(2)]),
   aspect: z
     .enum(["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"])

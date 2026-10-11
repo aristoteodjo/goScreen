@@ -1,6 +1,7 @@
 import { parseEditState } from "@goscreen/render-engine";
 import { describe, expect, it } from "vitest";
 import {
+  applyFilm,
   buildScenarioEdit,
   EXAMPLE_SCENARIO,
   filmSchema,
@@ -283,5 +284,88 @@ describe("device placement", () => {
     expect(wide.layers?.[0].scale).toBeLessThan(1);
     expect(tall.layers?.[0].scale).toBe(1);
     expect(bare.layers?.[0].scale).toBe(1);
+  });
+});
+
+describe("applyFilm", () => {
+  const film = filmSchema.parse({
+    intro: { title: "Hi", duration: 3 },
+    outro: { title: "Bye", duration: 2 },
+  });
+  const built = buildScenarioEdit(take, film, "fr-FR");
+  const edited = {
+    ...built,
+    clips: built.clips.map((c) =>
+      c.id === "scene-0" && c.kind === "recording" ? { ...c, out: 9 } : c,
+    ),
+    overlays: [
+      ...built.overlays,
+      { ...built.overlays[0], id: "mine", text: "My own text" },
+    ],
+  };
+
+  it("changes format, colours and captions, keeps the person's edits", () => {
+    const next = applyFilm(
+      edited,
+      filmSchema.parse({
+        ...film,
+        aspect: "16:9",
+        ink: "#ff0000",
+        captions: "bottom",
+      }),
+      "fr-FR",
+    );
+    expect(next.aspect).toBe("16:9");
+    const scene = next.clips.find((c) => c.id === "scene-0");
+    expect(scene?.kind === "recording" && scene.out).toBe(9);
+    const cap = next.overlays.find((o) => o.id === "caption-0");
+    expect(cap?.kind === "text" && cap.style.color).toBe("#ff0000");
+    expect(cap?.y).toBeGreaterThan(0.9);
+    const mine = next.overlays.find((o) => o.id === "mine");
+    expect(mine?.kind === "text" && mine.style.color).toBe(film.ink);
+    expect(next.layers?.[0].scale).toBeLessThan(1);
+    expect(next.film?.settings.aspect).toBe("16:9");
+  });
+
+  it("hides captions without losing them, and adds or drops cards", () => {
+    const hidden = applyFilm(
+      built,
+      filmSchema.parse({ ...film, captions: "none", intro: undefined }),
+      "fr-FR",
+    );
+    expect(
+      hidden.overlays
+        .filter((o) => o.id.startsWith("caption-"))
+        .every((o) => o.opacity === 0),
+    ).toBe(true);
+    expect(hidden.clips[0].id).toBe("scene-0");
+    expect(hidden.clips[0].transition).toBeNull();
+    const back = applyFilm(hidden, film, "fr-FR");
+    expect(back.clips[0].id).toBe("intro");
+    expect(back.overlays.find((o) => o.id === "caption-0")?.opacity).toBe(1);
+    expect(parseEditState(JSON.parse(JSON.stringify(back)))?.film?.locale).toBe(
+      "fr-FR",
+    );
+  });
+
+  it("sets the zoom of scene zooms only", () => {
+    const withMine = {
+      ...built,
+      zooms: [
+        ...built.zooms,
+        { id: "manual", start: 0, end: 1, scale: 2.5, focus: null },
+      ],
+    };
+    const next = applyFilm(
+      withMine,
+      filmSchema.parse({ ...film, zoom: 1.6 }),
+      "fr-FR",
+    );
+    expect(
+      next.zooms
+        .filter((z) => z.id.startsWith("scene-"))
+        .every((z) => z.scale === 1.6),
+    ).toBe(true);
+    expect(next.zooms.find((z) => z.id === "manual")?.scale).toBe(2.5);
   });
 });

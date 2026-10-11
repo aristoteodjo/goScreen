@@ -1137,6 +1137,39 @@ function TransitionMark({
   );
 }
 
+/**
+ * A recording clip is a scene when it came from a scenario: it shows the
+ * scene's caption, and its length in frames too (30 fps), as in Remotion.
+ */
+function RecordingLabel({
+  clip,
+  seconds,
+}: {
+  clip: Extract<MainClip, { kind: "recording" }>;
+  seconds: string;
+}) {
+  const chapters = useSession((s) => s.chapters);
+  const scene = chapters.find(
+    (c) => c.caption && clip.in >= c.start - 0.05 && clip.in < c.end,
+  );
+  const frames = Math.round(clipDuration(clip) * 30);
+  return (
+    <>
+      <span className="max-w-full truncate px-2 text-[10.5px] font-medium opacity-70">
+        {scene?.caption ?? "Clip"}
+        {clip.speed !== 1 ? ` · ${clip.speed}×` : ""}
+        {clip.muted && !scene ? " · muted" : ""}
+      </span>
+      <span
+        className="font-mono text-[12px] font-semibold tabular-nums"
+        title={`${frames} frames at 30 fps`}
+      >
+        {seconds}s
+      </span>
+    </>
+  );
+}
+
 function ClipLabel({ clip }: { clip: MainClip }) {
   const seconds = clipDuration(clip).toFixed(1);
   if (clip.kind === "slide") {
@@ -1151,17 +1184,7 @@ function ClipLabel({ clip }: { clip: MainClip }) {
       </>
     );
   }
-  return (
-    <>
-      <span className="text-[10.5px] font-medium opacity-60">
-        Clip{clip.speed !== 1 ? ` · ${clip.speed}×` : ""}
-        {clip.muted ? " · muted" : ""}
-      </span>
-      <span className="font-mono text-[12px] font-semibold tabular-nums">
-        {seconds}s
-      </span>
-    </>
-  );
+  return <RecordingLabel clip={clip} seconds={seconds} />;
 }
 
 /** Keyframes of an overlay, as diamonds along its block. */

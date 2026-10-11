@@ -80,8 +80,13 @@ open it.
    choose (colours follow the film), `edit_updateBlock` changes its props. A
    good VSL opens on a kinetic title or logo card, uses a counter or chart for
    proof, and ends on a call to action.
+   Change the film as a whole with `edit_setFilm` (format, colours, font,
+   captions, zoom, cards): the person's own edits stay.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
-   agrees.
+   agrees, or `export_variants` for several formats at once (9:16 for
+   stories, 16:9 for web, 1:1 and 4:5 for feeds). The goScreen window must
+   be visible while exporting; if an export "does not move", ask the person
+   to bring it to the front.
 
 ## Good VSLs
 

@@ -247,6 +247,21 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   ignorée seule.
 - IA : `animation.presets`, `edit.animate` (préréglage, clés, animateur ou effacement, validés), `edit.addText`.
 
+### Film et variantes (méthode Remotion)
+
+- Un montage issu d'un scénario garde ses **réglages de film** (`EditState.film = { settings, locale }`), comme
+  les props d'une composition Remotion. `applyFilm` (pur, testé, `@goscreen/scenario`) les applique à un montage
+  existant : format, fond, couleurs, police, place des légendes (masquées = transparentes, jamais perdues),
+  zoom des scènes, cartons d'ouverture et de fin. Seul ce qui vient des scènes change (ids `caption-*`,
+  `scene-*`, `intro`, `outro`) ; coupes, textes ajoutés, blocs et animations restent.
+- Éditeur : panneau **Film** (premier de la barre, visible pour ces montages) : chaque réglage s'applique tout de
+  suite, annulable. Les clips de la piste vidéo portent le nom de leur scène et leur durée en images (30 i/s).
+- **Variantes** : le même film en 9:16, 16:9, 1:1 et 4:5, chacun mis en page par les règles du film, exporté à la
+  suite sans toucher au montage à l'écran (`exportVariants`, panneau Film « Export several formats »).
+- L'export hors du dialogue (IA, variantes) passe par `exportCurrent` : une exportation à la fois, garde-fou de
+  30 s si la fenêtre est cachée.
+- IA : `edit.setFilm` (seulement les champs à changer), `export.variants`.
+
 ### Blocs : compositions HTML (méthode HyperFrames)
 
 - Un **bloc** (`@goscreen/blocks`, pur et testé) est une petite page HTML animée **en CSS seulement** : titre

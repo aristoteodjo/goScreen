@@ -111,7 +111,8 @@ export function buildScenarioEdit(
     };
     clips.push(clip);
     const length = scene.end - scene.start;
-    if (scene.caption && film.captions !== "none")
+    // Hidden captions are kept (transparent) so the film can show them again.
+    if (scene.caption)
       overlays.push({
         id: `caption-${i}`,
         kind: "text",
@@ -119,50 +120,28 @@ export function buildScenarioEdit(
         start: at,
         duration: length,
         x: 0.5,
-        y: film.captions === "top" ? 0.085 : 0.915,
+        y: captionY(film),
         width: 0.88,
         height: 0.11,
         rotation: 0,
-        opacity: 1,
+        opacity: film.captions === "none" ? 0 : 1,
         enter: "spring",
         exit: "fade",
         motion: 0.45,
         text: typeset(scene.caption, locale),
-        style: {
-          font: film.font,
-          size: film.aspect === "16:9" ? 0.05 : 0.042,
-          weight: 800,
-          color: film.ink,
-          align: "center",
-          // Zooms slide the page under the caption: a plate keeps it legible.
-          background: film.zoom > 1 ? film.background : null,
-        },
+        style: captionStyle(film),
       });
     zooms.push(...sceneZooms(take, scene, film.zoom, i));
     at += length;
   });
   if (film.outro) clips.push(card("outro", film, film.outro, locale));
 
-  // Leave room for the caption above or below the device. In a wide frame
-  // the device fills the height, so it is drawn smaller there.
-  const captioned = film.captions !== "none";
-  const wide = film.aspect !== "9:16";
-  const y =
-    film.captions === "top"
-      ? wide
-        ? 0.58
-        : 0.56
-      : film.captions === "bottom"
-        ? wide
-          ? 0.42
-          : 0.44
-        : 0.5;
-  const scale = captioned && wide ? 0.8 : 1;
+  const { y, scale } = deviceLayout(film);
   return {
     ...DEFAULT_EDIT,
     aspect: film.aspect,
     background: { kind: "color", value: film.background },
-    padding: film.captions === "none" ? 0.08 : 0.14,
+    padding: framePadding(film),
     clips,
     overlays,
     zooms,
@@ -180,5 +159,95 @@ export function buildScenarioEdit(
       hidden: false,
     })),
     camera: { ...DEFAULT_EDIT.camera, visible: false },
+    film: { settings: film, locale },
+  };
+}
+
+const captionY = (film: Film) => (film.captions === "bottom" ? 0.915 : 0.085);
+
+function captionStyle(film: Film) {
+  return {
+    font: film.font,
+    size: film.aspect === "16:9" ? 0.05 : 0.042,
+    weight: 800,
+    color: film.ink,
+    align: "center" as const,
+    // Zooms slide the page under the caption: a plate keeps it legible.
+    background: film.zoom > 1 ? film.background : null,
+  };
+}
+
+const framePadding = (film: Film) => (film.captions === "none" ? 0.08 : 0.14);
+
+/**
+ * Where the device sits: room for the caption above or below it, and drawn
+ * smaller in wide frames, where it would otherwise fill the height.
+ */
+function deviceLayout(film: Film) {
+  const wide = film.aspect !== "9:16";
+  const y =
+    film.captions === "top"
+      ? wide
+        ? 0.58
+        : 0.56
+      : film.captions === "bottom"
+        ? wide
+          ? 0.42
+          : 0.44
+        : 0.5;
+  return { y, scale: film.captions !== "none" && wide ? 0.8 : 1 };
+}
+
+/**
+ * Applies film settings to a built montage, Remotion-style "props": format,
+ * colours, font, captions, zoom and cards change; anything else the person
+ * edited (trims, extra texts, blocks, animations) stays as it is.
+ */
+export function applyFilm(
+  edit: EditState,
+  film: Film,
+  locale: string,
+): EditState {
+  const { y, scale } = deviceLayout(film);
+  const cardFor = (id: "intro" | "outro") => {
+    const c = film[id];
+    return c ? card(id, film, c, locale) : null;
+  };
+  const middle = edit.clips.filter((c) => c.id !== "intro" && c.id !== "outro");
+  const intro = cardFor("intro");
+  const outro = cardFor("outro");
+  // The first scene fades in after an opening card, cuts in without one.
+  const first = middle[0];
+  const scenes = first
+    ? [
+        {
+          ...first,
+          transition: intro ? (first.transition ?? CARD_FADE) : null,
+        },
+        ...middle.slice(1),
+      ]
+    : [];
+  return {
+    ...edit,
+    aspect: film.aspect,
+    background: { kind: "color", value: film.background },
+    padding: framePadding(film),
+    clips: [...(intro ? [intro] : []), ...scenes, ...(outro ? [outro] : [])],
+    overlays: edit.overlays.map((o) =>
+      o.kind === "text" && o.id.startsWith("caption-")
+        ? {
+            ...o,
+            y: captionY(film),
+            opacity: film.captions === "none" ? 0 : 1,
+            style: { ...o.style, ...captionStyle(film) },
+          }
+        : o,
+    ),
+    zooms: edit.zooms.map((z) =>
+      z.id.startsWith("scene-") ? { ...z, scale: Math.max(1, film.zoom) } : z,
+    ),
+    touch: { ...edit.touch, color: film.accent },
+    layers: edit.layers?.map((l) => ({ ...l, y, scale })) ?? null,
+    film: { settings: film, locale },
   };
 }

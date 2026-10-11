@@ -310,6 +310,9 @@ export type EditState = {
   mic: { volume: number };
   // Track switches, as in an NLE: hidden overlay lanes, muted music lanes, muted mic.
   tracks: { hidden: number[]; muted: number[]; micMuted: boolean };
+  // A scenario take's film settings (format, colours, cards...), kept so they
+  // can be changed after the montage was built. Read by @goscreen/scenario.
+  film?: { settings: Record<string, unknown>; locale: string };
 };
 
 export type Camera = { scale: number; center: Point };

@@ -71,6 +71,7 @@ export const useEdit = create<EditStore>((set, get) => ({
 }));
 
 export type Panel =
+  | "film"
   | "proposals"
   | "devices"
   | "background"

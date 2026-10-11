@@ -8,6 +8,7 @@ import {
 import {
   AiMagicIcon,
   Delete02Icon,
+  Film01Icon,
   PaintBoardIcon,
   SmartPhone01Icon,
   Target01Icon,
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
+import { FilmPanel } from "./FilmPanel";
 import { CameraPanel, DevicesPanel } from "./LayerPanels";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { ProposalsPanel } from "./ProposalsPanel";
@@ -35,6 +37,7 @@ import { useSession } from "./session";
 import { type Panel, useEdit, usePlayback } from "./store";
 
 const PANELS: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] = [
+  { id: "film", label: "Film", icon: Film01Icon },
   { id: "proposals", label: "Proposals", icon: AiMagicIcon },
   { id: "devices", label: "Devices", icon: SmartPhone01Icon },
   { id: "background", label: "Background", icon: PaintBoardIcon },
@@ -48,8 +51,12 @@ const PANELS: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] = [
 function usePanels() {
   const layered = useSession((s) => s.layers.length > 0);
   const hasCamera = useSession((s) => s.cameraUrl !== null);
+  const hasFilm = useEdit((s) => s.edit.film !== undefined);
   return PANELS.filter(
-    (p) => (p.id !== "devices" || layered) && (p.id !== "camera" || hasCamera),
+    (p) =>
+      (p.id !== "devices" || layered) &&
+      (p.id !== "camera" || hasCamera) &&
+      (p.id !== "film" || hasFilm),
   );
 }
 
@@ -88,6 +95,7 @@ export function PanelContent() {
   const panel = usePlayback((s) => s.panel);
   return (
     <aside className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-xl border bg-card/60 p-5">
+      {panel === "film" ? <FilmPanel /> : null}
       {panel === "proposals" ? <ProposalsPanel /> : null}
       {panel === "devices" ? <DevicesPanel /> : null}
       {panel === "camera" ? <CameraPanel /> : null}
