@@ -1,3 +1,6 @@
+import { naturalSize } from "@/modules/editor/actions";
+import { probeDuration } from "@/modules/editor/media";
+import { openPlace } from "@/modules/tabs/tabs";
 import {
   ANIMATION_PRESETS,
   applyPreset,
@@ -8,6 +11,7 @@ import {
   parseRecordingFile,
 } from "@goscreen/render-engine";
 import {
+  adoptFilm,
   applyFilm,
   buildScenarioEdit,
   compileFlow,
@@ -165,21 +169,23 @@ export function registerCommands() {
       video: video.optional(),
     }),
     run: async (i) => {
-      if (i.view === "home") await router.navigate({ to: "/" });
-      else if (i.view === "studio") await router.navigate({ to: "/studio" });
+      // The AI's places open in their own tabs, so the person keeps theirs.
+      if (i.view === "home") openPlace({ to: "/" });
+      else if (i.view === "studio") openPlace({ to: "/studio" });
       else if (i.view === "project" && i.project)
-        await router.navigate({
+        openPlace({
           to: "/projects/$project",
           params: { project: i.project },
         });
       else if (i.view === "flow" && i.project && i.vsl)
-        await router.navigate({
+        openPlace({
           to: "/flow",
           search: { project: i.project, vsl: i.vsl },
         });
       else if (i.view === "editor" && i.video)
-        await router.navigate({ to: "/editor", search: { video: i.video } });
+        openPlace({ to: "/editor", search: { video: i.video } });
       else throw new Error("Give the ids this view needs.");
+      await router.load();
       return { location: router.state.location.href };
     },
   });
@@ -637,6 +643,124 @@ export function registerCommands() {
     },
   });
   defineCommand({
+    name: "edit.addMedia",
+    title: "Add a media file",
+    description:
+      "Copies an image, video or audio file (absolute path) into a montage and places it at a timeline time: a sound (music, a voice-over recorded elsewhere) goes on a free audio track, an image or video on a free layer above the film. Returns the asset and the item it made.",
+    input: z.object({
+      video,
+      file: z.string().min(1),
+      start: z.number().min(0).default(0),
+      // Defaults: the file's own length (audio, video), 4 s for an image.
+      duration: z.number().positive().optional(),
+      volume: z.number().min(0).max(2).default(1),
+      x: z.number().default(0.5),
+      y: z.number().default(0.5),
+      width: z.number().positive().max(1).default(0.35),
+    }),
+    run: async (i) => {
+      const asset = await ipc.assetImport(i.video, i.file);
+      const open = useSession.getState().videoPath === i.video;
+      if (open) useSession.getState().addAssetUrl(asset.file, asset.url);
+      const length =
+        asset.kind === "image"
+          ? null
+          : await probeDuration(asset.kind, asset.url).catch(() => null);
+      const edit = await currentEdit(i.video);
+      const duration = i.duration ?? length ?? 4;
+      const record = {
+        id: asset.id,
+        name: asset.name,
+        kind: asset.kind,
+        file: asset.file,
+        duration: length,
+      };
+      const item = `ai-${asset.kind}-${Date.now().toString(36)}`;
+      // Images and videos keep their own shape, sized against the output.
+      const out = useSession.getState().source ?? { width: 9, height: 16 };
+      const natural =
+        asset.kind === "audio"
+          ? null
+          : await naturalSize(asset.kind, asset.url).catch(() => null);
+      const height = natural
+        ? Math.min(
+            0.9,
+            (i.width * out.width * natural.height) / natural.width / out.height,
+          )
+        : i.width;
+      const free = <
+        T extends { lane: number; start: number; duration: number },
+      >(
+        items: T[],
+      ) => {
+        for (let lane = 0; lane < 20; lane += 1)
+          if (
+            !items.some(
+              (o) =>
+                o.lane === lane &&
+                o.start < i.start + duration &&
+                i.start < o.start + o.duration,
+            )
+          )
+            return lane;
+        return 0;
+      };
+      const next: EditState =
+        asset.kind === "audio"
+          ? {
+              ...edit,
+              assets: [...edit.assets, record],
+              audio: [
+                ...edit.audio,
+                {
+                  id: item,
+                  lane: free(edit.audio),
+                  start: i.start,
+                  duration,
+                  asset: asset.id,
+                  in: 0,
+                  volume: i.volume,
+                  fadeIn: 0.05,
+                  fadeOut: 0.3,
+                },
+              ],
+            }
+          : {
+              ...edit,
+              assets: [...edit.assets, record],
+              overlays: [
+                ...edit.overlays,
+                {
+                  id: item,
+                  lane: free(edit.overlays),
+                  start: i.start,
+                  duration,
+                  x: i.x,
+                  y: i.y,
+                  width: i.width,
+                  height,
+                  rotation: 0,
+                  opacity: 1,
+                  enter: "pop",
+                  exit: "fade",
+                  motion: 0.35,
+                  radius: 0.02,
+                  ...(asset.kind === "image"
+                    ? { kind: "image" as const, asset: asset.id }
+                    : {
+                        kind: "video" as const,
+                        asset: asset.id,
+                        in: 0,
+                        volume: i.volume,
+                      }),
+                },
+              ],
+            };
+      await applyEdit(i.video, next);
+      return { asset: asset.id, item, kind: asset.kind };
+    },
+  });
+  defineCommand({
     name: "edit.addText",
     title: "Add a text",
     description:
@@ -768,7 +892,7 @@ export function registerCommands() {
     name: "edit.setFilm",
     title: "Change the film settings",
     description:
-      "Changes a scenario montage's film settings (aspect, background, ink, accent, font, captions top|bottom|none, zoom, intro/outro cards). Only what came from the scenes changes; the person's own edits stay. Pass only the fields to change.",
+      "Changes a montage's film settings: look showcase|plain (showcase = the VSL layout: device framed under a numbered title, accent disc, brand cards), label (chapter kicker, e.g. 'Buyer' gives 'BUYER · 2/11'), brand, aspect, background, ink, accent, font, captions top|bottom|none, zoom, intro/outro cards {eyebrow, title with *accent words*, subtitle, duration}. A video that is not a film yet becomes one: its first and last cards become the opening and closing cards, and texts starting with a clip become scene titles. Only what came from the scenes changes; the person's own edits stay. Pass only the fields to change.",
     input: z.object({ video, film: z.record(z.string(), z.unknown()) }),
     run: async (i) => {
       const edit = await currentEdit(i.video);
@@ -783,7 +907,9 @@ export function registerCommands() {
             .map((x) => `${x.path.join(".")}: ${x.message}`)
             .join("; "),
         );
-      const applied = applyFilm(edit, next.data, edit.film?.locale ?? "en-US");
+      const applied = edit.film
+        ? applyFilm(edit, next.data, edit.film.locale)
+        : adoptFilm(edit, next.data, navigator.language || "en-US");
       await applyEdit(i.video, applied);
       return { film: next.data };
     },

@@ -81,7 +81,7 @@ export function ProjectsHome() {
     <div className="flex h-full flex-col">
       <header
         data-tauri-drag-region
-        className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20"
+        className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-3"
       >
         <span data-tauri-drag-region className="text-[13px] font-semibold">
           goScreen
@@ -197,7 +197,10 @@ export function ProjectsHome() {
 
 function Grid({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+    <div
+      data-ai="projects"
+      className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4"
+    >
       {children}
     </div>
   );

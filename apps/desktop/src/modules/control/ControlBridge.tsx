@@ -2,6 +2,8 @@ import {
   AiBrain01Icon,
   Cancel01Icon,
   CheckmarkCircle02Icon,
+  ViewIcon,
+  ViewOffSlashIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +22,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { ipc } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { registerCommands } from "./commands";
+import { AiCursor, useAiWatch } from "./aiCursor";
+import { stageAfter, stageBefore } from "./aiStage";
 import { runCommand, titleOf, useActivity } from "./registry";
 
 const requestSchema = z.object({
@@ -51,9 +55,18 @@ export function ControlBridge() {
           ok: null,
           error: null,
         });
+      const staged = quiet
+        ? null
+        : await stageBefore(
+            command,
+            (input ?? {}) as Record<string, unknown>,
+            titleOf(command),
+          ).catch(() => null);
       const answer = await runCommand(command, input);
       if (!quiet) settle(id, answer.ok, answer.ok ? null : answer.error);
       await ipc.controlReply(id, answer).catch(() => {});
+      // The AI gets its answer first; the person still sees the result.
+      if (staged) void stageAfter(command, answer, staged).catch(() => {});
     }).then((un) => {
       if (alive) off = un;
       else un();
@@ -63,7 +76,12 @@ export function ControlBridge() {
       off?.();
     };
   }, []);
-  return <AiActivity />;
+  return (
+    <>
+      <AiActivity />
+      <AiCursor />
+    </>
+  );
 }
 
 function AiActivity() {
@@ -71,13 +89,33 @@ function AiActivity() {
   const open = useActivity((s) => s.panelOpen);
   const setOpen = useActivity.getState().setPanelOpen;
   const busy = entries.some((e) => e.ok === null);
+  const follow = useAiWatch((s) => s.follow);
+  const setFollow = useAiWatch((s) => s.setFollow);
   return (
-    <>
+    <div className="fixed top-1 right-2 z-50 flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setFollow(!follow)}
+        title={
+          follow
+            ? "Following the AI: its places open in tabs and its cursor shows each change. Click to stop."
+            : "Follow the AI: open its places in tabs and show its cursor."
+        }
+        className={cn(
+          "flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11.5px]",
+          follow
+            ? "border-orange-400/40 bg-orange-500/15 text-orange-200"
+            : "bg-popover/95 text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <HugeiconsIcon icon={follow ? ViewIcon : ViewOffSlashIcon} size={13} />
+        Follow
+      </button>
       <button
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-full border bg-popover/95 px-3 py-2 text-xs shadow-xl backdrop-blur hover:bg-popover",
+          "flex h-7 max-w-64 items-center gap-2 rounded-full border bg-popover/95 px-2.5 text-[11.5px] hover:bg-popover",
           entries.length === 0 && "opacity-70",
         )}
       >
@@ -93,7 +131,7 @@ function AiActivity() {
             : "Connect an AI"}
       </button>
       <ConnectDialog open={open} onOpenChange={setOpen} />
-    </>
+    </div>
   );
 }
 

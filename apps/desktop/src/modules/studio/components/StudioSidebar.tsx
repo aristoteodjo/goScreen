@@ -50,7 +50,7 @@ export function StudioSidebar() {
 
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader data-tauri-drag-region className="h-12 justify-end pl-20">
+      <SidebarHeader data-tauri-drag-region className="h-3 justify-end pl-3">
         <span
           data-tauri-drag-region
           className="text-[13px] font-semibold tracking-tight"

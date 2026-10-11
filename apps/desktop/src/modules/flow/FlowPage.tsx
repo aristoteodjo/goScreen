@@ -1,3 +1,4 @@
+import { useTabTitle } from "@/modules/tabs/tabs";
 import {
   compileFlow,
   type Flow,
@@ -149,10 +150,11 @@ function TopBar({
       toast.error("The clipboard refused the copy.");
     }
   };
+  useTabTitle(flow.name);
   return (
     <header
       data-tauri-drag-region
-      className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20"
+      className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-3"
     >
       <Button
         size="icon"
@@ -323,6 +325,7 @@ function Canvas({ project, vsl }: { project: string; vsl: string }) {
           }}
         >
           <ReactFlow
+            data-ai="flow"
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}

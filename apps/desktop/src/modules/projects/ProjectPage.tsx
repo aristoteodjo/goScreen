@@ -1,3 +1,4 @@
+import { openPlace, useTabTitle } from "@/modules/tabs/tabs";
 import {
   flowFromScenario,
   newFlow,
@@ -78,6 +79,7 @@ export function ProjectPage({ project }: { project: string }) {
     queryFn: () => projectsIpc.videos(project),
   });
   const name = projects.data?.find((p) => p.id === project)?.name ?? project;
+  useTabTitle(projects.data ? name : null);
   const [pending, setPending] = useState<Pending>(null);
   const [url, setUrl] = useState("https://");
   const [device, setDevice] = useState("galaxy-s25");
@@ -123,6 +125,14 @@ export function ProjectPage({ project }: { project: string }) {
 
   const vslItems = (v: VslEntry) => [
     { label: "Open the flow", onSelect: () => openVsl(v.id) },
+    {
+      label: "Open in new tab",
+      onSelect: () =>
+        openPlace(
+          { to: "/flow", search: { project, vsl: v.id } },
+          { reuse: false },
+        ),
+    },
     { label: "Simulate every journey", onSelect: () => runAll(v, "simulate") },
     { label: "Record the VSL", onSelect: () => runAll(v, "record") },
     {
@@ -146,7 +156,7 @@ export function ProjectPage({ project }: { project: string }) {
     <div className="flex h-full flex-col">
       <header
         data-tauri-drag-region
-        className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20"
+        className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-3"
       >
         <Button
           size="icon"
@@ -334,6 +344,16 @@ export function ProjectPage({ project }: { project: string }) {
                       }
                     >
                       Open in editor
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() =>
+                        openPlace(
+                          { to: "/editor", search: { video: v.path } },
+                          { reuse: false },
+                        )
+                      }
+                    >
+                      Open in new tab
                     </ContextMenuItem>
                     <ContextMenuItem
                       onClick={() => void revealItemInDir(v.path)}

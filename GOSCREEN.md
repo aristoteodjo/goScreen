@@ -260,7 +260,16 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   suite sans toucher au montage à l'écran (`exportVariants`, panneau Film « Export several formats »).
 - L'export hors du dialogue (IA, variantes) passe par `exportCurrent` : une exportation à la fois, garde-fou de
   30 s si la fenêtre est cachée.
-- IA : `edit.setFilm` (seulement les champs à changer), `export.variants`.
+- IA : `edit.setFilm` (seulement les champs à changer), `export.variants`, `edit.addMedia` (image, vidéo ou son par chemin absolu).
+- **Rendu « vitrine »** (`film.look = "showcase"`, par défaut, celui des VSL OEUF D'OR) : appareil avec sa coque à
+  75 % de la hauteur en 9:16 (à droite en 16:9), au-dessus un sur-titre de chapitre (`film.label` : « ACHETEUR ·
+  2/11 », pastille d'accent, JetBrains Mono espacé) et le titre de la scène aligné à gauche, disque d'accent à
+  16 % derrière l'appareil (`background.decor`), cartons de marque alignés à gauche (`slide.layout = "left"` :
+  pastille et `film.brand`, sur-titre, titre dont les `*mots entre étoiles*` prennent l'accent, sous-titre
+  atténué). Les sur-titres (`kicker-*`) sont recalculés à chaque application, jamais édités à part.
+  `look = "plain"` garde l'ancienne mise en page (légende centrée, plaque si zoom).
+- `adoptFilm` fait d'un montage quelconque un film : premier et dernier cartons = ouverture et fin, le texte qui
+  commence avec un clip devient le titre de sa scène. Panneau Film « Make it a film », ou `edit.setFilm` par l'IA.
 
 ### Blocs : compositions HTML (méthode HyperFrames)
 
@@ -395,6 +404,37 @@ n'en sait rien.
 - L'export mixe la bande-son par morceaux (`audioPieces` -> `export_finish`) : micro découpé par clip, musiques, sons de tap.
 - UI : `Timeline.tsx` (pistes), `TimelineToolbar.tsx` (ajout de contenu, split, zoom de timeline),
   `TimelineMenus.tsx` (clic droit), `SelectionPanels.tsx` (propriétés de l'élément sélectionné), `actions.ts`.
+
+### Interface façon Premiere / After Effects
+
+- **Espaces de travail** (en haut à droite : Editing, Animation, Film, Audio) : mêmes panneaux, tailles et onglets
+  propres à chacun (`workspace.ts`, tailles mémorisées par espace).
+- **Projet** (`ProjectPanel.tsx`) : chutier des médias (l'enregistrement + `edit.assets`, double-clic ou glisser
+  sur la timeline), Blocks (galerie vivante), Effects (animations de texte, mouvements, transitions, titres,
+  formes, flou : double-clic applique), Scenes (clips de la piste vidéo, clic = aller à).
+- **Program** : moniteur avec timecode `HH:MM:SS:FF`, format, résolution de lecture, durée ; transport image par
+  image, coupe, voix off. **Effect Controls / Film / Look / Audio / Assistant** à droite (`Panels.tsx`).
+- **Timeline** : outils en colonne (sélection V, cutter C, main H, texte T), pistes V1 (vidéo), V2… (calques),
+  Zoom, A1… (micro, sons) avec une piste audio vide toujours présente, barre d'état qui explique l'outil.
+  Raccourcis J/K/L en plus d'Espace.
+- **Voix off** (`voiceover.tsx`, Rust `media/voiceover.rs`) : bouton micro d'une piste audio, du moniteur ou du
+  panneau Projet. Décompte 3-2-1 pendant lequel le micro démarre (FFmpeg avfoundation, `-progress` donne
+  l'avance du fichier), puis la timeline joue haut-parleurs coupés jusqu'à Stop, Espace ou la fin ; Échap
+  annule. La prise est nettoyée par la même chaîne que la voix du studio (`VOICE_CHAIN`), copiée dans
+  `<stem>.assets/`, posée au point de départ (`in` = avance du fichier) : volume, fondus, coupe et déplacement
+  comme tout son.
+
+### Onglets et IA visible
+
+- **Onglets** (`modules/tabs`) : chaque onglet garde un lieu (accueil, projet, flow, vidéo, studio) ; naviguer
+  déplace l'onglet actif, ⌘T en ouvre un, Ctrl+Tab / ⌘1…9 pour passer de l'un à l'autre, clic milieu ferme,
+  clic droit dupliquer / fermer les autres, glisser pour réordonner. Restaurés au lancement (`localStorage`) ;
+  les montages vivent sur disque (sauvegarde forcée en quittant l'éditeur). « Open in new tab » sur les VSL et
+  vidéos d'un projet.
+- **Suivre l'IA** (bouton Follow, en haut à droite) : chaque commande ouvre son lieu dans un onglet
+  (`openPlace`), un curseur orange « AI » (`aiCursor.tsx`) glisse vers ce qui va changer (`data-ai` sur les
+  panneaux, `data-ai-item` sur les éléments de timeline), « clique », puis montre le résultat : l'élément créé,
+  ou chaque nœud ajouté ou modifié d'un flow (`aiStage.ts`). L'IA reçoit sa réponse avant cette mise en scène.
 
 ## Vérifications
 

@@ -37,6 +37,7 @@ export function TasksPanel() {
       <button
         type="button"
         onClick={() => setPanelOpen(true)}
+        data-ai="tasks"
         className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-full border bg-popover/95 px-3 py-2 text-xs shadow-xl backdrop-blur hover:bg-popover"
       >
         {running ? (
@@ -54,7 +55,10 @@ export function TasksPanel() {
     );
 
   return (
-    <div className="fixed right-4 bottom-4 z-50 flex max-h-[70vh] w-[380px] flex-col overflow-hidden rounded-xl border bg-popover/95 shadow-2xl backdrop-blur">
+    <div
+      data-ai="tasks"
+      className="fixed right-4 bottom-4 z-50 flex max-h-[70vh] w-[380px] flex-col overflow-hidden rounded-xl border bg-popover/95 shadow-2xl backdrop-blur"
+    >
       <div className="flex items-center gap-2 border-b px-3 py-2">
         <HugeiconsIcon icon={TaskDaily01Icon} size={15} />
         <span className="text-xs font-semibold">Background tasks</span>

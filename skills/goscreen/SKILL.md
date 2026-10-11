@@ -81,7 +81,17 @@ open it.
    good VSL opens on a kinetic title or logo card, uses a counter or chart for
    proof, and ends on a call to action.
    Change the film as a whole with `edit_setFilm` (format, colours, font,
-   captions, zoom, cards): the person's own edits stay.
+   captions, zoom, cards): the person's own edits stay. The default look,
+   `showcase`, is the VSL layout: the device framed at 75 % of the height
+   under a numbered kicker (`label`: "Buyer" gives "BUYER · 2/11") and the
+   scene title, an accent disc behind it, brand cards (`brand`, card
+   `eyebrow`, `*words between stars*` in the accent colour). `edit_setFilm`
+   also turns any video into a film (its cards and the texts starting each
+   clip are kept).
+   Media the person gives you (logo, product shot, music, a voice-over
+   recorded elsewhere): `edit_addMedia` with the file's absolute path. The
+   person records their own voice-over in the editor (mic button on any
+   audio track): suggest it, do not wait for it.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees, or `export_variants` for several formats at once (9:16 for
    stories, 16:9 for web, 1:1 and 4:5 for feeds). The goScreen window must
@@ -97,6 +107,11 @@ open it.
 - Never show secrets: mask codes and test banners (`mask`), use test accounts.
 
 ## Etiquette
+
+- The person may be watching: with **Follow** on (top right of goScreen),
+  each command opens its place in a tab and an orange cursor named "AI"
+  shows what you change. Work in readable steps (one scene, one block at a
+  time) rather than one huge `edit_save`, so they can follow.
 
 - Destructive tools (`projects_delete`, `vsl_delete`, `tasks_simulate`,
   `tasks_record`) act on real data: confirm with the person.
