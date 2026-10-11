@@ -2,139 +2,621 @@
   "version": 1,
   "name": "OEUF D'OR producteur",
   "url": "https://oeufsdor-pro.vercel.app/login",
-  "device": { "id": "galaxy-s25", "color": "navy" },
+  "device": {
+    "id": "galaxy-s25",
+    "color": "navy"
+  },
   "locale": "fr-FR",
   "timezone": "Africa/Porto-Novo",
   "vars": {
-    "producerPhone": { "label": "Numéro d'un producteur de test sans produit" },
-    "producerName": { "label": "Nom du producteur (sur sa carte d'offre)" },
-    "buyerPhone": { "label": "Numéro de l'acheteur de test (hors caméra)" },
-    "payPhone": { "label": "Numéro Mobile Money FedaPay (bac à sable)", "default": "0166000001" }
+    "producerPhone": {
+      "label": "Numéro d'un producteur de test sans produit"
+    },
+    "producerName": {
+      "label": "Nom du producteur (sur sa carte d'offre)"
+    },
+    "buyerPhone": {
+      "label": "Numéro de l'acheteur de test (hors caméra)"
+    },
+    "payPhone": {
+      "label": "Numéro Mobile Money FedaPay (bac à sable)",
+      "default": "0166000001"
+    }
   },
-  "mask": ["^(Développement|Environnement de test)\\s*:"],
+  "mask": [
+    "^(Développement|Environnement de test)\\s*:"
+  ],
   "film": {
+    "look": "showcase",
+    "label": "Producteur",
+    "brand": "OEUF D'OR",
     "aspect": "9:16",
     "background": "#f7f7f2",
     "ink": "#16241c",
     "accent": "#1e6a43",
-    "font": "Avenir Next",
+    "font": "Bricolage Grotesque Variable",
     "captions": "top",
     "zoom": 1.35,
-    "intro": { "title": "Mettez votre stock en ligne. Soyez payé.", "subtitle": "Depuis votre téléphone, sans mot de passe.", "duration": 3 },
-    "outro": { "title": "Vous vendez. OEUF D'OR encaisse et vous reverse.", "subtitle": "Votre compte est ouvert par l'équipe OEUF D'OR.", "duration": 3.2 }
+    "intro": {
+      "eyebrow": "Pour les producteurs",
+      "title": "Mettez votre stock en ligne. *Soyez payé.*",
+      "subtitle": "Depuis votre téléphone, sans mot de passe.",
+      "duration": 3
+    },
+    "outro": {
+      "eyebrow": "Espace producteur",
+      "title": "Vous vendez. *OEUF D'OR encaisse et vous reverse.*",
+      "subtitle": "Votre compte est ouvert par l'équipe OEUF D'OR.",
+      "duration": 3.2
+    }
   },
   "steps": [
-    { "do": "scene", "caption": "Votre numéro WhatsApp suffit" },
-    { "do": "type", "target": { "css": "input[type=tel]" }, "text": "{{producerPhone}}" },
-    { "do": "tap", "target": { "role": "button", "name": "Recevoir le code" } },
-    { "do": "wait", "ms": 700 },
-    { "do": "type", "text": "{{code}}", "delay": 160 },
-    { "do": "tap", "target": { "role": "button", "name": "Se connecter" } },
-    { "do": "waitUrl", "match": "/producer/?$", "timeout": 30000 },
-    { "do": "wait", "ms": 600 },
-
-    { "do": "scene", "caption": "Toute votre activité sur un écran" },
-    { "do": "wait", "ms": 1800 },
-    { "do": "scroll", "by": 700, "duration": 2200 },
-    { "do": "wait", "ms": 800 },
-    { "do": "scroll", "by": 900, "duration": 2000 },
-    { "do": "wait", "ms": 900 },
-
-    { "do": "scene", "caption": "Un produit en moins d'une minute" },
-    { "do": "tap", "target": { "role": "link", "name": "Stock", "nth": -1 } },
-    { "do": "waitUrl", "match": "/producer/stock" },
-    { "do": "wait", "ms": 700 },
-    { "do": "tap", "target": { "role": "button", "name": "Ajouter mon premier produit" } },
-    { "do": "waitFor", "target": { "role": "dialog" } },
-    { "do": "tap", "target": { "css": "#product-category" } },
-    { "do": "tap", "target": { "role": "option", "name": "Œuf de poulet" } },
-    { "do": "type", "target": { "css": "#product-variety" }, "text": "calibre moyen" },
-    { "do": "type", "target": { "css": "#product-price" }, "text": "2100" },
-    { "do": "type", "target": { "css": "#product-quantity" }, "text": "50" },
-    { "do": "wait", "ms": 500 },
-    { "do": "tap", "target": { "role": "button", "name": "Ajouter au stock" } },
-    { "do": "wait", "ms": 1500 },
-
-    { "do": "scene", "caption": "Vérifié : en vente tout de suite" },
-    { "do": "wait", "ms": 2600 },
-
-    { "do": "scene", "caption": "Nouvelle collecte ? Ajoutez un lot" },
-    { "do": "tap", "target": { "role": "button", "name": "Ajouter un lot" } },
-    { "do": "waitFor", "target": { "role": "dialog" } },
-    { "do": "type", "target": { "css": "#producer-quantity" }, "text": "40" },
-    { "do": "tap", "target": { "role": "button", "name": "Ajouter le lot" } },
-    { "do": "wait", "ms": 1800 },
-
-    { "do": "scene", "caption": "Des œufs cassés ? Retirez-les" },
-    { "do": "tap", "target": { "role": "button", "name": "Voir les lots et les prix" } },
-    { "do": "tap", "target": { "role": "button", "name": "Modifier ce lot" } },
-    { "do": "waitFor", "target": { "role": "dialog" } },
-    { "do": "type", "target": { "css": "#producer-correct-quantity" }, "text": "3" },
-    { "do": "tap", "target": { "text": "Cassé", "exact": true } },
-    { "do": "tap", "target": { "role": "button", "name": "Retirer du lot" } },
-    { "do": "wait", "ms": 1500 },
-
-    { "do": "scene", "caption": "Chaque lot suivi jusqu'à sa date limite" },
-    { "do": "scroll", "by": 260, "duration": 1500 },
-    { "do": "wait", "ms": 800 },
-    { "do": "scroll", "by": 260, "duration": 1500 },
-    { "do": "wait", "ms": 1200 },
-    { "do": "cut" },
-
-    { "do": "session", "name": "acheteur" },
-    { "do": "goto", "url": "https://oeufsdor.vercel.app/offres" },
-    { "do": "tap", "target": { "css": "a[href^='/offres/']", "hasText": "{{producerName}}" } },
-    { "do": "waitUrl", "match": "/offres/.+" },
-    { "do": "tap", "target": { "css": "#order-pickup" } },
-    { "do": "type", "target": { "css": "input[type=tel]" }, "text": "{{buyerPhone}}" },
-    { "do": "tap", "target": { "role": "button", "name": "Recevoir mon code" } },
-    { "do": "type", "text": "{{code}}", "delay": 120 },
-    { "do": "tap", "target": { "role": "button", "name": "Envoyer ma commande" } },
-    { "do": "waitUrl", "match": "/commandes/.+", "timeout": 40000 },
-    { "do": "remember", "name": "order", "match": "/commandes/([A-Z0-9-]+)" },
-    { "do": "tap", "target": { "role": "button", "name": "Payer ·" } },
-    { "do": "tap", "target": { "frame": "iframe[src*='fedapay']", "css": "a:visible", "hasText": "Mobile Money" } },
-    { "do": "check", "target": { "frame": "iframe[src*='fedapay']", "css": "#sendReceipt" }, "value": false },
-    { "do": "type", "target": { "frame": "iframe[src*='fedapay']", "css": "#phone_number" }, "text": "{{payPhone}}", "clear": true },
-    { "do": "tap", "target": { "frame": "iframe[src*='fedapay']", "css": "button[type=submit]:visible" } },
-    { "do": "waitFor", "target": { "text": "Code de remise", "exact": true }, "timeout": 120000 },
-    { "do": "remember", "name": "pickup", "target": { "css": "div", "hasText": "Code de remise", "nth": -1 }, "match": "Code de remise\\s+([A-Z0-9-]+)" },
-
-    { "do": "session", "name": "main" },
-    { "do": "goto", "url": "https://oeufsdor-pro.vercel.app/producer" },
-    { "do": "scene", "caption": "Une commande payée arrive" },
-    { "do": "tap", "target": { "role": "link", "name": "Commandes", "nth": -1 } },
-    { "do": "waitUrl", "match": "/producer/orders" },
-    { "do": "wait", "ms": 900 },
-    { "do": "tap", "target": { "css": "main a[href$='/producer/orders/{{order}}']" } },
-    { "do": "waitUrl", "match": "/producer/orders/.+" },
-    { "do": "wait", "ms": 900 },
-
-    { "do": "scene", "caption": "Saisissez le code de l'acheteur" },
-    { "do": "tap", "target": { "role": "button", "name": "Valider la remise" } },
-    { "do": "waitFor", "target": { "role": "dialog" } },
-    { "do": "type", "target": { "css": "#producer-code" }, "text": "{{pickup}}", "delay": 160 },
-    { "do": "tap", "target": { "role": "button", "name": "Valider la remise", "nth": -1 } },
-    { "do": "wait", "ms": 1800 },
-
-    { "do": "scene", "caption": "Terminée. L'argent est à vous" },
-    { "do": "scroll", "to": { "css": "[aria-label='5 sur 5 : Excellent']" } },
-    { "do": "tap", "target": { "css": "[aria-label='5 sur 5 : Excellent']" } },
-    { "do": "tap", "target": { "role": "button", "name": "Envoyer ma note" } },
-    { "do": "wait", "ms": 1500 },
-
-    { "do": "scene", "caption": "Retirez sur votre Mobile Money" },
-    { "do": "tap", "target": { "role": "link", "name": "Portefeuille", "nth": -1 } },
-    { "do": "waitUrl", "match": "/producer/wallet" },
-    { "do": "wait", "ms": 900 },
-    { "do": "tap", "target": { "role": "button", "name": "Retirer" } },
-    { "do": "waitFor", "target": { "role": "dialog" } },
-    { "do": "tap", "target": { "role": "button", "name": "MTN MoMo" } },
-    { "do": "tap", "target": { "role": "button", "name": "Recevoir le code sur WhatsApp" } },
-    { "do": "type", "target": { "css": "#payout-code" }, "text": "{{code}}", "delay": 170 },
-    { "do": "tap", "target": { "css": "[role=dialog] button[type=submit]", "nth": -1 } },
-    { "do": "wait", "ms": 1500 },
-    { "do": "scroll", "by": 300, "duration": 1200 },
-    { "do": "wait", "ms": 1500 }
+    {
+      "do": "scene",
+      "caption": "Votre numéro WhatsApp suffit"
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "input[type=tel]"
+      },
+      "text": "{{producerPhone}}"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Recevoir le code"
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 700
+    },
+    {
+      "do": "type",
+      "text": "{{code}}",
+      "delay": 160
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Se connecter"
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/producer/?$",
+      "timeout": 30000
+    },
+    {
+      "do": "wait",
+      "ms": 600
+    },
+    {
+      "do": "scene",
+      "caption": "Toute votre activité sur un écran"
+    },
+    {
+      "do": "wait",
+      "ms": 1800
+    },
+    {
+      "do": "scroll",
+      "by": 700,
+      "duration": 2200
+    },
+    {
+      "do": "wait",
+      "ms": 800
+    },
+    {
+      "do": "scroll",
+      "by": 900,
+      "duration": 2000
+    },
+    {
+      "do": "wait",
+      "ms": 900
+    },
+    {
+      "do": "scene",
+      "caption": "Un produit en moins d'une minute"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "link",
+        "name": "Stock",
+        "nth": -1
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/producer/stock"
+    },
+    {
+      "do": "wait",
+      "ms": 700
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Ajouter mon premier produit"
+      }
+    },
+    {
+      "do": "waitFor",
+      "target": {
+        "role": "dialog"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "css": "#product-category"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "option",
+        "name": "Œuf de poulet"
+      }
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#product-variety"
+      },
+      "text": "calibre moyen"
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#product-price"
+      },
+      "text": "2100"
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#product-quantity"
+      },
+      "text": "50"
+    },
+    {
+      "do": "wait",
+      "ms": 500
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Ajouter au stock"
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    },
+    {
+      "do": "scene",
+      "caption": "Vérifié : en vente tout de suite"
+    },
+    {
+      "do": "wait",
+      "ms": 2600
+    },
+    {
+      "do": "scene",
+      "caption": "Nouvelle collecte ? Ajoutez un lot"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Ajouter un lot"
+      }
+    },
+    {
+      "do": "waitFor",
+      "target": {
+        "role": "dialog"
+      }
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#producer-quantity"
+      },
+      "text": "40"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Ajouter le lot"
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 1800
+    },
+    {
+      "do": "scene",
+      "caption": "Des œufs cassés ? Retirez-les"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Voir les lots et les prix"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Modifier ce lot"
+      }
+    },
+    {
+      "do": "waitFor",
+      "target": {
+        "role": "dialog"
+      }
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#producer-correct-quantity"
+      },
+      "text": "3"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "text": "Cassé",
+        "exact": true
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Retirer du lot"
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    },
+    {
+      "do": "scene",
+      "caption": "Chaque lot suivi jusqu'à sa date limite"
+    },
+    {
+      "do": "scroll",
+      "by": 260,
+      "duration": 1500
+    },
+    {
+      "do": "wait",
+      "ms": 800
+    },
+    {
+      "do": "scroll",
+      "by": 260,
+      "duration": 1500
+    },
+    {
+      "do": "wait",
+      "ms": 1200
+    },
+    {
+      "do": "cut"
+    },
+    {
+      "do": "session",
+      "name": "acheteur"
+    },
+    {
+      "do": "goto",
+      "url": "https://oeufsdor.vercel.app/offres"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "css": "a[href^='/offres/']",
+        "hasText": "{{producerName}}"
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/offres/.+"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "css": "#order-pickup"
+      }
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "input[type=tel]"
+      },
+      "text": "{{buyerPhone}}"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Recevoir mon code"
+      }
+    },
+    {
+      "do": "type",
+      "text": "{{code}}",
+      "delay": 120
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Envoyer ma commande"
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/commandes/.+",
+      "timeout": 40000
+    },
+    {
+      "do": "remember",
+      "name": "order",
+      "match": "/commandes/([A-Z0-9-]+)"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Payer ·"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "frame": "iframe[src*='fedapay']",
+        "css": "a:visible",
+        "hasText": "Mobile Money"
+      }
+    },
+    {
+      "do": "check",
+      "target": {
+        "frame": "iframe[src*='fedapay']",
+        "css": "#sendReceipt"
+      },
+      "value": false
+    },
+    {
+      "do": "type",
+      "target": {
+        "frame": "iframe[src*='fedapay']",
+        "css": "#phone_number"
+      },
+      "text": "{{payPhone}}",
+      "clear": true
+    },
+    {
+      "do": "tap",
+      "target": {
+        "frame": "iframe[src*='fedapay']",
+        "css": "button[type=submit]:visible"
+      }
+    },
+    {
+      "do": "waitFor",
+      "target": {
+        "text": "Code de remise",
+        "exact": true
+      },
+      "timeout": 120000
+    },
+    {
+      "do": "remember",
+      "name": "pickup",
+      "target": {
+        "css": "div",
+        "hasText": "Code de remise",
+        "nth": -1
+      },
+      "match": "Code de remise\\s+([A-Z0-9-]+)"
+    },
+    {
+      "do": "session",
+      "name": "main"
+    },
+    {
+      "do": "goto",
+      "url": "https://oeufsdor-pro.vercel.app/producer"
+    },
+    {
+      "do": "scene",
+      "caption": "Une commande payée arrive"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "link",
+        "name": "Commandes",
+        "nth": -1
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/producer/orders"
+    },
+    {
+      "do": "wait",
+      "ms": 900
+    },
+    {
+      "do": "tap",
+      "target": {
+        "css": "main a[href$='/producer/orders/{{order}}']"
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/producer/orders/.+"
+    },
+    {
+      "do": "wait",
+      "ms": 900
+    },
+    {
+      "do": "scene",
+      "caption": "Saisissez le code de l'acheteur"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Valider la remise"
+      }
+    },
+    {
+      "do": "waitFor",
+      "target": {
+        "role": "dialog"
+      }
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#producer-code"
+      },
+      "text": "{{pickup}}",
+      "delay": 160
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Valider la remise",
+        "nth": -1
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 1800
+    },
+    {
+      "do": "scene",
+      "caption": "Terminée. L'argent est à vous"
+    },
+    {
+      "do": "scroll",
+      "to": {
+        "css": "[aria-label='5 sur 5 : Excellent']"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "css": "[aria-label='5 sur 5 : Excellent']"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Envoyer ma note"
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    },
+    {
+      "do": "scene",
+      "caption": "Retirez sur votre Mobile Money"
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "link",
+        "name": "Portefeuille",
+        "nth": -1
+      }
+    },
+    {
+      "do": "waitUrl",
+      "match": "/producer/wallet"
+    },
+    {
+      "do": "wait",
+      "ms": 900
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Retirer"
+      }
+    },
+    {
+      "do": "waitFor",
+      "target": {
+        "role": "dialog"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "MTN MoMo"
+      }
+    },
+    {
+      "do": "tap",
+      "target": {
+        "role": "button",
+        "name": "Recevoir le code sur WhatsApp"
+      }
+    },
+    {
+      "do": "type",
+      "target": {
+        "css": "#payout-code"
+      },
+      "text": "{{code}}",
+      "delay": 170
+    },
+    {
+      "do": "tap",
+      "target": {
+        "css": "[role=dialog] button[type=submit]",
+        "nth": -1
+      }
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    },
+    {
+      "do": "scroll",
+      "by": 300,
+      "duration": 1200
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    }
   ]
 }

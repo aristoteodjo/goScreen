@@ -46,6 +46,16 @@ export function fillBackground(
     ctx.fillStyle = g;
   }
   ctx.fillRect(0, 0, w, h);
+  if (bg.kind === "none" || !bg.decor) return;
+  for (const d of bg.decor) {
+    ctx.save();
+    ctx.globalAlpha *= d.opacity;
+    ctx.fillStyle = d.color;
+    ctx.beginPath();
+    ctx.arc(d.x * w, d.y * h, d.r * w, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 /** Greedy word wrap; explicit line breaks are kept. */
@@ -80,6 +90,8 @@ type TextBlock = {
   color: string;
   align: "left" | "center" | "right";
   background: string | null;
+  bullet?: string | null;
+  tracking?: number;
   // Center and wrap width in output px.
   x: number;
   y: number;
@@ -89,12 +101,27 @@ type TextBlock = {
 /** Draws a text block with its reveal (typewriter, words or wipe). */
 function drawText(
   ctx: CanvasRenderingContext2D,
-  b: TextBlock,
+  block: TextBlock,
   m: Motion,
   mode: "typewriter" | "words" | "wipe" | null,
 ) {
+  let b = block;
   ctx.font = `${b.weight} ${b.size * 0.8}px ${b.font}, -apple-system, system-ui, sans-serif`;
   ctx.textBaseline = "middle";
+  // WebKit draws letter spacing from Safari 18; older ones ignore it.
+  if (b.tracking && "letterSpacing" in ctx)
+    ctx.letterSpacing = `${b.tracking * b.size * 0.8}px`;
+  if (b.bullet) {
+    // A marker at the left edge; the text moves over to make room.
+    const d = b.size * 0.5;
+    ctx.save();
+    ctx.fillStyle = b.bullet;
+    ctx.beginPath();
+    ctx.arc(b.x - b.width / 2 + d / 2, b.y, d / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    b = { ...b, x: b.x + d * 0.8, width: b.width - d * 1.6 };
+  }
   const lines = wrapLines(ctx, b.text, b.width);
   const height = lines.length * b.size;
   const top = b.y - height / 2;
@@ -202,6 +229,10 @@ export function drawSlide(
 ) {
   fillBackground(ctx, slide.background, out.width, out.height);
   const m = slideMotion(slide.animation, slide.duration, local);
+  if (slide.layout === "left") {
+    drawBrandCard(ctx, slide, m, out);
+    return;
+  }
   const mode = reveals(slide.animation);
   const base = {
     font: slide.font,
@@ -226,6 +257,132 @@ export function drawSlide(
     ctx.save();
     applyMotion(ctx, motion, out.width / 2, y, out);
     drawText(ctx, { ...base, text, y, size, weight }, motion, mode);
+    ctx.restore();
+  }
+}
+
+/** Words of a title; `*between stars*` is drawn in the accent colour. */
+export function titleWords(title: string): { word: string; accent: boolean }[] {
+  const out: { word: string; accent: boolean }[] = [];
+  title.split("*").forEach((part, i) => {
+    for (const word of part.split(/\s+/).filter(Boolean))
+      out.push({ word, accent: i % 2 === 1 });
+  });
+  return out;
+}
+
+/**
+ * A brand card, flush left (the VSL look): the brand with its dot, an
+ * eyebrow, the title with its accent words, the subtitle. Sizes follow the
+ * short side, so a 16:9 card reads like a 9:16 one.
+ */
+function drawBrandCard(
+  ctx: CanvasRenderingContext2D,
+  slide: SlideClip,
+  m: ReturnType<typeof slideMotion>,
+  out: Size,
+) {
+  const u = Math.min(out.width, out.height) / 1080;
+  const left = 96 * u;
+  const width = out.width - left * 2;
+  const accent = slide.accent ?? slide.color;
+  const muted = slide.muted ?? slide.color;
+  const font = (w: number, px: number, family: string) =>
+    `${w} ${px}px ${family}, -apple-system, system-ui, sans-serif`;
+  const mono = '"JetBrains Mono", ui-monospace, monospace';
+  const gap = 40 * u;
+  const titlePx = 104 * u;
+  const titleLine = titlePx * 1.04;
+  const subPx = 46 * u;
+  const subLine = subPx * 1.3;
+
+  ctx.textBaseline = "middle";
+  ctx.font = font(800, titlePx, slide.font);
+  const words = titleWords(slide.title);
+  const rows: { word: string; accent: boolean; x: number }[][] = [[]];
+  let x = 0;
+  for (const w of words) {
+    const wide = ctx.measureText(w.word).width;
+    const space = ctx.measureText(" ").width;
+    const row = rows[rows.length - 1];
+    if (row.length > 0 && x + wide > width) {
+      rows.push([{ ...w, x: 0 }]);
+      x = wide + space;
+    } else {
+      row.push({ ...w, x });
+      x += wide + space;
+    }
+  }
+  ctx.font = font(400, subPx, slide.font);
+  const subRows = slide.subtitle.trim()
+    ? wrapLines(ctx, slide.subtitle, Math.min(width, subPx * 12))
+    : [];
+
+  const brandH = slide.brand ? 64 * u : 0;
+  const eyebrowH = slide.eyebrow ? 32 * u : 0;
+  const parts = [
+    brandH,
+    eyebrowH,
+    rows.length * titleLine,
+    subRows.length * subLine,
+  ].filter((h) => h > 0);
+  const total =
+    parts.reduce((a, b) => a + b, 0) + gap * Math.max(0, parts.length - 1);
+  let y = (out.height - total) / 2;
+
+  ctx.save();
+  applyMotion(ctx, m.title, out.width / 2, out.height / 2, out);
+  if (slide.brand) {
+    const r = 23 * u;
+    ctx.fillStyle = accent;
+    ctx.save();
+    ctx.globalAlpha *= 0.18;
+    ctx.beginPath();
+    ctx.arc(left + r, y + brandH / 2, r + 14 * u, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(left + r, y + brandH / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = slide.color;
+    ctx.font = font(800, 64 * u, slide.font);
+    ctx.fillText(slide.brand, left + r * 2 + 22 * u, y + brandH / 2);
+    y += brandH + gap;
+  }
+  if (slide.eyebrow) {
+    ctx.fillStyle = muted;
+    ctx.font = font(500, 32 * u, mono);
+    if ("letterSpacing" in ctx) ctx.letterSpacing = `${0.08 * 32 * u}px`;
+    ctx.fillText(slide.eyebrow.toUpperCase(), left, y + eyebrowH / 2);
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+    y += eyebrowH + gap;
+  }
+  ctx.font = font(800, titlePx, slide.font);
+  const alpha = wordOpacities(words.length, m.title.reveal);
+  let i = 0;
+  rows.forEach((row, r) => {
+    const cy = y + titleLine * (r + 0.5);
+    for (const w of row) {
+      const a = alpha[i] ?? 1;
+      ctx.save();
+      ctx.globalAlpha *= a;
+      ctx.fillStyle = w.accent ? accent : slide.color;
+      ctx.fillText(w.word, left + w.x, cy + (1 - a) * titlePx * 0.3);
+      ctx.restore();
+      i += 1;
+    }
+  });
+  y += rows.length * titleLine + gap;
+  ctx.restore();
+
+  if (subRows.length) {
+    ctx.save();
+    applyMotion(ctx, m.subtitle, out.width / 2, out.height / 2, out);
+    ctx.fillStyle = muted;
+    ctx.font = font(400, subPx, slide.font);
+    subRows.forEach((line, r) => {
+      ctx.fillText(line, left, y + subLine * (r + 0.5));
+    });
     ctx.restore();
   }
 }
@@ -473,6 +630,8 @@ function drawTextOverlay(
       color: o.style.color,
       align: o.style.align,
       background: o.style.background,
+      bullet: o.style.bullet,
+      tracking: o.style.tracking,
       x: r.x + r.width / 2,
       y: r.y + r.height / 2,
       width: r.width,

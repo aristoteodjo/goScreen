@@ -136,8 +136,10 @@ const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 const cardSchema = z
   .object({
+    // *Words between stars* are drawn in the accent colour.
     title: z.string().min(1),
     subtitle: z.string().default(""),
+    eyebrow: z.string().optional(),
     duration: z.number().min(0.5).max(15).default(3),
   })
   .strict();
@@ -153,6 +155,13 @@ export const filmSchema = z
     captions: z.enum(["top", "bottom", "none"]).default("top"),
     // Zoom on bursts of taps; 1 = no zoom.
     zoom: z.number().min(1).max(3).default(1.35),
+    // "showcase": the VSL look (chapter kicker and title above a framed
+    // device, accent disc behind it, brand cards); "plain": centered.
+    look: z.enum(["showcase", "plain"]).default("showcase"),
+    // Chapter kicker: "BUYER · 2/11". Empty: no kicker.
+    label: z.string().default(""),
+    // On the cards, with the accent dot.
+    brand: z.string().default(""),
     intro: cardSchema.optional(),
     outro: cardSchema.optional(),
   })

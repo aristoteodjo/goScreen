@@ -235,14 +235,29 @@ function lenient<T extends z.ZodTypeAny>(item: T) {
     .catch([]);
 }
 
+const decorSchema = z
+  .array(
+    z.object({
+      x: z.number().min(-1).max(2),
+      y: z.number().min(-1).max(2),
+      r: z.number().positive().max(3),
+      color,
+      opacity: z.number().min(0).max(1),
+    }),
+  )
+  .max(8)
+  .optional()
+  .catch(undefined);
+
 const backgroundSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
-  z.object({ kind: z.literal("color"), value: color }),
+  z.object({ kind: z.literal("color"), value: color, decor: decorSchema }),
   z.object({
     kind: z.literal("gradient"),
     from: color,
     to: color,
     angle: z.number(),
+    decor: decorSchema,
   }),
 ]);
 
@@ -292,6 +307,11 @@ const slideClipSchema = z.object({
   color: color.catch("#ffffff"),
   font: z.string().catch("Inter"),
   animation,
+  layout: z.enum(["center", "left"]).optional().catch(undefined),
+  eyebrow: z.string().optional().catch(undefined),
+  brand: z.string().optional().catch(undefined),
+  accent: color.optional().catch(undefined),
+  muted: color.optional().catch(undefined),
 });
 
 const easeSchema = z.union([
@@ -383,6 +403,8 @@ const overlaySchema = z.discriminatedUnion("kind", [
       color,
       align: z.enum(["left", "center", "right"]),
       background: color.nullable(),
+      bullet: color.nullable().optional().catch(undefined),
+      tracking: z.number().min(0).max(1).optional().catch(undefined),
     }),
     animator: animatorSchema,
   }),

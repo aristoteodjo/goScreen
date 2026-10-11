@@ -40,10 +40,26 @@ export type CaptureMode = "scene" | "canvas" | "device";
 
 export type AspectId = "auto" | "16:9" | "1:1" | "4:3" | "9:16" | "3:4" | "4:5";
 
+// Soft discs painted on the background, behind the devices: x, y are
+// fractions of the output, r a fraction of its width.
+export type Decor = {
+  x: number;
+  y: number;
+  r: number;
+  color: string;
+  opacity: number;
+};
+
 export type EditBackground =
   | { kind: "none" }
-  | { kind: "color"; value: string }
-  | { kind: "gradient"; from: string; to: string; angle: number };
+  | { kind: "color"; value: string; decor?: Decor[] }
+  | {
+      kind: "gradient";
+      from: string;
+      to: string;
+      angle: number;
+      decor?: Decor[];
+    };
 
 // focus null follows the touches inside the segment; otherwise it is a
 // point of the output frame (0..1).
@@ -137,6 +153,13 @@ export type SlideClip = {
   font: string;
   animation: Animation;
   transition: Transition | null;
+  // "left": a brand card, title flush left, *words* in the accent colour.
+  layout?: "center" | "left";
+  eyebrow?: string;
+  brand?: string;
+  accent?: string;
+  // Secondary text (eyebrow, subtitle) in the left layout.
+  muted?: string;
 };
 
 export type MainClip = RecordingClip | SlideClip;
@@ -216,6 +239,10 @@ export type TextStyle = {
   color: string;
   align: "left" | "center" | "right";
   background: string | null;
+  // A dot before the text in this colour (a chapter kicker's marker).
+  bullet?: string | null;
+  // Extra space between letters, in em (kickers in capitals).
+  tracking?: number;
 };
 
 export type TextOverlay = OverlayBase & {

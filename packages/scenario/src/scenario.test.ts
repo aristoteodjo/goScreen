@@ -1,6 +1,7 @@
 import { parseEditState } from "@goscreen/render-engine";
 import { describe, expect, it } from "vitest";
 import {
+  adoptFilm,
   applyFilm,
   buildScenarioEdit,
   EXAMPLE_SCENARIO,
@@ -282,8 +283,87 @@ describe("device placement", () => {
       "en",
     );
     expect(wide.layers?.[0].scale).toBeLessThan(1);
-    expect(tall.layers?.[0].scale).toBe(1);
-    expect(bare.layers?.[0].scale).toBe(1);
+    // The VSL frame: 75 % of the height, under the texts; beside them in 16:9.
+    expect(tall.layers?.[0]).toMatchObject({ x: 0.5, y: 0.589, scale: 0.75 });
+    expect(wide.layers?.[0].x).toBeGreaterThan(0.6);
+    expect(bare.layers?.[0].scale).toBeLessThan(1);
+    const plain = buildScenarioEdit(
+      take,
+      filmSchema.parse({ aspect: "9:16", look: "plain" }),
+      "en",
+    );
+    expect(plain.layers?.[0].scale).toBe(1);
+  });
+});
+
+describe("showcase look", () => {
+  const film = filmSchema.parse({
+    label: "Acheteur",
+    brand: "OEUF D'OR",
+    accent: "#e9a100",
+    intro: {
+      eyebrow: "Pour les acheteurs",
+      title: "Vous cherchez des œufs ? *Voyez qui en a.*",
+      duration: 3,
+    },
+  });
+  const built = buildScenarioEdit(take, film, "fr-FR");
+
+  it("numbers every scene title with a kicker", () => {
+    const titles = built.overlays.filter((o) => o.id.startsWith("caption-"));
+    const kicks = built.overlays.filter((o) => o.id.startsWith("kicker-"));
+    expect(kicks).toHaveLength(titles.length);
+    const first = kicks[0];
+    expect(first?.kind === "text" && first.text).toBe(
+      `ACHETEUR · 1/${titles.length}`,
+    );
+    expect(first?.kind === "text" && first.style.bullet).toBe("#e9a100");
+    expect(first?.start).toBe(titles[0]?.start);
+  });
+
+  it("paints the accent disc and makes brand cards", () => {
+    expect(built.background).toMatchObject({
+      kind: "color",
+      decor: [{ color: "#e9a100", opacity: 0.16 }],
+    });
+    const intro = built.clips[0];
+    expect(intro?.kind === "slide" && intro.layout).toBe("left");
+    expect(intro?.kind === "slide" && intro.brand).toBe("OEUF D'OR");
+    expect(intro?.kind === "slide" && intro.title).toContain("*Voyez");
+  });
+
+  it("drops kickers without a label, and rebuilds them when titles change", () => {
+    const none = applyFilm(built, { ...film, label: "" }, "fr-FR");
+    expect(none.overlays.some((o) => o.id.startsWith("kicker-"))).toBe(false);
+    const fewer = applyFilm(
+      {
+        ...built,
+        overlays: built.overlays.filter((o) => o.id !== "caption-0"),
+      },
+      film,
+      "fr-FR",
+    );
+    const k = fewer.overlays.filter((o) => o.id.startsWith("kicker-"));
+    expect(k[0]?.kind === "text" && k[0].text).toBe(`ACHETEUR · 1/${k.length}`);
+  });
+
+  it("adopts a montage made without a film", () => {
+    const plain = {
+      ...built,
+      film: undefined,
+      clips: built.clips.map((c, i) =>
+        i === 0 ? { ...c, id: "my-intro" } : c,
+      ),
+      overlays: built.overlays
+        .filter((o) => !o.id.startsWith("kicker-"))
+        .map((o, i) => ({ ...o, id: `text-${i}` })),
+    };
+    const adopted = adoptFilm(plain, film, "fr-FR");
+    expect(adopted.clips[0]?.id).toBe("intro");
+    expect(
+      adopted.overlays.filter((o) => o.id.startsWith("kicker-")).length,
+    ).toBeGreaterThan(0);
+    expect(adopted.film?.settings.label).toBe("Acheteur");
   });
 });
 
