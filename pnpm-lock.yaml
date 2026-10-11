@@ -44,6 +44,9 @@ importers:
       '@goscreen/render-engine':
         specifier: workspace:*
         version: link:../../packages/render-engine
+      '@goscreen/scenario':
+        specifier: workspace:*
+        version: link:../../packages/scenario
       '@hugeicons/core-free-icons':
         specifier: ^4.3.5
         version: 4.3.5
@@ -224,6 +227,28 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
+  packages/scenario:
+    dependencies:
+      '@goscreen/render-engine':
+        specifier: workspace:*
+        version: link:../render-engine
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
+  packages/scenario-runner:
+    dependencies:
+      playwright-core:
+        specifier: 1.57.0
+        version: 1.57.0
 
 packages:
 
@@ -2625,6 +2650,11 @@ packages:
   pkg-up@3.1.0:
     resolution: {integrity: sha512-nDywThFk1i4BQK4twPQ6TA4RT8bDY96yeuCVBWL3ePARCiEKDRSrNGbFIgUJpLp+XeIR65v8ra7WuJOFUBtkMA==}
     engines: {node: '>=8'}
+
+  playwright-core@1.57.0:
+    resolution: {integrity: sha512-agTcKlMw/mjBWOnD6kFZttAAGHgi/Nw0CZ2o6JqWSbMlI219lAFLZZCyqByTsvVAJq5XA5H8cA6PrvBRpBWEuQ==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   postcss-selector-parser@7.1.6:
     resolution: {integrity: sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==}
@@ -5518,6 +5548,8 @@ snapshots:
   pkg-up@3.1.0:
     dependencies:
       find-up: 3.0.0
+
+  playwright-core@1.57.0: {}
 
   postcss-selector-parser@7.1.6:
     dependencies:

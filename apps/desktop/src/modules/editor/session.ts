@@ -1,4 +1,5 @@
 import {
+  type Chapter,
   clipAt,
   type EditState,
   MIC_ASSET,
@@ -22,7 +23,7 @@ type Opened = {
   pointers: RecordedPointer[];
   layers: RecordedLayer[];
   // Site tour pages, in source seconds (empty for other takes).
-  chapters: { url: string; start: number; end: number }[];
+  chapters: Chapter[];
   // Camera/mic start, in seconds after the first screen frame.
   mediaOffset: number;
   // Imported asset file name -> local media URL.

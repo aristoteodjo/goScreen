@@ -1,0 +1,9 @@
+{
+  "name": "oeufdor-vsl-prototype",
+  "private": true,
+  "type": "commonjs",
+  "description": "First version of the OEUF D'OR VSLs, written as Playwright scripts before goScreen had scenarios. Kept as reference.",
+  "dependencies": {
+    "playwright": "1.57.0"
+  }
+}

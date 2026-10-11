@@ -20,6 +20,7 @@
     "@goscreen/device-engine": "workspace:*",
     "@goscreen/device-registry": "workspace:*",
     "@goscreen/render-engine": "workspace:*",
+    "@goscreen/scenario": "workspace:*",
     "@hugeicons/core-free-icons": "^4.3.5",
     "@hugeicons/react": "^1.1.10",
     "@tanstack/react-query": "^5.104.1",

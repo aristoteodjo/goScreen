@@ -12,6 +12,7 @@ import {
   SmartPhone01Icon,
   Video01Icon,
   VideoOffIcon,
+  WorkflowSquare01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +31,7 @@ import { ipc } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useEditor } from "@/modules/studio/store/editor";
 import { useProject } from "@/modules/studio/store/project";
+import { useScenario } from "@/modules/scenario/store";
 import { useTour } from "@/modules/tour/store";
 import {
   selectCaptureMode,
@@ -161,6 +163,19 @@ export function CaptureBar({ capture }: { capture: CaptureControls }) {
         >
           <HugeiconsIcon icon={Globe02Icon} size={18} strokeWidth={1.6} />
           Site tour
+        </button>
+        <button
+          type="button"
+          title="Play a scripted journey in a browser and edit it into a video"
+          onClick={() => useScenario.getState().set({ dialogOpen: true })}
+          className="flex h-12 items-center gap-2 rounded-xl px-3 text-[13px] text-white/80 hover:bg-white/5 hover:text-white"
+        >
+          <HugeiconsIcon
+            icon={WorkflowSquare01Icon}
+            size={18}
+            strokeWidth={1.6}
+          />
+          Scenario
         </button>
         <Button
           onClick={capture.toggleRecording}

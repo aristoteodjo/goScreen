@@ -26,6 +26,15 @@ export {
   stageArea,
   webcamRect,
 } from "./layers";
+export {
+  type Extrapolate,
+  type InterpolateOptions,
+  interpolate,
+  SPRING_DEFAULT,
+  type SpringConfig,
+  spring,
+  springSettle,
+} from "./keyframes";
 export { ASPECT_OPTIONS, contentRect, fitInto, outputSize } from "./layout";
 export {
   activeOverlays,
@@ -39,6 +48,7 @@ export {
   wordOpacities,
 } from "./motion";
 export {
+  type Chapter,
   DEFAULT_EDIT,
   EMPTY_RECORDING,
   fullClip,

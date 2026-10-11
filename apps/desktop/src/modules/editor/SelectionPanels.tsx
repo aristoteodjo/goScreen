@@ -37,6 +37,7 @@ const ANIMATIONS: { id: Animation; label: string; text?: boolean }[] = [
   { id: "slide-up", label: "Slide up" },
   { id: "slide-left", label: "Slide left" },
   { id: "pop", label: "Pop" },
+  { id: "spring", label: "Spring" },
   { id: "wipe", label: "Wipe" },
   { id: "typewriter", label: "Typewriter", text: true },
   { id: "words", label: "Word by word", text: true },

@@ -1,4 +1,5 @@
 import { easeInOut } from "./camera";
+import { spring, springSettle } from "./keyframes";
 import type { Animation, Overlay } from "./types";
 
 // How an animated element looks at one instant. Offsets are fractions of
@@ -12,6 +13,9 @@ export type Motion = {
 };
 
 export const STILL: Motion = { opacity: 1, dx: 0, dy: 0, scale: 1, reveal: 1 };
+
+// The spring is fitted to the motion span: settled by its end.
+const SPRING_SPAN = springSettle();
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
@@ -32,6 +36,16 @@ export function animate(kind: Animation, p: number): Motion {
       const q = clamp01(p);
       const s = q < 0.7 ? 0.6 + (q / 0.7) * 0.5 : 1.1 - ((q - 0.7) / 0.3) * 0.1;
       return { ...STILL, opacity: clamp01(q * 2.5), scale: s };
+    }
+    case "spring": {
+      // Rises into place with a physical overshoot (Remotion's default spring).
+      const s = spring(clamp01(p) * SPRING_SPAN);
+      return {
+        ...STILL,
+        opacity: clamp01(p * 3),
+        dy: (1 - s) * 0.05,
+        scale: 0.92 + 0.08 * s,
+      };
     }
     case "typewriter":
     case "words":

@@ -85,6 +85,8 @@ const v3Schema = z.object({
         url: z.string(),
         start: z.number().min(0),
         end: z.number().min(0),
+        // Scenario takes: what the scene shows, written as it is recorded.
+        caption: z.string().optional().catch(undefined),
       }),
     )
     .optional()
@@ -104,6 +106,13 @@ const v2Schema = z.object({
   pointers: z.array(pointerSchema),
 });
 
+export type Chapter = {
+  url: string;
+  start: number;
+  end: number;
+  caption?: string;
+};
+
 export type RecordingFile = {
   stage: { width: number; height: number } | null;
   mode: CaptureMode | null;
@@ -113,7 +122,7 @@ export type RecordingFile = {
   mediaOffset: number;
   camera: CameraEdit | null;
   pauses: { start: number; end: number }[];
-  chapters: { url: string; start: number; end: number }[];
+  chapters: Chapter[];
 };
 
 export const EMPTY_RECORDING: RecordingFile = {
@@ -244,6 +253,7 @@ const animation = z
     "slide-up",
     "slide-left",
     "pop",
+    "spring",
     "typewriter",
     "words",
     "wipe",

@@ -1,0 +1,16 @@
+{
+  "name": "@goscreen/scenario-runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Plays a goScreen scenario in Playwright and writes the take (MP4 + interactions journal).",
+  "bin": {
+    "goscreen-scenario": "./run.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playwright-core": "1.57.0"
+  }
+}

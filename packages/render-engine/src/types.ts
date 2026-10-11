@@ -120,6 +120,7 @@ export type Animation =
   | "slide-up"
   | "slide-left"
   | "pop"
+  | "spring"
   | "typewriter"
   | "words"
   | "wipe";

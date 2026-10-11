@@ -5,6 +5,7 @@
     "includes": [
       "apps/*/src/**/*.{ts,tsx}",
       "packages/*/src/**/*.ts",
+      "packages/scenario-runner/*.mjs",
       "!apps/*/src/components/ui",
       "!apps/*/src/routeTree.gen.ts"
     ]

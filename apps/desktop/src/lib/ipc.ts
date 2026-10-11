@@ -66,6 +66,22 @@ const recordingEntrySchema = z.object({
 });
 export type RecordingEntry = z.infer<typeof recordingEntrySchema>;
 
+const scenarioOutcomeSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("done"),
+    videoPath: z.string().min(1),
+    interactionsPath: z.string().min(1),
+    durationMs: z.number().nonnegative(),
+  }),
+  z.object({
+    status: z.literal("failed"),
+    index: z.number().int().nonnegative().nullable(),
+    message: z.string(),
+    shot: z.string().nullable(),
+  }),
+]);
+export type ScenarioOutcome = z.infer<typeof scenarioOutcomeSchema>;
+
 const ffmpegStatusSchema = z.object({
   available: z.boolean(),
   path: z.string().nullable(),
@@ -180,6 +196,12 @@ export const ipc = {
     importedAssetSchema.parse(
       await invoke("asset_import", { videoPath, source }),
     ),
+  /** Plays a scenario in a headless browser; progress comes as `scenario-progress` events. */
+  scenarioRun: async (job: unknown) =>
+    scenarioOutcomeSchema.parse(await invoke("scenario_run", { job })),
+  scenarioCancel: async () => {
+    await invoke("scenario_cancel");
+  },
   exportCancel: async () => {
     await invoke("export_cancel");
   },

@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{android, export, media, proxy, recording};
+use modules::{android, export, media, proxy, recording, scenario};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -13,6 +13,7 @@ pub fn run() {
         .manage(android::AndroidState::default())
         .manage(media::MediaState::default())
         .manage(export::ExportState::default())
+        .manage(scenario::ScenarioState::default())
         .invoke_handler(tauri::generate_handler![
             proxy::server::proxy_open,
             recording::commands::ffmpeg_status,
@@ -39,6 +40,8 @@ pub fn run() {
             export::export_frame,
             export::export_finish,
             export::export_cancel,
+            scenario::scenario_run,
+            scenario::scenario_cancel,
         ])
         .setup(|_| {
             recording::orphan::reap();

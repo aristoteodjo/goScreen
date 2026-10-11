@@ -23,7 +23,10 @@ packages/
   device-engine/      Fonctions pures : géométrie, orientation, safe area, layout, styles
   content-source/     Contrat DeviceContentSource : d'où viennent les pixels d'un frame (web, android…)
   android-source/     Modèle AndroidDevice, provider ADB (via transport injecté), gestes, choix de profil
-  render-engine/      Éditeur, cœur pur : EditState, caméra/zoom, touch rings, timeline, composeFrame
+  render-engine/      Éditeur, cœur pur : EditState, caméra/zoom, touch rings, timeline, composeFrame,
+                      animation par le temps (interpolate, spring)
+  scenario/           Scénarios (zod, pur) : format, valeurs {{…}}, montage tiré d'une prise
+  scenario-runner/    Node + Playwright : joue un scénario, écrit le MP4 et son journal
   campaign/           Brief de campagne (zod), catalogue de recettes, choix des 8 propositions (pur)
 ```
 
@@ -146,6 +149,50 @@ Limites connues : les cookies tiers en iframe (WebKit ITP) peuvent casser certai
   chaque page : ouverture sur tous les devices web synchronisés (attente des `location` de type `load`),
   pause, scroll doux de haut en bas (`scrollTo` via le bridge), pause. Stop dans la toolbar arrête le tour.
   Timings purs et testés dans `tour/plan.ts`.
+
+### Scénarios (prises scriptées, Playwright)
+
+Un **scénario** (`*.scenario.json`, `@goscreen/scenario`, pur et testé) décrit un parcours sur un vrai site :
+`goto`, `tap` (`repeat`), `type` (avec ou sans cible, `clear`), `press`, `check`, `scroll` (`by` ou `to`),
+`wait`, `waitFor`, `waitUrl`, `session` (un autre compte, ses propres cookies), `remember` (garde une valeur
+tirée d'un texte ou de l'URL), et `scene` / `cut`. Une **cible** se trouve par `css`, `text`, `role` (+ `name`),
+`label`, `placeholder` ou `testId`, affinée par `hasText`, `nth` (-1 = dernier) et `frame` (CSS d'une iframe :
+fenêtres de paiement). Les valeurs `{{nom}}` (`vars`) sont demandées avant la prise ; `{{code}}` est le dernier
+code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la prise.
+
+- **Aucune capture d'écran** : `packages/scenario-runner/run.mjs` (Node, `playwright-core`) pilote un Chromium
+  sans fenêtre (Chrome installé, sinon le Chromium de Playwright) émulé comme le device du registry (viewport,
+  densité, UA, tactile). Les images viennent du screencast CDP ; un compteur à 30 i/s répète la dernière image
+  quand l'écran ne bouge pas, donc la vidéo garde le temps réel et chaque scène dure ce qu'elle a duré.
+- **Masques** (`mask`, expressions régulières) : un script injecté avant ceux de la page cache chaque bloc
+  correspondant avant qu'il soit dessiné (bandeaux de test, codes) ; ses chiffres deviennent `{{code}}`.
+- La prise est un journal v3 en mode `device` : un calque plein verre, les touches en `u, v`, et une
+  **scène = un chapitre avec sa légende** (`chapters[].caption`). Un `cut` laisse un trou (connexion, chargement).
+- **Montage dérivé de la prise** (`buildScenarioEdit`, pur) : carton d'ouverture, un clip et une légende par
+  scène, zooms sur les rafales de touches (dans leur scène), touches dessinées par l'éditeur, cadre du device,
+  carton de fin. Les réglages sont les « props » du film (`film` : format, couleurs, police, place des légendes,
+  zoom, cartons). Tout reste éditable dans l'éditeur ; l'espace insécable français est posé si `locale` est `fr`.
+- Desktop : bouton **Scenario** de la barre de capture (`modules/scenario/`), éditeur JSON avec validation
+  située (`steps.3.target: …`), liste des étapes, champs des valeurs (les valeurs `secret` ne sont jamais
+  gardées), progression et Stop dans la toolbar. À la fin, `<stem>.edit.json` est écrit et l'éditeur s'ouvre.
+- Rust (`modules/scenario/`) : `scenario_run` trouve Node (PATH, asdf, nvm, fnm, volta, Homebrew ;
+  `GOSCREEN_NODE`), le runner (`GOSCREEN_SCENARIO_RUNNER`, sinon celui du dépôt) et FFmpeg, écrit le job dans un
+  fichier temporaire supprimé à la fin (il contient les valeurs saisies), relaie les lignes JSON du runner en
+  événements `scenario-progress`. Un échec rend l'étape, le message et une capture `<stem>.failed.png`.
+  `scenario_cancel` arrête le runner (SIGTERM), qui supprime la vidéo partielle.
+- Limite : le runner a besoin de Node et de ses dépendances (`pnpm install`) ; il n'est pas encore embarqué
+  dans l'app packagée.
+- Exemples : `EXAMPLE_SCENARIO` (TodoMVC public, « Insert example ») et `examples/oeufdor-vsl/` (parcours
+  acheteur et producteur complets, plus le prototype en scripts Playwright qui a précédé le format).
+
+### Animation par le temps (méthode Remotion, sans dépendance)
+
+Remotion n'est pas sous MIT : on reprend sa méthode, pas sa bibliothèque. Chaque valeur animée est une
+fonction pure du temps (`keyframes.ts`) : `interpolate(t, entrées, sorties, { easing, extrapolate… })` et
+`spring(t, { mass, damping, stiffness, overshootClamping })` (ressort amorti en forme close, donc n'importe
+quelle image se calcule seule, dans n'importe quel ordre : aperçu, déplacement dans la timeline et export
+dessinent la même image). L'animation d'entrée `spring` des textes s'en sert ; un montage est construit à
+partir de données (scénario + `film`), comme une composition Remotion à partir de ses props.
 
 ### Capture native
 

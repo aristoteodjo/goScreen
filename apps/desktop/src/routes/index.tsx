@@ -5,6 +5,7 @@ import { CanvasRoot } from "@/modules/canvas/CanvasRoot";
 import { CaptureBar } from "@/modules/recording/CaptureBar";
 import { LiveCamera } from "@/modules/recording/LiveCamera";
 import { useCapture } from "@/modules/recording/useCapture";
+import { ScenarioDialog } from "@/modules/scenario/ScenarioDialog";
 import { bindCapture } from "@/modules/studio/actions";
 import { CommandPalette } from "@/modules/studio/components/CommandPalette";
 import { Inspector } from "@/modules/studio/components/Inspector";
@@ -39,6 +40,7 @@ function Studio() {
       </SidebarInset>
       <CommandPalette capture={capture} />
       <SiteTourDialog capture={capture} />
+      <ScenarioDialog />
     </SidebarProvider>
   );
 }
