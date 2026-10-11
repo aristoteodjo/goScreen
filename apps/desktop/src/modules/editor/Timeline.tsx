@@ -38,6 +38,13 @@ import {
   useState,
   type WheelEvent,
 } from "react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import { MenuTrigger } from "@/lib/menu";
 import { registry } from "@/lib/registry";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
@@ -614,7 +621,37 @@ export function Timeline() {
           {/* Main track */}
           <Row
             height={MAIN}
-            header={<TrackHeader name="V1" hint="Video" color="bg-amber-500" />}
+            header={
+              <ContextMenu>
+                <MenuTrigger>
+                  <div className="w-full">
+                    <TrackHeader
+                      name="Video"
+                      hint="main track: clips and cards"
+                      color="bg-amber-500"
+                    />
+                  </div>
+                </MenuTrigger>
+                <ContextMenuContent className="w-56">
+                  <ContextMenuItem onClick={() => editActions.addSlide()}>
+                    Add a card at the playhead
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => editActions.captionScenes()}>
+                    Caption every scene
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => editActions.autoZoom()}>
+                    Zoom on every click
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    variant="destructive"
+                    onClick={() => editActions.clearZooms()}
+                  >
+                    Remove every zoom
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            }
           >
             <Track width={trackWidth}>
               {placed.map((p) => (

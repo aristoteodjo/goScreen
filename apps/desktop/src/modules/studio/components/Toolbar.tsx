@@ -36,10 +36,8 @@ import {
 } from "@/components/ui/tooltip";
 import { normalizeUrl } from "@/lib/url";
 import { cn } from "@/lib/utils";
-import { ipc } from "@/lib/ipc";
 import { useReload } from "@/modules/interaction/runtime";
 import { useCaptureSettings } from "@/modules/recording/settings";
-import { useScenario } from "@/modules/scenario/store";
 import { useRecording } from "@/modules/recording/store";
 import type { CaptureControls } from "@/modules/recording/useCapture";
 import { pageLabel } from "@/modules/tour/plan";
@@ -180,36 +178,10 @@ export function Toolbar({ capture }: { capture: CaptureControls }) {
           <TooltipContent>Screenshot</TooltipContent>
         </Tooltip>
         <TourProgress />
-        <ScenarioProgress />
         <PauseButton capture={capture} />
         <RecordButton capture={capture} />
       </div>
     </header>
-  );
-}
-
-function ScenarioProgress() {
-  const running = useScenario((s) => s.running);
-  const index = useScenario((s) => s.index);
-  const total = useScenario((s) => s.total);
-  const caption = useScenario((s) => s.caption);
-  if (!running) return null;
-  return (
-    <span className="flex max-w-[280px] items-center gap-1.5 rounded-md bg-white/5 py-0.5 pr-0.5 pl-2 font-mono text-[11px] text-muted-foreground">
-      <Spinner className="size-3" />
-      <span className="truncate">
-        Scenario {Math.min(index + 1, total)}/{total}
-        {caption ? ` · ${caption}` : ""}
-      </span>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-6 px-2 text-[11px]"
-        onClick={() => void ipc.scenarioCancel()}
-      >
-        Stop
-      </Button>
-    </span>
   );
 }
 

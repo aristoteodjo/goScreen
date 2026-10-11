@@ -21,7 +21,7 @@ import { useEdit, usePlayback } from "./store";
 /** What sits under a right-click on the preview. `at` is a fraction of the output. */
 export type PreviewTarget =
   | { kind: "overlay"; id: string }
-  | { kind: "layer"; id: string }
+  | { kind: "layer"; id: string; at: { x: number; y: number } }
   | { kind: "empty"; at: { x: number; y: number } };
 
 /**
@@ -48,7 +48,15 @@ export function PreviewMenu({
       <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-56">
         {target?.kind === "overlay" ? <OverlayItems id={target.id} /> : null}
-        {target?.kind === "layer" ? <LayerItems id={target.id} /> : null}
+        {target?.kind === "layer" ? (
+          <>
+            <ContextMenuItem onClick={() => editActions.zoomHere(target.at)}>
+              Zoom here
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <LayerItems id={target.id} />
+          </>
+        ) : null}
         {target?.kind === "empty" || !target ? (
           <EmptyItems at={target?.kind === "empty" ? target.at : undefined} />
         ) : null}
@@ -198,6 +206,11 @@ function LayerItems({ id }: { id: string }) {
 function EmptyItems({ at }: { at?: { x: number; y: number } }) {
   return (
     <>
+      {at ? (
+        <ContextMenuItem onClick={() => editActions.zoomHere(at)}>
+          Zoom here
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuItem onClick={() => editActions.addText(TEXT_PRESETS[0], at)}>
         Add a title here
       </ContextMenuItem>
@@ -213,6 +226,9 @@ function EmptyItems({ at }: { at?: { x: number; y: number } }) {
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => editActions.addSlide()}>
         Add a slide at the playhead
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => editActions.captionScenes()}>
+        Caption every scene
       </ContextMenuItem>
     </>
   );

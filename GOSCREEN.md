@@ -185,6 +185,35 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
 - Exemples : `EXAMPLE_SCENARIO` (TodoMVC public, « Insert example ») et `examples/oeufdor-vsl/` (parcours
   acheteur et producteur complets, plus le prototype en scripts Playwright qui a précédé le format).
 
+### Projets, flows de VSL et tâches de fond
+
+- **Accueil = projets** (`/`, `modules/projects/`) : un dossier par projet dans `<Vidéos>/goScreen/Projects/<id>/`
+  (`project.json` garde le nom ; l'id, tiré du nom à la création, ne change jamais, donc renommer ne déplace
+  rien). Un projet contient ses VSL (`vsls/<id>.flow.json`) et les prises tournées depuis eux. Créer, renommer,
+  dupliquer (les VSL, pas les vidéos), supprimer : bouton « … » ou clic droit. **Supprimer envoie à la corbeille
+  du système** (crate `trash`), jamais une suppression définitive. Rust (`modules/projects/`) : le studio n'envoie
+  que des ids (`[a-z0-9-]`, vérifiés), jamais de chemin. Le studio libre reste sur `/studio`.
+- **Flow d'un VSL** (`/flow?project&vsl`, `modules/flow/`, React Flow `@xyflow/react`, MIT) : un nœud **Départ**
+  (site, appareil, langue, film, valeurs, masques) puis des nœuds **Scène** (filmée, avec sa légende), **Hors
+  caméra** (jouée, coupée du montage) et **Session** (un autre compte). Chaque chemin du Départ à une feuille est
+  un **parcours** ; une branche est une variante. Modèle pur et testé dans `@goscreen/scenario` (`flow.ts`) :
+  `flowPaths`, `pathTo`, `compileFlow` (parcours -> scénario, avec l'origine de chaque étape), `flowIssues`,
+  `flowFromScenario` (import), `layoutFlow` (« Tidy up »). Tourner plusieurs parcours les joue bout à bout dans
+  une seule prise : chaque parcours après le premier repart du Départ dans des sessions neuves (`pathN`), pour
+  ne jamais partager un panier ou une connexion. Sauvegarde automatique (600 ms).
+- **Simuler** joue un parcours sans filmer (`dry` : ni screencast ni FFmpeg) et colore les nœuds : vert = passé,
+  orange = en cours, rouge = l'étape a échoué ici (`origins` relie chaque étape à son nœud).
+- **Tâches de fond** (`modules/tasks/`) : simulations et tournages passent par une file (le runner joue un
+  scénario à la fois) ; le studio reste libre. Panneau sur tous les écrans : progression, miniature en direct
+  (le runner envoie une capture toutes les 1,5 s, `preview`), une vignette par scène terminée, erreur avec
+  l'étape fautive et sa capture, ouverture du résultat. Les tâches finies restent listées (sans images) entre
+  deux sessions.
+- Menus contextuels : flow (nœud : ajouter la suite, simuler jusqu'ici, tourner les parcours qui passent ici,
+  transformer, dupliquer, délier, supprimer ; fond : ajouter un nœud ici, ranger, tout simuler, tourner ; lien :
+  supprimer), étapes d'un nœud, projets, VSL, vidéos, tâches ; éditeur : « Zoom here » sur l'aperçu,
+  « Caption every scene » ; piste **Video** (ex-« V1 », la piste principale : clips et cartons) : carton, légendes
+  des scènes, zoom sur chaque clic, retirer les zooms ; studio : « Start a scenario on this page ».
+
 ### Animation par le temps (méthode Remotion, sans dépendance)
 
 Remotion n'est pas sous MIT : on reprend sa méthode, pas sa bibliothèque. Chaque valeur animée est une

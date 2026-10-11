@@ -5,9 +5,6 @@ import {
   resolveVars,
   stepLabel,
 } from "@goscreen/scenario";
-import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,10 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { registry } from "@/lib/registry";
-import { runScenario, ScenarioFailed } from "./runScenario";
+import { enqueue } from "@/modules/tasks/queue";
 import { useScenario } from "./store";
 
 // Scripted takes: a browser plays the scenario on the real site (Playwright),
@@ -35,7 +31,6 @@ export function ScenarioDialog() {
   const text = useScenario((s) => s.text);
   const values = useScenario((s) => s.values);
   const { set, setText, setValue, setSecrets } = useScenario.getState();
-  const navigate = useNavigate();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const parsed = useMemo(() => parseScenario(text), [text]);
@@ -53,33 +48,7 @@ export function ScenarioDialog() {
     );
   }, [scenario, setSecrets]);
 
-  const run = useMutation({
-    mutationFn: runScenario,
-    onSuccess: (video) => {
-      if (typeof video !== "string" || video.length === 0) return;
-      toast.success("Scenario recorded", {
-        description: "The montage is ready in the editor.",
-      });
-      navigate({ to: "/editor", search: { video } });
-    },
-    onError: (e) => {
-      const shot = e instanceof ScenarioFailed ? e.shot : null;
-      toast.error("Scenario stopped", {
-        description: e instanceof Error ? e.message : String(e),
-        duration: 20_000,
-        ...(shot
-          ? {
-              action: {
-                label: "Show screenshot",
-                onClick: () => void revealItemInDir(shot),
-              },
-            }
-          : {}),
-      });
-    },
-  });
-
-  const start = () => {
+  const start = (kind: "simulate" | "record") => {
     if (!scenario) return;
     const resolved = resolveVars(scenario, values);
     if (!resolved.ok) {
@@ -91,7 +60,12 @@ export function ScenarioDialog() {
       return;
     }
     set({ dialogOpen: false });
-    run.mutate(resolved.scenario);
+    // Runs in the background; the task panel shows it and opens the result.
+    enqueue({
+      kind,
+      label: resolved.scenario.name,
+      scenario: resolved.scenario,
+    });
   };
 
   const loadFile = async (file: File | undefined) => {
@@ -221,14 +195,22 @@ export function ScenarioDialog() {
           <span className="text-xs text-muted-foreground">
             Needs Node.js and Chrome (or a Playwright Chromium).
           </span>
-          <Button
-            onClick={start}
-            disabled={!scenario || !device || run.isPending}
-            className="bg-rec text-white hover:bg-rec/90"
-          >
-            {run.isPending ? <Spinner /> : null}
-            Record scenario
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => start("simulate")}
+              disabled={!scenario || !device}
+            >
+              Simulate
+            </Button>
+            <Button
+              onClick={() => start("record")}
+              disabled={!scenario || !device}
+              className="bg-rec text-white hover:bg-rec/90"
+            >
+              Record scenario
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

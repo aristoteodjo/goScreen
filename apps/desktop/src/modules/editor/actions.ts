@@ -1,6 +1,7 @@
 import {
   type Animation,
   type AudioClip,
+  buildAutoZooms,
   clipAt,
   DEFAULT_EDIT,
   type EditState,
@@ -11,13 +12,16 @@ import {
   type Overlay,
   type OverlayBase,
   placeClips,
+  placeZoom,
   removeClip,
   type ShapeKind,
   type SlideClip,
   setSpeed,
+  sourceTimeAt,
   splitAt,
   type TextOverlay,
   type Transition,
+  timelineTimesOf,
 } from "@goscreen/render-engine";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
@@ -111,6 +115,90 @@ export const TEXT_PRESETS: {
 ];
 
 export const editActions = {
+  /** A zoom on this point of the frame (fractions), around the playhead. */
+  zoomHere(at: { x: number; y: number }) {
+    const ed = useEdit.getState().edit;
+    const s = sourceTimeAt(ed.clips, now());
+    if (s === null) {
+      toast.error("Zooms follow the recording: put the playhead on a clip.");
+      return;
+    }
+    const slot = placeZoom(ed.zooms, s, usePlayback.getState().duration);
+    if (!slot) {
+      toast.error("A zoom is already running here.");
+      return;
+    }
+    const id = newId("zoom");
+    change((e) => ({
+      ...e,
+      zooms: [...e.zooms, { id, ...slot, scale: 1.8, focus: at }],
+    }));
+    usePlayback.getState().selectZoom(id);
+  },
+
+  /** Replaces every zoom with one per burst of clicks. */
+  autoZoom() {
+    const { pointers } = useSession.getState();
+    const zooms = buildAutoZooms(pointers, usePlayback.getState().duration);
+    if (zooms.length === 0) {
+      toast.error("No click to zoom on.");
+      return;
+    }
+    change((ed) => ({ ...ed, zooms }));
+    usePlayback.getState().selectZoom(null);
+  },
+
+  clearZooms() {
+    change((ed) => ({ ...ed, zooms: [] }));
+    usePlayback.getState().selectZoom(null);
+  },
+
+  /** One caption per recorded scene (scenario takes), where it plays. */
+  captionScenes() {
+    const { chapters } = useSession.getState();
+    const ed = useEdit.getState().edit;
+    const have = new Set(
+      ed.overlays.flatMap((o) => (o.kind === "text" ? [o.text] : [])),
+    );
+    const added: Overlay[] = [];
+    for (const c of chapters) {
+      if (!c.caption || have.has(c.caption)) continue;
+      const [t] = timelineTimesOf(ed.clips, c.start + 0.01);
+      if (t === undefined) continue;
+      const duration = Math.max(0.5, c.end - c.start);
+      added.push({
+        ...overlayAt(duration, {
+          start: t,
+          duration,
+          lane: freeLane([...ed.overlays, ...added], t, duration),
+          y: 0.085,
+          width: 0.88,
+          height: 0.11,
+          enter: "spring",
+          motion: 0.45,
+        }),
+        kind: "text",
+        text: c.caption,
+        style: {
+          font: "Inter",
+          size: 0.042,
+          weight: 800,
+          color: "#ffffff",
+          align: "center",
+          background: null,
+        },
+      } as TextOverlay);
+    }
+    if (added.length === 0) {
+      toast.error("No scene caption to add (none recorded, or already there).");
+      return;
+    }
+    change((e) => ({ ...e, overlays: [...e.overlays, ...added] }));
+    toast.success(
+      `${added.length} caption${added.length > 1 ? "s" : ""} added`,
+    );
+  },
+
   /** `at` places it where the user right-clicked (fractions of the output). */
   addText(preset = TEXT_PRESETS[0], at?: { x: number; y: number }) {
     const big = preset.id === "title";

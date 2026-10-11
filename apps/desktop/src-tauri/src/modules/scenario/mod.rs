@@ -35,6 +35,10 @@ pub enum ScenarioOutcome {
         interactions_path: String,
         duration_ms: u64,
     },
+    /// A dry run (no video): every step played.
+    Simulated {
+        duration_ms: u64,
+    },
     Failed {
         index: Option<u64>,
         message: String,
@@ -145,9 +149,17 @@ fn kill(pid: u32) {
 }
 
 /// Plays a scenario. `job` carries the resolved scenario and the device; the
-/// output paths, FFmpeg and the frame rate are added here.
+/// output paths, FFmpeg and the frame rate are added here. Takes go to the
+/// project's folder when one is given; `dry` plays without recording.
 #[tauri::command(async)]
-pub fn scenario_run(app: AppHandle, state: State<'_, ScenarioState>, job: Value) -> Result<ScenarioOutcome, String> {
+pub fn scenario_run(
+    app: AppHandle,
+    state: State<'_, ScenarioState>,
+    job: Value,
+    project: Option<String>,
+    dry: Option<bool>,
+) -> Result<ScenarioOutcome, String> {
+    let dry = dry.unwrap_or(false);
     let Value::Object(mut job) = job else { return Err("Invalid scenario job.".into()) };
     let name = job
         .get("scenario")
@@ -159,7 +171,10 @@ pub fn scenario_run(app: AppHandle, state: State<'_, ScenarioState>, job: Value)
     let runner = runner_path()?;
     let ffmpeg = ffmpeg::locate().ok_or("FFmpeg not found. Install it (brew install ffmpeg).")?;
 
-    let dir = dirs::video_dir().or_else(dirs::home_dir).ok_or("No home directory")?.join("goScreen");
+    let dir = match project.as_deref() {
+        Some(id) => super::projects::project_dir(id)?,
+        None => dirs::video_dir().or_else(dirs::home_dir).ok_or("No home directory")?.join("goScreen"),
+    };
     std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or_default();
     let stem = format!("goscreen-scenario-{}-{stamp}", slug(&name));
@@ -172,6 +187,7 @@ pub fn scenario_run(app: AppHandle, state: State<'_, ScenarioState>, job: Value)
     job.insert("failShot".into(), path(&shot));
     job.insert("ffmpeg".into(), path(&ffmpeg));
     job.insert("fps".into(), Value::from(30));
+    job.insert("dry".into(), Value::Bool(dry));
 
     {
         let mut pid = state.pid.lock().map_err(|_| "scenario state poisoned")?;
@@ -244,6 +260,9 @@ pub fn scenario_run(app: AppHandle, state: State<'_, ScenarioState>, job: Value)
 
     let kind = last.as_ref().and_then(|e| e.get("type")).and_then(Value::as_str);
     match (kind, last.as_ref()) {
+        (Some("done"), Some(e)) if dry => Ok(ScenarioOutcome::Simulated {
+            duration_ms: (e.get("duration").and_then(Value::as_f64).unwrap_or(0.0) * 1000.0) as u64,
+        }),
         (Some("done"), Some(e)) if video.is_file() && interactions.is_file() => Ok(ScenarioOutcome::Done {
             video_path: video.to_string_lossy().into_owned(),
             interactions_path: interactions.to_string_lossy().into_owned(),

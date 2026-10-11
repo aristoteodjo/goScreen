@@ -16,9 +16,10 @@ import {
 } from "@/components/ui/context-menu";
 import { registry } from "@/lib/registry";
 import { canvasCommands } from "@/modules/canvas/commands";
-import { useReload } from "@/modules/interaction/runtime";
+import { useReload, useRuntime } from "@/modules/interaction/runtime";
 import { useCaptureSettings } from "@/modules/recording/settings";
 import { useRecording } from "@/modules/recording/store";
+import { scenarioFor, useScenario } from "@/modules/scenario/store";
 import { studioActions } from "../actions";
 import { useEditor } from "../store/editor";
 import { useProject } from "../store/project";
@@ -51,6 +52,21 @@ export function DeviceContextMenu({
         <ContextMenuItem onClick={() => studioActions.recordDevice(id)}>
           Record this device
         </ContextMenuItem>
+        {web ? (
+          <ContextMenuItem
+            onClick={() => {
+              const here =
+                useRuntime.getState().locations[id]?.href ??
+                device.url ??
+                useProject.getState().url;
+              const s = useScenario.getState();
+              s.setText(scenarioFor(here, device.deviceId, def.name));
+              s.set({ dialogOpen: true });
+            }}
+          >
+            Start a scenario on this page
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuItem onClick={() => studioActions.screenshotDevice(id)}>
           Screenshot this device
         </ContextMenuItem>

@@ -353,9 +353,14 @@ function TopBar({ name, onExport }: { name: string; onExport: () => void }) {
       className="flex h-12 shrink-0 items-center gap-2 border-b pr-3 pl-20"
     >
       <IconButton
-        label="Back to studio"
+        label="Back"
         icon={ArrowLeft01Icon}
-        onClick={() => navigate({ to: "/" })}
+        onClick={() =>
+          // Back where the video was opened from: a project, the studio...
+          window.history.length > 1
+            ? window.history.back()
+            : navigate({ to: "/" })
+        }
       />
       <h1
         data-tauri-drag-region

@@ -29,6 +29,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const job = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const { scenario, device } = job;
 const fps = job.fps ?? 30;
+// A simulation plays every step without filming: no screencast, no FFmpeg.
+const dry = job.dry === true;
+const PREVIEW_EVERY_MS = 1500;
 const size = videoSize(device.width, device.height, device.dpr);
 const viewport = { width: device.width, height: device.height };
 
@@ -84,6 +87,7 @@ class Recorder {
       await this.cdp.detach().catch(() => {});
     }
     this.page = page;
+    if (dry) return;
     this.cdp = await page.context().newCDPSession(page);
     this.cdp.on("Page.screencastFrame", (f) => {
       this.latest = Buffer.from(f.data, "base64");
@@ -101,6 +105,9 @@ class Recorder {
   }
 
   async start() {
+    this.t0 = performance.now();
+    this.previews = setInterval(() => this.preview(), PREVIEW_EVERY_MS);
+    if (dry) return;
     const end = Date.now() + 10_000;
     while (!this.latest && Date.now() < end) await sleep(50);
     if (!this.latest) throw new Error("The browser sent no picture.");
@@ -184,8 +191,29 @@ class Recorder {
     });
   }
 
+  // A small picture of the page now, for the studio's task panel.
+  async preview() {
+    if (this.previewing || !this.page) return;
+    this.previewing = true;
+    try {
+      const jpeg = await this.page.screenshot({
+        type: "jpeg",
+        quality: 55,
+        scale: "css",
+        timeout: 3000,
+      });
+      emit({ type: "preview", jpeg: jpeg.toString("base64") });
+    } catch {
+      // The page is navigating: the next tick will catch it.
+    } finally {
+      this.previewing = false;
+    }
+  }
+
   async stop() {
     clearInterval(this.ticker);
+    clearInterval(this.previews);
+    if (dry) return this.now();
     if (!this.ffmpeg) return 0;
     this.scene("cut");
     this.tick();
@@ -465,7 +493,12 @@ async function main() {
       await play(rec, scenario.steps[index]);
     }
     await sleep(400);
+    await rec.preview();
     const duration = await rec.stop();
+    if (dry) {
+      emit({ type: "done", duration });
+      return;
+    }
     writeFileSync(
       job.interactions,
       JSON.stringify(
@@ -489,7 +522,7 @@ async function main() {
         .catch(() => null);
     }
     await rec.stop().catch(() => {});
-    rmSync(job.video, { force: true });
+    if (!dry) rmSync(job.video, { force: true });
     emit({
       type: "error",
       index: index >= 0 ? index : null,

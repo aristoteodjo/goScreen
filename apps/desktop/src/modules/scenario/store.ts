@@ -26,6 +26,26 @@ type ScenarioState = {
   ) => void;
 };
 
+/** A one-scene scenario on this page and device, to start writing from. */
+export function scenarioFor(url: string, deviceId: string, name: string) {
+  return JSON.stringify(
+    {
+      version: 1,
+      name,
+      url,
+      device: { id: deviceId },
+      locale: navigator.language || "en-US",
+      steps: [
+        { do: "scene", caption: "First scene" },
+        { do: "wait", ms: 2000 },
+        { do: "scroll", by: 500, duration: 1500 },
+      ],
+    },
+    null,
+    2,
+  );
+}
+
 export const useScenario = create<ScenarioState>()(
   persist(
     (set) => ({

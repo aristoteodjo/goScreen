@@ -296,11 +296,9 @@ export function Preview() {
     const p = toOutput(clientX, clientY);
     const now = frameNow();
     const id = p && now ? hitLayer(now.frame.layers, p) : null;
-    if (id) return { kind: "layer", id };
-    return {
-      kind: "empty",
-      at: { x: screen.x / output.width, y: screen.y / output.height },
-    };
+    const at = { x: screen.x / output.width, y: screen.y / output.height };
+    if (id) return { kind: "layer", id, at };
+    return { kind: "empty", at };
   };
 
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {

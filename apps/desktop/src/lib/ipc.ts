@@ -74,6 +74,10 @@ const scenarioOutcomeSchema = z.discriminatedUnion("status", [
     durationMs: z.number().nonnegative(),
   }),
   z.object({
+    status: z.literal("simulated"),
+    durationMs: z.number().nonnegative(),
+  }),
+  z.object({
     status: z.literal("failed"),
     index: z.number().int().nonnegative().nullable(),
     message: z.string(),
@@ -122,6 +126,81 @@ async function proxyOpen(
   );
   return result;
 }
+
+const projectSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  createdMs: z.number(),
+  modifiedMs: z.number(),
+  vsls: z.number().int(),
+  videos: z.number().int(),
+});
+export type ProjectEntry = z.infer<typeof projectSchema>;
+
+const vslEntrySchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  modifiedMs: z.number(),
+});
+export type VslEntry = z.infer<typeof vslEntrySchema>;
+
+const videoEntrySchema = z.object({
+  path: z.string().min(1),
+  name: z.string(),
+  modifiedMs: z.number(),
+  export: z.boolean(),
+});
+export type VideoEntry = z.infer<typeof videoEntrySchema>;
+
+export const projectsIpc = {
+  list: async () => z.array(projectSchema).parse(await invoke("projects_list")),
+  create: async (name: string) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("project_create", { name })),
+  rename: async (id: string, name: string) => {
+    await invoke("project_rename", { id, name });
+  },
+  duplicate: async (id: string) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("project_duplicate", { id })),
+  remove: async (id: string) => {
+    await invoke("project_delete", { id });
+  },
+  videos: async (project: string) =>
+    z
+      .array(videoEntrySchema)
+      .parse(await invoke("project_videos", { project })),
+  removeVideo: async (project: string, path: string) => {
+    await invoke("project_video_delete", { project, path });
+  },
+  vsls: async (project: string) =>
+    z.array(vslEntrySchema).parse(await invoke("vsl_list", { project })),
+  createVsl: async (project: string, name: string, doc: unknown) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("vsl_create", { project, name, doc })),
+  loadVsl: async (project: string, vsl: string) =>
+    z.unknown().parse(await invoke("vsl_load", { project, vsl })),
+  saveVsl: async (project: string, vsl: string, doc: unknown) => {
+    await invoke("vsl_save", { project, vsl, doc });
+  },
+  renameVsl: async (project: string, vsl: string, name: string) => {
+    await invoke("vsl_rename", { project, vsl, name });
+  },
+  duplicateVsl: async (project: string, vsl: string) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("vsl_duplicate", { project, vsl })),
+  removeVsl: async (project: string, vsl: string) => {
+    await invoke("vsl_delete", { project, vsl });
+  },
+};
 
 export const ipc = {
   proxyOpen,
@@ -197,8 +276,17 @@ export const ipc = {
       await invoke("asset_import", { videoPath, source }),
     ),
   /** Plays a scenario in a headless browser; progress comes as `scenario-progress` events. */
-  scenarioRun: async (job: unknown) =>
-    scenarioOutcomeSchema.parse(await invoke("scenario_run", { job })),
+  scenarioRun: async (
+    job: unknown,
+    options: { project?: string | null; dry?: boolean } = {},
+  ) =>
+    scenarioOutcomeSchema.parse(
+      await invoke("scenario_run", {
+        job,
+        project: options.project ?? null,
+        dry: options.dry ?? false,
+      }),
+    ),
   scenarioCancel: async () => {
     await invoke("scenario_cancel");
   },

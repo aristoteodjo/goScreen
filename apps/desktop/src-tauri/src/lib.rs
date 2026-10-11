@@ -1,6 +1,6 @@
 pub mod modules;
 
-use modules::{android, export, media, proxy, recording, scenario};
+use modules::{android, export, media, projects, proxy, recording, scenario};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,6 +42,20 @@ pub fn run() {
             export::export_cancel,
             scenario::scenario_run,
             scenario::scenario_cancel,
+            projects::projects_list,
+            projects::project_create,
+            projects::project_rename,
+            projects::project_duplicate,
+            projects::project_delete,
+            projects::project_videos,
+            projects::project_video_delete,
+            projects::vsl_list,
+            projects::vsl_create,
+            projects::vsl_load,
+            projects::vsl_save,
+            projects::vsl_rename,
+            projects::vsl_duplicate,
+            projects::vsl_delete,
         ])
         .setup(|_| {
             recording::orphan::reap();
