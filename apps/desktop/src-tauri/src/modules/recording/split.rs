@@ -107,6 +107,8 @@ pub fn recording_split(video_path: String, parts: Vec<SplitPart>) -> Result<Vec<
                 "16",
                 "-pix_fmt",
                 "yuv420p",
+                "-force_key_frames",
+                super::capture::KEYFRAME_EVERY_SECOND,
                 "-an",
                 "-movflags",
                 "+faststart",

@@ -11,7 +11,7 @@ import {
 } from "@goscreen/render-engine";
 import { create } from "zustand";
 import { geometryOf } from "./devices";
-import { shouldSeek } from "./drift";
+import { followMove } from "./drift";
 import { pooledEntries } from "./media";
 import { timelineEnd, useEdit, usePlayback } from "./store";
 import { startVoices, stopVoices } from "./voices";
@@ -114,6 +114,17 @@ export function assetUrl(edit: EditState, id: string): string | null {
 }
 
 const lastSeek = new WeakMap<HTMLMediaElement, number>();
+const seekLatency = new WeakMap<HTMLMediaElement, number>();
+
+function seekTo(m: HTMLMediaElement, at: number, now: number) {
+  m.currentTime = at;
+  lastSeek.set(m, now);
+  m.addEventListener(
+    "seeked",
+    () => seekLatency.set(m, (performance.now() - now) / 1000),
+    { once: true },
+  );
+}
 
 function follow(
   m: HTMLMediaElement,
@@ -129,19 +140,19 @@ function follow(
     if (!m.paused) m.pause();
     return;
   }
-  if (m.playbackRate !== rate) m.playbackRate = rate;
   const now = performance.now();
   // An element about to start lands exactly on the playhead first.
-  const seek = shouldSeek({
+  const move = followMove({
     playing: playing && !m.paused,
-    drift: Math.abs(m.currentTime - local),
+    target: local,
+    current: m.currentTime,
     seeking: m.seeking,
     msSinceSeek: now - (lastSeek.get(m) ?? -Infinity),
+    seekLatency: seekLatency.get(m) ?? 0.3,
+    rate,
   });
-  if (seek) {
-    m.currentTime = local;
-    lastSeek.set(m, now);
-  }
+  if (Math.abs(m.playbackRate - move.rate) > 1e-3) m.playbackRate = move.rate;
+  if (move.seekTo !== null) seekTo(m, move.seekTo, now);
   if (playing && m.paused) void m.play().catch(() => {});
   if (!playing && !m.paused) m.pause();
 }

@@ -250,7 +250,7 @@ export function flowFromScenario(s: Scenario): Flow {
       kind,
       caption: "",
       steps: [],
-      position: { x: 320 * (nodes.length + 1), y: 0 },
+      position: { x: 0, y: 0 },
       ...extra,
     };
     nodes.push(current);
@@ -268,16 +268,27 @@ export function flowFromScenario(s: Scenario): Flow {
     target: n.id,
   }));
   const { version: _v, name, steps: _s, ...start } = s;
-  return {
+  return layoutFlow({
     version: 1,
     name,
     start: { ...start, position: { x: 0, y: 0 } },
     nodes,
     edges,
-  };
+  });
 }
 
-/** Tidy layout: one column per depth from Start, branches stacked. */
+// Nodes are 224 px wide and at most ~110 px tall.
+export const LAYOUT = {
+  columns: 6,
+  colWidth: 272,
+  rowHeight: 140,
+  bandGap: 70,
+};
+
+/**
+ * Tidy layout: one column per depth from Start, branches stacked, and a long
+ * journey wrapped into bands of `columns` steps, read like lines of text.
+ */
 export function layoutFlow(flow: Flow): Flow {
   const depth = new Map<string, number>([[START, 0]]);
   const queue = [START];
@@ -289,16 +300,38 @@ export function layoutFlow(flow: Flow): Flow {
       queue.push(n);
     }
   }
-  const rows = new Map<number, number>();
   const orphanDepth = Math.max(0, ...depth.values()) + 1;
+  const depthOf = (id: string) => depth.get(id) ?? orphanDepth;
+  const { columns, colWidth, rowHeight, bandGap } = LAYOUT;
+  const band = (d: number) => Math.floor(d / columns);
+
+  const rowOf = new Map<string, number>();
+  const used = new Map<number, number>();
+  const tallest = new Map<number, number>([[0, 1]]);
+  for (const n of flow.nodes) {
+    const d = depthOf(n.id);
+    const row = used.get(d) ?? 0;
+    used.set(d, row + 1);
+    rowOf.set(n.id, row);
+    tallest.set(band(d), Math.max(tallest.get(band(d)) ?? 0, row + 1));
+  }
+  const top = new Map<number, number>();
+  let y = 0;
+  for (let b = 0; b <= band(orphanDepth); b++) {
+    top.set(b, y);
+    const rows = tallest.get(b) ?? 0;
+    if (rows > 0) y += rows * rowHeight + bandGap;
+  }
+  const at = (d: number, row: number) => ({
+    x: (d % columns) * colWidth,
+    y: (top.get(band(d)) ?? 0) + row * rowHeight,
+  });
   return {
     ...flow,
-    start: { ...flow.start, position: { x: 0, y: 0 } },
-    nodes: flow.nodes.map((n) => {
-      const d = depth.get(n.id) ?? orphanDepth;
-      const row = rows.get(d) ?? 0;
-      rows.set(d, row + 1);
-      return { ...n, position: { x: d * 320, y: row * 200 } };
-    }),
+    start: { ...flow.start, position: at(0, 0) },
+    nodes: flow.nodes.map((n) => ({
+      ...n,
+      position: at(depthOf(n.id), rowOf.get(n.id) ?? 0),
+    })),
   };
 }

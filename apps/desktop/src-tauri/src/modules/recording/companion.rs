@@ -84,7 +84,7 @@ pub fn companion_args(camera: Option<u32>, mic: Option<u32>, video: &Path) -> Op
     }
     if let Some(out) = &cam_out {
         args.extend(
-            ["-map", "0:v", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
+            ["-map", "0:v", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-force_key_frames", super::capture::KEYFRAME_EVERY_SECOND, "-movflags", "+faststart"]
                 .map(String::from),
         );
         args.push(out.to_string_lossy().into_owned());

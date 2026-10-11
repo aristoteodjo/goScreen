@@ -19,14 +19,40 @@ async function until(ok: () => boolean, ms: number) {
   return ok();
 }
 
+// One staging at a time, in command order: the cursor never shows a command
+// while the previous one is still being shown.
+let chain: Promise<unknown> = Promise.resolve();
+function inTurn<T>(fn: () => Promise<T>): Promise<T> {
+  const run = chain.then(fn, fn);
+  chain = run.catch(() => {});
+  return run;
+}
+
 /** What the person sees before a command runs; returns what to compare after. */
-export async function stageBefore(
+export function stageBefore(
   command: string,
   input: Input,
   title: string,
 ): Promise<{ flow: Flow | null }> {
-  const before = { flow: null as Flow | null };
-  if (!useAiWatch.getState().follow) return before;
+  return inTurn(() => before(command, input, title));
+}
+
+/** After the command: point at what it made or changed. */
+export function stageAfter(
+  command: string,
+  answer: Answer,
+  was: { flow: Flow | null },
+): Promise<void> {
+  return inTurn(() => after(command, answer, was));
+}
+
+async function before(
+  command: string,
+  input: Input,
+  title: string,
+): Promise<{ flow: Flow | null }> {
+  const seen = { flow: null as Flow | null };
+  if (!useAiWatch.getState().follow) return seen;
   const video = str(input.video);
   const project = str(input.project);
   const vsl = str(input.vsl);
@@ -47,7 +73,7 @@ export async function stageBefore(
       return s.vsl === vsl && useFlowDoc.getState().flow !== null;
     }, 6000);
     await sleep(400);
-    before.flow = useFlowDoc.getState().flow;
+    seen.flow = useFlowDoc.getState().flow;
   }
 
   const item = str(input.overlay);
@@ -70,14 +96,13 @@ export async function stageBefore(
                     ? ['[data-ai="projects"]', '[data-ai="tabs"]']
                     : ['[data-ai="tabs"]'];
   if (await aiPoint(targets, `${title}…`)) await aiClick();
-  return before;
+  return seen;
 }
 
-/** After the command: point at what it made or changed. */
-export async function stageAfter(
+async function after(
   command: string,
   answer: Answer,
-  before: { flow: Flow | null },
+  was: { flow: Flow | null },
 ) {
   if (!useAiWatch.getState().follow) return;
   if (!answer.ok) {
@@ -87,19 +112,22 @@ export async function stageAfter(
   const result = (answer.result ?? {}) as Input;
   const made = str(result.overlay) ?? str(result.item);
   if (made) {
-    await sleep(150);
-    await aiPoint(`[data-ai-item="${made}"]`, "Here it is");
+    const at = `[data-ai-item="${made}"]`;
+    await until(() => document.querySelector(at) !== null, 2000);
+    await aiPoint(at, "Here it is");
   } else if (command === "edit.setFilm") {
     await aiPoint('[data-ai="program"]', "Film settings applied");
-  } else if (command === "vsl.save" && before.flow) {
-    await showFlowChanges(before.flow);
+  } else if (command === "vsl.save" && was.flow) {
+    await showFlowChanges(was.flow);
   }
   aiRest();
 }
 
 /** Each node the AI added or changed, one after the other. */
 async function showFlowChanges(old: Flow) {
-  await sleep(250);
+  // The saved file reaches the open flow a moment later.
+  await until(() => useFlowDoc.getState().flow !== old, 3000);
+  await sleep(150);
   const next = useFlowDoc.getState().flow;
   if (!next) return;
   const was = new Map(old.nodes.map((n) => [n.id, JSON.stringify(n)]));

@@ -6,6 +6,7 @@ import {
   flowFromScenario,
   flowIssues,
   flowPaths,
+  LAYOUT,
   layoutFlow,
   newFlow,
   parseFlow,
@@ -142,9 +143,53 @@ describe("checks, import and layout", () => {
   it("lays nodes out by depth, branches stacked", () => {
     const laid = layoutFlow(branching());
     const at = (id: string) => laid.nodes.find((n) => n.id === id)?.position;
-    expect(at("a")).toEqual({ x: 320, y: 0 });
-    expect(at("c")).toEqual({ x: 960, y: 0 });
-    expect([at("b")?.y, at("d")?.y].sort()).toEqual([0, 200]);
+    expect(at("a")).toEqual({ x: LAYOUT.colWidth, y: 0 });
+    expect(at("c")).toEqual({ x: 3 * LAYOUT.colWidth, y: 0 });
+    expect([at("b")?.y, at("d")?.y].sort()).toEqual([0, LAYOUT.rowHeight]);
+  });
+
+  it("wraps a long journey into bands, below the tallest branch", () => {
+    const f = branching();
+    const extra = Array.from({ length: 4 }, (_, i) => ({
+      id: `x${i}`,
+      kind: "scene" as const,
+      caption: `X${i}`,
+      steps: [{ do: "wait" as const, ms: 100 }],
+      position: { x: 0, y: 0 },
+    }));
+    f.nodes.push(...extra);
+    f.edges.push(
+      ...extra.map((n, i) => ({
+        id: `x-${i}`,
+        source: i === 0 ? "c" : `x${i - 1}`,
+        target: n.id,
+      })),
+    );
+    const laid = layoutFlow(f);
+    const at = (id: string) => laid.nodes.find((n) => n.id === id)?.position;
+    // c is at depth 3, so x1 (depth 5) ends the first band and x2 opens the next.
+    expect(at("x1")).toEqual({ x: 5 * LAYOUT.colWidth, y: 0 });
+    const second = 2 * LAYOUT.rowHeight + LAYOUT.bandGap;
+    expect(at("x2")).toEqual({ x: 0, y: second });
+    expect(at("x3")).toEqual({ x: LAYOUT.colWidth, y: second });
+  });
+
+  it("lays out an imported scenario", () => {
+    const f = flowFromScenario({
+      version: 1,
+      ...newFlow("Demo", "https://x.test/", "galaxy-s25").start,
+      name: "Demo",
+      steps: [
+        { do: "scene", caption: "A" },
+        { do: "wait", ms: 10 },
+        { do: "scene", caption: "B" },
+        { do: "wait", ms: 10 },
+      ],
+    } as never);
+    expect(f.nodes.map((n) => n.position.x)).toEqual([
+      LAYOUT.colWidth,
+      2 * LAYOUT.colWidth,
+    ]);
   });
 
   it("refuses a flow with a broken step, naming where", () => {

@@ -140,6 +140,9 @@ class Recorder {
         "veryfast",
         "-crf",
         "16",
+        // A keyframe each second, so the editor seeks without freezing.
+        "-force_key_frames",
+        "expr:gte(t,n_forced*1)",
         "-r",
         String(fps),
         "-movflags",

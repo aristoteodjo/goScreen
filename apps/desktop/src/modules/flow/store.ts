@@ -1,6 +1,7 @@
 import {
   type Flow,
   type FlowNode,
+  LAYOUT,
   layoutFlow,
   START,
   type Step,
@@ -94,12 +95,12 @@ export const flowActions = {
     while (
       flow.nodes.some(
         (n) =>
-          Math.abs(n.position.x - (origin.x + 320)) < 100 &&
-          Math.abs(n.position.y - y) < 120,
+          Math.abs(n.position.x - (origin.x + LAYOUT.colWidth)) <
+            LAYOUT.colWidth / 2 && Math.abs(n.position.y - y) < 120,
       )
     )
       y += 200;
-    return flowActions.add(kind, { x: origin.x + 320, y }, from);
+    return flowActions.add(kind, { x: origin.x + LAYOUT.colWidth, y }, from);
   },
 
   patchNode(id: string, patch: Partial<FlowNode>) {

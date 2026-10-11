@@ -199,7 +199,9 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   caméra** (jouée, coupée du montage) et **Session** (un autre compte). Chaque chemin du Départ à une feuille est
   un **parcours** ; une branche est une variante. Modèle pur et testé dans `@goscreen/scenario` (`flow.ts`) :
   `flowPaths`, `pathTo`, `compileFlow` (parcours -> scénario, avec l'origine de chaque étape), `flowIssues`,
-  `flowFromScenario` (import), `layoutFlow` (« Tidy up »). Tourner plusieurs parcours les joue bout à bout dans
+  `flowFromScenario` (import, déjà rangé), `layoutFlow` (« Tidy up » : une colonne par profondeur, branches
+  empilées, et un parcours long revient à la ligne toutes les 6 colonnes, comme un texte ; `LAYOUT`, nœuds de
+  224 px espacés de 48 ; le lien qui revient à la ligne est tracé en angles droits). Tourner plusieurs parcours les joue bout à bout dans
   une seule prise : chaque parcours après le premier repart du Départ dans des sessions neuves (`pathN`), pour
   ne jamais partager un panier ou une connexion. Sauvegarde automatique (600 ms).
 - **Enregistrer sur le site** (« Record actions on the site », bouton du nœud ou clic droit ;
@@ -380,9 +382,14 @@ n'en sait rien.
 - Non destructif : le MP4 n'est jamais modifié ; les effets vivent dans `*.edit.json` (autosave, parse
   champ par champ avec repli).
 - Un seul rendu : `composeFrame` (pur) + `drawFrame` (Canvas2D) servent la preview et l'export.
-- Lecture : chaque média suit l'horloge de la timeline, mais un élément qui joue n'est recalé qu'au-delà de
-  0,3 s de dérive, jamais pendant un saut ni dans la seconde qui suit (`drift.ts`, pur et testé) : recaler un
-  élément qui redémarre le fait sauter en boucle et rend une voix off incompréhensible.
+- Lecture : chaque média suit l'horloge de la timeline (`followMove`, `drift.ts`, pur et testé). Une dérive
+  de moins d'une seconde se rattrape en jouant jusqu'à 10 % plus vite ou plus lentement, sans saut ; au-delà,
+  le saut vise où sera la timeline une fois le saut fini (durée du dernier saut mesurée par élément), jamais
+  pendant un saut ni dans la seconde qui suit. Chaque saut redécode depuis l'image clé précédente : il fige
+  l'image, et un saut qui arrive en retard en appelle un autre.
+- Encodage des prises (écran, scénario, caméra, découpe) : une image clé par seconde
+  (`-force_key_frames expr:gte(t,n_forced*1)`, `KEYFRAME_EVERY_SECOND`) ; avec le défaut de x264 (une toutes
+  les ~8 s), chaque saut de la preview figeait l'image le temps de décoder jusqu'à 250 images.
 - Les clips audio (voix off générée ou enregistrée, musique) ne passent pas par un élément `<audio>` dans la
   preview : chaque fichier est décodé une fois et programmé sur l'horloge Web Audio (`voices.ts`, plan pur et
   testé dans `voicePlan.ts` : départ, décalage dans le fichier, fondus et volume comme à l'export). Un `<audio>`
@@ -464,6 +471,10 @@ n'en sait rien.
   (`openPlace`), un curseur orange « AI » (`aiCursor.tsx`) glisse vers ce qui va changer (`data-ai` sur les
   panneaux, `data-ai-item` sur les éléments de timeline), « clique », puis montre le résultat : l'élément créé,
   ou chaque nœud ajouté ou modifié d'un flow (`aiStage.ts`). L'IA reçoit sa réponse avant cette mise en scène.
+  Les mises en scène passent une à la fois, dans l'ordre des commandes. Le curseur vise la partie visible de sa
+  cible (fenêtre et ancêtres qui coupent), l'amène d'abord à l'écran (défilement, ou le flow se centre sur le
+  nœud : `addRevealer`), puis se recale si la page a bougé pendant son déplacement ; après une commande, il
+  attend que le résultat soit affiché (élément créé, flow rechargé) avant de le montrer.
 
 ## Vérifications
 

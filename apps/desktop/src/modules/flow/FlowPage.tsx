@@ -1,3 +1,4 @@
+import { addRevealer } from "@/modules/control/aiCursor";
 import { useTabTitle } from "@/modules/tabs/tabs";
 import {
   compileFlow,
@@ -235,9 +236,28 @@ function Canvas({ project, vsl }: { project: string; vsl: string }) {
   const flow = useFlowDoc((s) => s.flow) as Flow;
   const selected = useFlowDoc((s) => s.selected);
   const status = useNodeStatus(project, vsl);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNode, getZoom, setCenter } =
+    useReactFlow();
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const lastPointer = useRef({ x: 0, y: 0 });
+  const box = useRef<HTMLDivElement>(null);
+
+  // The AI's cursor shows a node out of view: pan to it first.
+  useEffect(
+    () =>
+      addRevealer((el) => {
+        const id = el.closest(".react-flow__node")?.getAttribute("data-id");
+        const node = id ? getNode(id) : undefined;
+        if (!node || !box.current?.contains(el)) return false;
+        void setCenter(
+          node.position.x + (node.measured?.width ?? 224) / 2,
+          node.position.y + (node.measured?.height ?? 100) / 2,
+          { zoom: Math.max(getZoom(), 0.8), duration: 400 },
+        );
+        return true;
+      }),
+    [getNode, getZoom, setCenter],
+  );
 
   const issues = useMemo(() => {
     const byNode = new Map<string, string[]>();
@@ -270,14 +290,21 @@ function Canvas({ project, vsl }: { project: string; vsl: string }) {
     ],
     [flow, selected, status, issues],
   );
-  const edges: Edge[] = useMemo(
-    () =>
-      flow.edges.map((e) => ({
-        ...e,
-        animated: status.get(e.target) === "running",
-      })),
-    [flow.edges, status],
-  );
+  const edges: Edge[] = useMemo(() => {
+    const x = new Map([
+      [START, flow.start.position.x],
+      ...flow.nodes.map((n) => [n.id, n.position.x] as const),
+    ]);
+    return flow.edges.map((e) => ({
+      ...e,
+      // A journey wrapped to the next band: a curve would cross the band.
+      type:
+        (x.get(e.target) ?? 0) < (x.get(e.source) ?? 0)
+          ? "smoothstep"
+          : undefined,
+      animated: status.get(e.target) === "running",
+    }));
+  }, [flow, status]);
 
   const onNodesChange = (changes: NodeChange[]) => {
     for (const c of changes) {
@@ -314,6 +341,7 @@ function Canvas({ project, vsl }: { project: string; vsl: string }) {
     <ContextMenu onOpenChange={(open) => !open && setMenu(null)}>
       <MenuTrigger>
         <div
+          ref={box}
           role="application"
           aria-label="VSL flow"
           className="relative min-w-0 flex-1"

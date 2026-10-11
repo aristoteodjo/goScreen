@@ -138,6 +138,10 @@ pub fn parse_avfoundation_screen(listing: &str) -> Option<u32> {
     })
 }
 
+/// A keyframe each second: the editor seeks fast instead of decoding up to
+/// 8 seconds of frames (x264's default) on each jump.
+pub const KEYFRAME_EVERY_SECOND: &str = "expr:gte(t,n_forced*1)";
+
 pub fn encode_args(
     input: (Vec<String>, Option<String>),
     output: &str,
@@ -155,7 +159,7 @@ pub fn encode_args(
         args.extend(
             [
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
+                "-force_key_frames", KEYFRAME_EVERY_SECOND, "-movflags", "+faststart",
             ]
             .map(String::from),
         );

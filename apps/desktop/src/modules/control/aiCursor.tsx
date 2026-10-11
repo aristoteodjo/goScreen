@@ -49,21 +49,72 @@ let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
 type Target = string | Element | { x: number; y: number } | null;
 
+// Brings an element into view; a canvas (the flow) pans to it. Returns
+// whether it handled the element.
+type Revealer = (el: Element) => boolean;
+const revealers = new Set<Revealer>();
+export function addRevealer(fn: Revealer) {
+  revealers.add(fn);
+  return () => {
+    revealers.delete(fn);
+  };
+}
+
+function elementOf(target: Target): Element | null {
+  if (!target) return null;
+  if (typeof target === "string") return document.querySelector(target);
+  return target instanceof Element ? target : null;
+}
+
+/** The part of the element left visible by the window and clipping ancestors. */
+function visibleRect(el: Element) {
+  const r = el.getBoundingClientRect();
+  let left = Math.max(0, r.left);
+  let top = Math.max(0, r.top);
+  let right = Math.min(window.innerWidth, r.right);
+  let bottom = Math.min(window.innerHeight, r.bottom);
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const style = getComputedStyle(p);
+    if (style.overflowX === "visible" && style.overflowY === "visible")
+      continue;
+    const c = p.getBoundingClientRect();
+    left = Math.max(left, c.left);
+    top = Math.max(top, c.top);
+    right = Math.min(right, c.right);
+    bottom = Math.min(bottom, c.bottom);
+  }
+  return right - left < 4 || bottom - top < 4
+    ? null
+    : { left, top, width: right - left, height: bottom - top };
+}
+
 function resolve(target: Target): { x: number; y: number } | null {
   if (!target) return null;
   if (typeof target === "object" && "x" in target && !("nodeType" in target))
     return target as { x: number; y: number };
-  const el =
-    typeof target === "string" ? document.querySelector(target) : target;
-  if (!(el instanceof Element)) return null;
-  const r = el.getBoundingClientRect();
-  if (r.width === 0 && r.height === 0) return null;
+  const el = elementOf(target);
+  const r = el ? visibleRect(el) : null;
+  if (!r) return null;
   // Inside the element, a little up and left of its center: where a hand
   // would land on a button or a block.
   return {
-    x: Math.min(window.innerWidth - 8, r.left + Math.min(r.width / 2, 120)),
-    y: Math.min(window.innerHeight - 8, r.top + Math.min(r.height / 2, 60)),
+    x: r.left + Math.min(r.width / 2, 120),
+    y: r.top + Math.min(r.height / 2, 60),
   };
+}
+
+/** Scrolls or pans the first target that exists into view. */
+async function reveal(targets: Target[]) {
+  const el = targets.map(elementOf).find((e) => e !== null);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const v = visibleRect(el);
+  // A small item must be mostly in view; a big panel only needs some of it.
+  const seen = v ? v.width * v.height : 0;
+  if (seen >= 0.6 * r.width * r.height || seen > 60_000) return;
+  for (const fn of revealers) if (fn(el)) return sleep(450);
+  el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+  await sleep(350);
 }
 
 /** Glides to the target (the first selector that matches) and says why. */
@@ -73,14 +124,15 @@ export async function aiPoint(
 ): Promise<boolean> {
   if (!useAiWatch.getState().follow) return false;
   const list = Array.isArray(targets) ? targets : [targets];
-  const at = list.map(resolve).find((p) => p !== null) ?? null;
   clearTimeout(hideTimer);
-  const s = useAiCursor.getState();
+  await reveal(list);
+  const find = () => list.map(resolve).find((p) => p !== null) ?? null;
+  const at = find();
   if (!at) {
     useAiCursor.setState({ label });
     return false;
   }
-  if (!s.visible)
+  if (!useAiCursor.getState().visible)
     // Appears from the window's right edge the first time.
     useAiCursor.setState({
       x: window.innerWidth - 40,
@@ -90,6 +142,12 @@ export async function aiPoint(
   await sleep(16);
   useAiCursor.setState({ x: at.x, y: at.y, label });
   await sleep(GLIDE_MS);
+  // The page may have moved under it (a panel opening, a list scrolling).
+  const now = find();
+  if (now && Math.hypot(now.x - at.x, now.y - at.y) > 4) {
+    useAiCursor.setState({ x: now.x, y: now.y });
+    await sleep(GLIDE_MS / 2);
+  }
   return true;
 }
 
