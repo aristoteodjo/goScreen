@@ -40,6 +40,20 @@ describe("parseScenario", () => {
     expect(r.errors.some((e) => e.startsWith("steps.1"))).toBe(true);
   });
 
+  it("only opens web pages", () => {
+    expect(with_({ url: "file:///etc/passwd" }).ok).toBe(false);
+    expect(
+      with_({ steps: [{ do: "goto", url: "file:///Users/me/.ssh/id_rsa" }] })
+        .ok,
+    ).toBe(false);
+    expect(
+      with_({ steps: [{ do: "goto", url: "javascript:alert(1)" }] }).ok,
+    ).toBe(false);
+    expect(
+      with_({ steps: [{ do: "goto", url: "https://x.test/{{order}}" }] }).ok,
+    ).toBe(true);
+  });
+
   it("refuses broken JSON, bad masks and unknown keys", () => {
     expect(parseScenario("{").ok).toBe(false);
     expect(with_({ mask: ["("] }).ok).toBe(false);

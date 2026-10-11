@@ -122,6 +122,19 @@ fn runner_path() -> Result<PathBuf, String> {
     }
 }
 
+/// Writes a file only the current user can read (the temp dir is shared).
+fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)
+}
+
 fn kill(pid: u32) {
     #[cfg(unix)]
     let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
@@ -175,7 +188,7 @@ pub fn scenario_run(app: AppHandle, state: State<'_, ScenarioState>, job: Value)
     // The job holds the user's values (phone numbers...): a private temp file,
     // removed as soon as the run ends.
     let job_file = std::env::temp_dir().join(format!("goscreen-scenario-{}.json", uuid::Uuid::new_v4()));
-    if let Err(e) = std::fs::write(&job_file, serde_json::to_vec(&Value::Object(job)).unwrap_or_default()) {
+    if let Err(e) = write_private(&job_file, &serde_json::to_vec(&Value::Object(job)).unwrap_or_default()) {
         release();
         return Err(format!("write {}: {e}", job_file.display()));
     }
@@ -262,6 +275,17 @@ pub fn scenario_cancel(state: State<'_, ScenarioState>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn job_files_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = std::env::temp_dir().join(format!("goscreen-job-{}.json", uuid::Uuid::new_v4()));
+        write_private(&path, b"{}").unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(write_private(&path, b"{}").is_err(), "never reuses an existing file");
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn slugs_are_file_safe() {

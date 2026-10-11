@@ -51,10 +51,16 @@ export const targetSchema = z
 
 export type Target = z.infer<typeof targetSchema>;
 
+// Only web pages: a scenario from someone else must not read local files
+// (file:, chrome:, data:) into the take or a remembered value.
+const webUrl = z
+  .string()
+  .regex(/^https?:\/\//i, { message: "only http:// or https:// addresses" });
+
 const ms = z.number().int().min(0).max(120_000);
 
 export const stepSchema = z.discriminatedUnion("do", [
-  z.object({ do: z.literal("goto"), url: z.string().min(1) }).strict(),
+  z.object({ do: z.literal("goto"), url: webUrl }).strict(),
   // Starts a scene: everything until the next scene or cut is one clip.
   z.object({ do: z.literal("scene"), caption: z.string().min(1) }).strict(),
   // Ends the scene: what follows (logins, loading) stays out of the montage.
@@ -158,7 +164,7 @@ export const scenarioSchema = z
   .object({
     version: z.literal(1),
     name: z.string().min(1),
-    url: z.string().url(),
+    url: webUrl.pipe(z.string().url()),
     device: z
       .object({ id: z.string().min(1), color: z.string().optional() })
       .strict()

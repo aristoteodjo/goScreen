@@ -229,6 +229,11 @@ async function session(name) {
     colorScheme: scenario.colorScheme,
   });
   await context.addInitScript(maskInit, scenario.mask);
+  // Whatever a page or a link asks for, only web requests leave the browser.
+  await context.route(
+    (url) => !/^(https?|data|blob):$/.test(url.protocol),
+    (route) => route.abort("blockedbyclient"),
+  );
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
   sessions.set(name, page);
@@ -347,6 +352,8 @@ async function fill(page, text) {
 }
 
 async function open(page, url) {
+  if (!/^https?:\/\//i.test(url))
+    throw new Error(`Refused to open ${url}: only http(s).`);
   await page.goto(url, { waitUntil: "load", timeout: 45_000 });
   // Single-page apps keep loading data after `load`.
   await page
