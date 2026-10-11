@@ -26,7 +26,9 @@ pub struct ScenarioState {
 }
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase", tag = "status")]
+// Variant names and their fields both go camelCase: `rename_all` alone
+// renames only the variants, and the studio would miss `videoPath`.
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "status")]
 pub enum ScenarioOutcome {
     Done {
         video_path: String,
@@ -285,6 +287,20 @@ mod tests {
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         assert!(write_private(&path, b"{}").is_err(), "never reuses an existing file");
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn outcomes_reach_the_studio_in_camel_case() {
+        let done = serde_json::to_value(ScenarioOutcome::Done {
+            video_path: "/m/a.mp4".into(),
+            interactions_path: "/m/a.interactions.json".into(),
+            duration_ms: 1200,
+        })
+        .unwrap();
+        assert_eq!(
+            done,
+            serde_json::json!({"status": "done", "videoPath": "/m/a.mp4", "interactionsPath": "/m/a.interactions.json", "durationMs": 1200})
+        );
     }
 
     #[test]
