@@ -12,7 +12,8 @@
     "check-types": "pnpm -r check-types",
     "test": "pnpm -r test",
     "lint": "biome lint .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "bench:reproduce": "node packages/motion/bench/reproduce.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

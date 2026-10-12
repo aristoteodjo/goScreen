@@ -548,6 +548,12 @@ n'en sait rien.
 
 - Frontend : `pnpm -r check-types`, `pnpm -r test`, `pnpm lint`
 - Rust : `cd apps/desktop/src-tauri && cargo test` (via `portly temp`)
+- Reproduction : `pnpm bench:reproduce <vidéo>` (via `portly temp`, quelques minutes) joue la boucle de l'écran
+  Reproduce sans l'app (mesure, spec, rendu, mesure du rendu) et note chaque plan ; code 1 si un plan reste sous
+  `FIDELITY_PASS`. Base de test : `presentation.mp4` (36 s, texte cinétique, interfaces, logo), 0,938 et 17/17 au
+  2026-10-12. L'app donne la même spec et les mêmes notes (`motion.create` puis `motion.render`), à condition que
+  sa page ait été rechargée après un changement de `@goscreen/motion` : les commandes de l'IA gardaient sinon
+  l'ancienne version (redémarrer `goScreen/desktop` avec Portly).
 
 ## Plan : vidéos produit automatiques, pilotées par la campagne
 
