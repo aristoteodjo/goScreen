@@ -1,0 +1,21 @@
+{
+  "name": "@goscreen/motion",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Motion specs: a reference video described as shots, rendered back to HTML, and measured against the original.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

@@ -43,6 +43,8 @@ async function main() {
     await page.route("**/*", (route) => route.abort());
     await page.setContent(job.html, { waitUntil: "load" });
     await page.evaluate(() => document.fonts?.ready);
+    // A page that builds its animations from script says when it is done.
+    await page.evaluate(() => window.__goscreenReady);
     const frames = framesFor(job.duration, job.fps);
     ffmpeg = spawn(job.ffmpeg, composeArgs(job), {
       stdio: ["pipe", "ignore", "pipe"],
