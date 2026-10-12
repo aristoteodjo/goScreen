@@ -1,6 +1,7 @@
 import {
   Add01Icon,
   Cancel01Icon,
+  FilmRoll01Icon,
   Folder01Icon,
   Home01Icon,
   Video01Icon,
@@ -24,6 +25,7 @@ const ICONS: Record<TabKind, typeof Home01Icon> = {
   flow: WorkflowSquare01Icon,
   editor: Video01Icon,
   studio: Video01Icon,
+  reproduce: FilmRoll01Icon,
 };
 
 /** The tab strip at the top of the window, where the traffic lights sit. */

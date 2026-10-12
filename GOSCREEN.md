@@ -359,7 +359,16 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
 - IA : `motion.references`, `motion.create`, `motion.spec`, `motion.setSpec`, `motion.frame`, `motion.shot`,
   `motion.teach`, `motion.reviewLocal`, `motion.render`, `training.stats`, `training.export`
   (`modules/motion/commands.ts`). `motion_video_url` sert une référence ou un rendu par le serveur média.
-- Reste : l'écran « Reproduce » (comparaison côte à côte, relecture, progression du modèle local).
+- **Écran Reproduce** (`/reproduce`, bouton « Reproduce a video » de l'accueil ; `/reproduce?reference=<id>`) :
+  références en cartes (création = choisir une vidéo, mesure, première spec). Page d'une référence : la vidéo et
+  un rendu côte à côte sur une seule horloge (`compare.ts` : la référence mène, le rendu suit à 80 ms près ;
+  Espace), bande des plans colorée par fidélité (vert ≥ `FIDELITY_PASS`, orange ≥ 0,6, rouge), liste des plans,
+  et pour le plan choisi : son image et la spec dessinée à la même place (position, taille, interligne,
+  accent, barré), les écarts mesurés, la dernière réponse du modèle local et la **correction** d'une personne
+  (`correction.ts`, pur et testé : une ligne par ligne, `*mot*` accent, `~mot~` barré), qui réécrit la spec et
+  devient un exemple (`teacherName: "person"`). Dialogue **Local model** : télécharger, démarrer, arrêter un
+  Qwen3-VL, ce qu'il a appris (exemples, accord global et sur les 20 derniers), export du jeu d'entraînement.
+  IA : `app.show` avec `view: "reproduce"`.
 
 ### Capture native
 

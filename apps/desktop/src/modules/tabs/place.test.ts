@@ -15,6 +15,7 @@ suite("tab places", () => {
       title: "my film",
     });
     expect(describe("/studio")).toEqual({ kind: "studio", title: "Studio" });
+    expect(describe("/reproduce")).toEqual({ kind: "reproduce", title: "Reproduce" });
     expect(describe("/")).toEqual({ kind: "home", title: "Projects" });
   });
 });

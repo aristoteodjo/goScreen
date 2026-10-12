@@ -1,6 +1,7 @@
 import {
   Copy01Icon,
   Delete02Icon,
+  FilmRoll01Icon,
   Folder01Icon,
   FolderAddIcon,
   MoreHorizontalIcon,
@@ -88,6 +89,14 @@ export function ProjectsHome() {
         </span>
         <span className="text-[13px] text-muted-foreground">· Projects</span>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => navigate({ to: "/reproduce", search: {} })}
+          >
+            <HugeiconsIcon icon={FilmRoll01Icon} size={15} />
+            Reproduce a video
+          </Button>
           <Button
             size="sm"
             variant="ghost"

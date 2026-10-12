@@ -175,17 +175,23 @@ export function registerCommands() {
     name: "app.show",
     title: "Show a screen",
     description:
-      "Puts a screen in front of the person: home, a project, a VSL flow, a video in the editor, or the studio.",
+      "Puts a screen in front of the person: home, a project, a VSL flow, a video in the editor, the studio, or a reference video being reproduced (all references without `reference`).",
     input: z.object({
-      view: z.enum(["home", "project", "flow", "editor", "studio"]),
+      view: z.enum(["home", "project", "flow", "editor", "studio", "reproduce"]),
       project: project.optional(),
       vsl: vsl.optional(),
       video: video.optional(),
+      reference: z.string().min(1).optional().describe("Reference id (motion.references)"),
     }),
     run: async (i) => {
       // The AI's places open in their own tabs, so the person keeps theirs.
       if (i.view === "home") openPlace({ to: "/" });
       else if (i.view === "studio") openPlace({ to: "/studio" });
+      else if (i.view === "reproduce")
+        openPlace({
+          to: "/reproduce",
+          search: i.reference ? { reference: i.reference } : {},
+        });
       else if (i.view === "project" && i.project)
         openPlace({
           to: "/projects/$project",

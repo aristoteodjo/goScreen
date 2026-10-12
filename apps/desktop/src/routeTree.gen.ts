@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as FlowRouteImport } from './routes/flow'
+import { Route as ReproduceRouteImport } from './routes/reproduce'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as ProjectsProjectRouteImport } from './routes/projects.$project'
 
@@ -30,6 +31,11 @@ const FlowRoute = FlowRouteImport.update({
   path: '/flow',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReproduceRoute = ReproduceRouteImport.update({
+  id: '/reproduce',
+  path: '/reproduce',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
   '/flow': typeof FlowRoute
+  '/reproduce': typeof ReproduceRoute
   '/studio': typeof StudioRoute
   '/projects/$project': typeof ProjectsProjectRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
   '/flow': typeof FlowRoute
+  '/reproduce': typeof ReproduceRoute
   '/studio': typeof StudioRoute
   '/projects/$project': typeof ProjectsProjectRoute
 }
@@ -60,21 +68,32 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/editor': typeof EditorRoute
   '/flow': typeof FlowRoute
+  '/reproduce': typeof ReproduceRoute
   '/studio': typeof StudioRoute
   '/projects/$project': typeof ProjectsProjectRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/editor' | '/flow' | '/studio' | '/projects/$project'
+  fullPaths:
+    '/' | '/editor' | '/flow' | '/reproduce' | '/studio' | '/projects/$project'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/editor' | '/flow' | '/studio' | '/projects/$project'
-  id: '__root__' | '/' | '/editor' | '/flow' | '/studio' | '/projects/$project'
+  to:
+    '/' | '/editor' | '/flow' | '/reproduce' | '/studio' | '/projects/$project'
+  id:
+    | '__root__'
+    | '/'
+    | '/editor'
+    | '/flow'
+    | '/reproduce'
+    | '/studio'
+    | '/projects/$project'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EditorRoute: typeof EditorRoute
   FlowRoute: typeof FlowRoute
+  ReproduceRoute: typeof ReproduceRoute
   StudioRoute: typeof StudioRoute
   ProjectsProjectRoute: typeof ProjectsProjectRoute
 }
@@ -102,6 +121,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FlowRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reproduce': {
+      id: '/reproduce'
+      path: '/reproduce'
+      fullPath: '/reproduce'
+      preLoaderRoute: typeof ReproduceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio': {
       id: '/studio'
       path: '/studio'
@@ -123,6 +149,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EditorRoute: EditorRoute,
   FlowRoute: FlowRoute,
+  ReproduceRoute: ReproduceRoute,
   StudioRoute: StudioRoute,
   ProjectsProjectRoute: ProjectsProjectRoute,
 }
