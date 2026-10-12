@@ -133,6 +133,15 @@ pub fn motion_file_path(id: String, file: String) -> Result<String, String> {
     if path.is_file() { Ok(path.to_string_lossy().into_owned()) } else { Err(format!("No {file}.")) }
 }
 
+/// A local URL that plays a video of the reference (served with Range, like
+/// the editor's), for the side-by-side comparison.
+#[tauri::command]
+pub async fn motion_video_url(media: State<'_, super::media::MediaState>, id: String, video: String) -> Result<String, String> {
+    let dir = reference_dir(&id)?;
+    let reference = read_reference(&dir).ok_or("Unreadable reference.")?;
+    media.publish(video_of(&dir, &reference, &video)?).await
+}
+
 /// The video a file name stands for: the reference itself, or a rendering.
 fn video_of(dir: &Path, reference: &Reference, which: &str) -> Result<PathBuf, String> {
     if which == "reference" {

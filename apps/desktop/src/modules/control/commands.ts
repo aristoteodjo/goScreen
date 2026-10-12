@@ -63,6 +63,7 @@ import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand } from "./registry";
+import { registerMotionCommands } from "@/modules/motion/commands";
 
 // The commands an AI can run. Each one is what a button of the studio does,
 // on the same data, so a person and an agent can take turns on a project.
@@ -125,6 +126,7 @@ const pickPaths = (flow: Flow, picked?: number[]) => {
 };
 
 export function registerCommands() {
+  registerMotionCommands();
   defineCommand({
     name: "control.catalog",
     title: "List commands",

@@ -47,6 +47,9 @@ importers:
       '@goscreen/device-registry':
         specifier: workspace:*
         version: link:../../packages/device-registry
+      '@goscreen/motion':
+        specifier: workspace:*
+        version: link:../../packages/motion
       '@goscreen/render-engine':
         specifier: workspace:*
         version: link:../../packages/render-engine

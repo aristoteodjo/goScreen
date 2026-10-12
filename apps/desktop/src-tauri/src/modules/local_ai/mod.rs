@@ -21,6 +21,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::recording::ffmpeg;
 
+pub mod training;
+
 pub const PROGRESS_EVENT: &str = "local-ai-progress";
 
 /// A file of a model, from Hugging Face (or GitHub for OCR data).
@@ -39,8 +41,6 @@ pub struct Model {
     pub kind: &'static str,
     pub files: &'static [ModelFile],
 }
-
-const HF: &str = "https://huggingface.co";
 
 pub const MODELS: &[Model] = &[
     Model {
@@ -447,7 +447,7 @@ mod tests {
             names.sort();
             names.dedup();
             assert_eq!(names.len(), m.files.len(), "{}", m.id);
-            assert!(m.files.iter().all(|f| f.url.starts_with(HF) || f.url.starts_with("https://github.com/")));
+            assert!(m.files.iter().all(|f| f.url.starts_with("https://huggingface.co/") || f.url.starts_with("https://github.com/")));
             if m.kind == "vision" {
                 assert!(names.contains(&"model.gguf") && names.contains(&"mmproj.gguf"), "{}", m.id);
             }

@@ -186,7 +186,7 @@ impl MediaState {
             .copied()
     }
 
-    async fn publish(&self, path: PathBuf) -> Result<String, String> {
+    pub(crate) async fn publish(&self, path: PathBuf) -> Result<String, String> {
         let port = self.ensure_server().await?;
         let token = local_http::token();
         self.files
