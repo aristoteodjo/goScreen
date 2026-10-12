@@ -29,6 +29,8 @@ packages/
   scenario/           Scénarios (zod, pur) : format, valeurs {{…}}, montage tiré d'une prise
   scenario-runner/    Node + Playwright : joue un scénario, écrit le MP4 et son journal
   campaign/           Brief de campagne (zod), catalogue de recettes, choix des 8 propositions (pur)
+  motion/             Spec de motion design (zod, pur) : mesures d'une vidéo de référence, spec dérivée,
+                      rendu HTML, comparaison, relecture par une IA, exemples d'apprentissage du modèle local
 ```
 
 ## Règles
@@ -331,6 +333,33 @@ fonction pure du temps (`keyframes.ts`) : `interpolate(t, entrées, sorties, { e
 quelle image se calcule seule, dans n'importe quel ordre : aperçu, déplacement dans la timeline et export
 dessinent la même image). L'animation d'entrée `spring` des textes s'en sert ; un montage est construit à
 partir de données (scénario + `film`), comme une composition Remotion à partir de ses props.
+
+### Reproduire une vidéo de référence (motion specs, IA locale)
+
+- Une **référence** = un dossier `<Vidéos>/goScreen/References/<id>/` (Rust `modules/motion/`) : la vidéo source,
+  les mesures (`*.observations.json`, `scenario-runner/analyze.mjs` : coupes, mots OCR minutés, couleurs,
+  soulignés), la spec (`spec.json`, plus `spec.auto.json` telle que dérivée) et ses rendus (`render-N.mp4` +
+  `.report.json`). Le studio n'envoie que des ids et des noms de fichiers, jamais de chemin (sauf la vidéo choisie).
+- `@goscreen/motion` (pur, testé) : `specFromObservations` (plans entre les coupes, lignes, taille, accent,
+  barré, sans IA) -> `specHtml` (une page autonome, une Web Animation par élément, rendue par `compose.mjs`) ->
+  `measureShots` + `fidelity` (le rendu repasse par le même analyseur : on compare des mesures entre elles).
+- **Relecture** (`review.ts`) : une IA regarde une image par plan et corrige ce que l'OCR ne sait pas (texte
+  exact, accents, mots mis en avant ou barrés, nature d'un plan qui n'est pas du texte). Le minutage et la mise
+  en page restent mesurés, l'IA ne les invente jamais. Même contrat (`ShotReview`) pour tous les modèles.
+- **Modèle local** (Rust `modules/local_ai/`) : `llama-server` (llama.cpp) avec Qwen3-VL 2B/4B/8B, téléchargé une
+  fois dans `<data>/goScreen/models/`, sur 127.0.0.1 derrière une clé aléatoire ; réponses en JSON Schema.
+  Rien ne quitte la machine.
+- **Professeur / élève** (`training.ts`, Rust `local_ai/training.rs`) : chaque réponse d'un professeur (Claude par
+  MCP, `motion.teach`, ou une personne) devient un exemple `<data>/goScreen/training/examples/<id>.json` + `.jpg`
+  (image, question, réponse de l'élève s'il en avait donné une, réponse du professeur). Avant chaque question, le
+  modèle local reçoit les exemples les plus instructifs (`pickExamples` : ses erreurs d'abord, même référence,
+  plus récents) en few-shot ; `agreement` suit son accord avec le professeur (global et 20 derniers) ;
+  `training.export` écrit `train.jsonl` (format chat avec images) pour un LoRA, utile à partir de
+  `FINE_TUNE_MIN_EXAMPLES` (200). Toute nouvelle étape assistée par IA doit suivre ce contrat.
+- IA : `motion.references`, `motion.create`, `motion.spec`, `motion.setSpec`, `motion.frame`, `motion.shot`,
+  `motion.teach`, `motion.reviewLocal`, `motion.render`, `training.stats`, `training.export`
+  (`modules/motion/commands.ts`). `motion_video_url` sert une référence ou un rendu par le serveur média.
+- Reste : l'écran « Reproduce » (comparaison côte à côte, relecture, progression du modèle local).
 
 ### Capture native
 
