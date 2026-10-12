@@ -128,14 +128,20 @@ export function applyReview(shot: Shot, review: ShotReview): Shot {
   const strikeAfter = (at: number) =>
     measured.find((w) => w.strike !== undefined)?.strike ?? round(at + 0.6);
   let k = 0;
-  const lines: Line[] = review.lines.map((row) => ({
-    words: row.map((w): Word => {
+  // Places stay with the words when the AI kept as many words on each line.
+  const same =
+    review.lines.length === shot.lines.length &&
+    review.lines.every((row, i) => row.length === shot.lines[i].words.length);
+  const lines: Line[] = review.lines.map((row, li) => ({
+    words: row.map((w, wi): Word => {
       const at = round(times[k++]);
+      const x = same ? shot.lines[li].words[wi].x : undefined;
       return {
         text: w.text,
         at,
         accent: w.accent,
         echo: measured.find((m) => m.text === w.text)?.echo ?? false,
+        ...(x !== undefined ? { x } : {}),
         ...(w.strike ? { strike: strikeAfter(at) } : {}),
       };
     }),

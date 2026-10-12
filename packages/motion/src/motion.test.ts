@@ -3,6 +3,7 @@ import {
   ASSET_BASE,
   cleanWords,
   labelsFor,
+  onPicture,
   visualPath,
   visualsFor,
   fidelity,
@@ -24,6 +25,9 @@ const word = (text: string, x: number, start: number, extra: Partial<ObservedWor
   start,
   settled: start + 0.1,
   end: 1.4,
+  masked: true,
+  mark: false,
+  around: null,
   ...extra,
 });
 
@@ -140,7 +144,7 @@ describe("visuals", () => {
       visuals: [
         visual(),
         // The word while it comes in, blurred: OCR could not read it.
-        visual({ image: "reference.visual-2.png", box: { x: 190, y: 540, w: 520, h: 140 } }),
+        visual({ image: "reference.visual-2.png", box: { x: 190, y: 500, w: 320, h: 130 } }),
         // The underline.
         visual({ image: "reference.visual-3.png", box: { x: 190, y: 655, w: 1100, h: 10 } }),
       ],
@@ -170,10 +174,29 @@ describe("visuals", () => {
   });
 
   it("draws the big words of a slide as labels, unless a picture holds them", () => {
-    const words = [word("Audit", 197, 0.15), word("1281", 1550, 0.15, { box: { x: 1550, y: 130, w: 100, h: 50 } })];
+    const words = [
+      word("Audit", 197, 0.15),
+      word("1281", 1550, 0.15, { box: { x: 1550, y: 130, w: 100, h: 50 } }),
+      word("semaine", 197, 0.15, { masked: false, box: { x: 197, y: 620, w: 90, h: 20 } }),
+    ];
     const o = obs(words, { visuals: [visual()] });
-    const pictures = visualsFor(o, 0, 2, null);
-    expect(labelsFor(o, words, pictures).map((l) => l.text)).toEqual(["Audit"]);
+    expect(labelsFor(o, words, visualsFor(o, 0, 2, null)).map((l) => l.text)).toEqual(["Audit"]);
+  });
+
+  it("keeps a chip around a word of a text shot, not the word alone", () => {
+    const words = [word("Saisie", 261, 0.15, { box: { x: 261, y: 559, w: 153, h: 43 } })];
+    const o = obs(words, {
+      visuals: [
+        visual({ image: "chip.png", box: { x: 184, y: 528, w: 272, h: 112 } }),
+        visual({ image: "blur.png", box: { x: 255, y: 550, w: 165, h: 60 } }),
+      ],
+    });
+    const [chip, ...rest] = visualsFor(o, 0, 2, words.map((w) => ({ ...w, around: "#ffffff" })));
+    expect(rest).toEqual([]);
+    expect(chip.src).toBe("chip.png");
+    // The word inside it is hidden while it is there; the text is drawn over.
+    expect(chip.covers).toHaveLength(1);
+    expect(chip.covers[0]).toMatchObject({ color: "#ffffff", at: 0, until: 1.6 });
   });
 
   it("renders pictures from the assets, and clips as videos", () => {
@@ -197,3 +220,28 @@ describe("visuals", () => {
 });
 
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+describe("lettering", () => {
+  it("leaves a logo's lettering and stray letters out of the text", () => {
+    const o = obs([
+      word("Chaque", 197, 0.15),
+      word("A", 900, 0.2, { seen: 1, conf: 97, box: { x: 900, y: 700, w: 9, h: 15 } }),
+      word("REMAIN", 600, 0.3, { mark: true, masked: false, box: { x: 600, y: 300, w: 699, h: 83 } }),
+    ]);
+    const shot = specFromObservations(o).shots[0];
+    expect(shot.kind === "text" && shot.lines.flatMap((l) => l.words.map((w) => w.text))).toEqual(["Chaque"]);
+  });
+});
+
+describe("onPicture", () => {
+  const words = [word("1281", 600, 0.15)];
+  it("gives the words of a dashboard to its picture", () => {
+    const o = obs(words, { visuals: [visual({ box: { x: 400, y: 300, w: 1000, h: 600 }, start: 0, end: 2 })] });
+    expect(onPicture(o, words)).toBe(true);
+    expect(specFromObservations(o).shots[0].kind).toBe("placeholder");
+  });
+  it("does not mistake the words, seen blurred, for a picture", () => {
+    const o = obs(words, { visuals: [visual({ box: { x: 590, y: 480, w: 320, h: 130 }, start: 0, end: 2 })] });
+    expect(onPicture(o, words)).toBe(false);
+  });
+});

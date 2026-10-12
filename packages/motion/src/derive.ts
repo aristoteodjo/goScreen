@@ -1,4 +1,3 @@
-import { BIG_WORD } from "./observations.ts";
 import type {
   Box,
   Observations,
@@ -7,6 +6,7 @@ import type {
   ObservedWord,
 } from "./observations.ts";
 import type {
+  Cover,
   Label,
   Line,
   MotionSpec,
@@ -57,9 +57,10 @@ const overlap = (a: Box, b: Box) => {
  * best reading where OCR saw two words in the same place at the same time.
  */
 export function cleanWords(words: ObservedWord[]): ObservedWord[] {
+  // A lone letter read once is a piece of something else (a logo, an icon).
   const kept = words.filter(
     (w) =>
-      (w.seen >= 2 || (w.conf >= 90 && w.end - w.start >= 0.3)) &&
+      (w.seen >= 2 || (w.conf >= 90 && w.end - w.start >= 0.3 && w.text.length > 1)) &&
       w.end > w.start,
   );
   const score = (w: ObservedWord) => w.seen * w.conf;
@@ -129,8 +130,9 @@ export function fontSizeOf(row: ObservedWord[]): number {
     const plain = w.text.normalize("NFD").replace(/[̀-ͯ]/g, "");
     return plain === w.text && /[A-Zbdfhklt]/.test(w.text);
   });
+  // The median top: an accent OCR read without it (« À » as « A ») stands taller.
   const tops = (tall.length ? tall : row).map((w) => w.box.y);
-  const height = base - Math.min(...tops);
+  const height = base - median(tops);
   return tall.length ? height / 0.73 : height / 0.75;
 }
 
@@ -175,7 +177,7 @@ function textShot(
   const main = Math.max(...sizes);
   // A much smaller row above the others is a kicker; the rest are lines.
   const kickerRow =
-    rows.length > 1 && sizes[0] < main * 0.45 ? rows.shift() : undefined;
+    rows.length > 1 && sizes[0] < main * 0.5 ? rows.shift() : undefined;
   if (kickerRow) sizes.shift();
   const size = median(sizes);
   const lastBase = baselineOf(rows[rows.length - 1]);
@@ -209,6 +211,7 @@ function textShot(
         at: round(Math.max(start, w.start)),
         accent: isAccent(w.color, ink),
         echo: false,
+        x: round(w.box.x / obs.width, 10000),
         ...(struck(w) !== undefined ? { strike: round(struck(w) as number) } : {}),
       }),
     ),
@@ -250,6 +253,29 @@ function textShot(
     };
   }
   return shot;
+}
+
+/**
+ * The area a word drawn as text takes while it is on screen, coming in
+ * included (the analyser's `wordArea`).
+ */
+const wordArea = (b: Box): Box => ({
+  x: b.x - b.h * 0.2,
+  y: b.y - b.h * 0.3,
+  w: b.w + b.h * 0.4,
+  h: b.h * 1.9,
+});
+
+/** How much of a box the words take (0..1), each word with its margin. */
+function coveredBy(box: Box, words: ObservedWord[]): number {
+  let covered = 0;
+  for (const { box: b } of words) {
+    const a = wordArea(b);
+    const x = Math.max(0, Math.min(box.x + box.w, a.x + a.w) - Math.max(box.x, a.x));
+    const y = Math.max(0, Math.min(box.y + box.h, a.y + a.h) - Math.max(box.y, a.y));
+    covered += x * y;
+  }
+  return Math.min(1, covered / (box.w * box.h || 1));
 }
 
 /** A visual's path as the renderer reads it: centre and scale, edges undone. */
@@ -299,10 +325,11 @@ export function visualPath(
 }
 
 /**
- * The pictures of a shot, from the visuals the analyser cut out. In a text
- * shot, what overlaps its words is the text itself (blurred while it comes
- * in, a label) and the thin coloured lines are its underline or strikes:
- * the renderer draws those, so only what is around the text stays.
+ * The pictures of a shot, from the visuals the analyser cut out. In a text shot, a picture that is mostly
+ * its words is the text itself (blurred while it comes in, a word OCR did not
+ * keep) and the thin coloured lines are its underline or strikes: the
+ * renderer draws those, so only what is around the text stays (a chip, a
+ * bullet, an echo).
  */
 export function visualsFor(
   obs: Observations,
@@ -311,6 +338,14 @@ export function visualsFor(
   words: ObservedWord[] | null,
 ): Visual[] {
   const { width: W, height: H } = obs;
+  // The words there with it for a good part of its time (not one leaving as
+  // it comes in).
+  const during = (v: ObservedVisual) =>
+    (words ?? []).filter(
+      (w) =>
+        Math.min(v.end, w.end + 0.2) - Math.max(v.start, w.start - 0.4) >
+        0.25 * (v.end - v.start),
+    );
   return obs.visuals
     .filter((v) => v.image && v.start < end && v.end > start)
     // A flash of a transition, seen once.
@@ -318,7 +353,7 @@ export function visualsFor(
     .filter(
       (v) =>
         !words ||
-        (!words.some((w) => overlap(v.box, w.box) > 0.3) &&
+        (coveredBy(v.box, during(v)) < 0.6 &&
           !(v.box.h <= H * 0.025 && v.box.w > W * 0.03)),
     )
     // The biggest behind.
@@ -339,13 +374,42 @@ export function visualsFor(
         // Leaves before the cut: it went away on its own, softly.
         fadeOut: v.end < end - 0.1 ? 0.15 : 0,
         path,
+        covers: coversOf(v, during(v), W, H),
       };
     });
 }
 
 /**
- * The big words of a shot that is not kinetic text: the pictures were cut
- * without them, so they are drawn as text at their measured place. A word
+ * Patches over a picture of a text shot where its words are (a chip around a
+ * word: the chip stays, the word is drawn as text): the colour around each
+ * word, for as long as it is on screen, cut to the picture.
+ */
+function coversOf(v: ObservedVisual, words: ObservedWord[], W: number, H: number): Cover[] {
+  return words.flatMap((w) => {
+    if (!w.masked || !w.around) return [];
+    const a = wordArea(w.box);
+    const x = Math.max(a.x, v.box.x);
+    const y = Math.max(a.y, v.box.y);
+    const x1 = Math.min(a.x + a.w, v.box.x + v.box.w);
+    const y1 = Math.min(a.y + a.h, v.box.y + v.box.h);
+    if (x1 <= x || y1 <= y) return [];
+    return [
+      {
+        x: round(x / W, 10000),
+        y: round(y / H, 10000),
+        w: round((x1 - x) / W, 10000),
+        h: round((y1 - y) / H, 10000),
+        color: w.around,
+        at: round(Math.max(0, w.start - 0.4)),
+        until: round(w.end + 0.2),
+      },
+    ];
+  });
+}
+
+/**
+ * The words of a shot that is not kinetic text that the pictures were cut
+ * without (`masked`): they are drawn as text at their measured place. A word
  * inside a picture is already in it (a figure on a dashboard).
  */
 export function labelsFor(
@@ -356,7 +420,7 @@ export function labelsFor(
   const { width: W, height: H } = obs;
   const bg = at(obs.backgrounds, words[0]?.settled ?? 0);
   return words
-    .filter((w) => w.box.h >= H * BIG_WORD)
+    .filter((w) => w.masked)
     .filter(
       (w) =>
         !visuals.some(
@@ -388,9 +452,31 @@ export function isKineticText(groups: ObservedWord[][], height: number) {
   );
 }
 
+/**
+ * Words that lie on a picture, there while they are, belong to it (the
+ * figures of a dashboard, the title of a page): they are not kinetic text.
+ */
+export function onPicture(obs: Observations, words: ObservedWord[]): boolean {
+  const from = Math.min(...words.map((w) => w.start));
+  const to = Math.max(...words.map((w) => w.end));
+  return obs.visuals.some((v) => {
+    if (!v.image || v.start > from + 0.1 || v.end < to - 0.1) return false;
+    const on = words.filter((w) => overlap(v.box, w.box) > 0.8);
+    if (on.length * 2 < words.length) return false;
+    // Much bigger than its words: a picture that holds them, not the words
+    // themselves (seen blurred while they came in, or their echo above).
+    const x = Math.min(...on.map((w) => w.box.x));
+    const y = Math.min(...on.map((w) => w.box.y));
+    const w = Math.max(...on.map((o) => o.box.x + o.box.w)) - x;
+    const h = Math.max(...on.map((o) => o.box.y + o.box.h)) - y;
+    return v.box.w * v.box.h >= 8 * w * h;
+  });
+}
+
 /** A first motion spec from the measurements of a video. */
 export function specFromObservations(obs: Observations): MotionSpec {
-  const words = cleanWords(obs.words);
+  // A logo's lettering stays in its picture.
+  const words = cleanWords(obs.words).filter((w) => !w.mark);
   const bounds = [0, ...obs.cuts.filter((c) => c > 0 && c < obs.duration), obs.duration];
   const shots: Shot[] = [];
   for (let i = 0; i + 1 < bounds.length; i++) {
@@ -400,37 +486,43 @@ export function specFromObservations(obs: Observations): MotionSpec {
       return mid >= from && mid < to;
     });
     const groups = groupByTime(inside);
-    if (!groups.length || !isKineticText(groups, obs.height)) {
-      const visuals = visualsFor(obs, from, to, null);
-      shots.push({
-        kind: "placeholder",
-        id: `shot-${shots.length + 1}`,
-        start: round(from),
-        end: round(to),
-        background: at(obs.backgrounds, (from + to) / 2),
-        label: groups.length ? "interface" : visuals.length ? "picture" : "",
-        visuals,
-        labels: labelsFor(obs, inside, visuals),
-      });
-      continue;
+    // Each group of words is kinetic text, or part of a picture (a slide, a
+    // logo card, an interface); pictures that follow each other are one shot.
+    const segments: { text: boolean; words: ObservedWord[] }[] = [];
+    for (const g of groups) {
+      const text = isKineticText([g], obs.height) && !onPicture(obs, g);
+      const last = segments[segments.length - 1];
+      if (!text && last && !last.text) last.words.push(...g);
+      else segments.push({ text, words: [...g] });
     }
-    groups.forEach((g, k) => {
-      const start = k === 0 ? from : Math.max(...groups[k - 1].map((w) => w.end));
-      const end =
-        k === groups.length - 1 ? to : Math.max(...g.map((w) => w.end));
-      const shot = textShot(
-        `shot-${shots.length + 1}`,
-        g,
-        obs.rules,
-        obs,
-        start,
-        Math.max(end, start + 0.1),
-        k === groups.length - 1 ? "cut" : "blur",
-      );
-      // Every word of the cut, not only this group's: a word in transit
-      // belongs to the text, whichever group it ends up in.
-      shot.visuals = visualsFor(obs, shot.start, shot.end, inside);
-      shots.push(shot);
+    if (!segments.length) segments.push({ text: false, words: [] });
+    let start = from;
+    segments.forEach((seg, k) => {
+      const lastOne = k === segments.length - 1;
+      const end = lastOne
+        ? to
+        : Math.max(start + 0.1, ...seg.words.map((w) => w.end));
+      const id = `shot-${shots.length + 1}`;
+      if (seg.text) {
+        const shot = textShot(id, seg.words, obs.rules, obs, start, end, lastOne ? "cut" : "blur");
+        // Every word of the cut, not only this group's: a word in transit
+        // belongs to the text, whichever group it ends up in.
+        shot.visuals = visualsFor(obs, shot.start, shot.end, inside);
+        shots.push(shot);
+      } else {
+        const visuals = visualsFor(obs, start, end, null);
+        shots.push({
+          kind: "placeholder",
+          id,
+          start: round(start),
+          end: round(end),
+          background: at(obs.backgrounds, (start + end) / 2),
+          label: seg.words.length ? "interface" : visuals.length ? "picture" : "",
+          visuals,
+          labels: labelsFor(obs, seg.words, visuals),
+        });
+      }
+      start = end;
     });
   }
   return {

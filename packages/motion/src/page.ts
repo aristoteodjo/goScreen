@@ -68,8 +68,11 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     }
   });
 
+  // A picture: a box (placed, softened at its edges, moved) holding the image
+  // or clip and the patches that hide its words while the text is drawn.
   const visual = (v, shot, frame) => {
-    const node = el(v.kind === "clip" ? "video" : "img", "visual", frame);
+    const node = el("div", "visual", frame);
+    const media = el(v.kind === "clip" ? "video" : "img", "media", node);
     const left = v.x * W, top = v.y * H, w = v.w * W, h = v.h * H;
     // Soft edges, except where it touches the frame (it would show a seam).
     const f = Math.max(2, Math.min(w, h) * 0.02);
@@ -79,13 +82,22 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     node.style.cssText = "left:" + left + "px;top:" + top + "px;width:" + w + "px;height:" + h + "px;" +
       "-webkit-mask-image:" + fx + "," + fy + ";-webkit-mask-composite:source-in;mask-image:" + fx + "," + fy + ";mask-composite:intersect";
     if (v.kind === "clip") {
-      node.muted = true;
-      node.playsInline = true;
-      node.preload = "auto";
-      clips.push({ node, at: v.at, until: v.until });
+      media.muted = true;
+      media.playsInline = true;
+      media.preload = "auto";
+      clips.push({ node: media, at: v.at, until: v.until });
     }
-    loads.push(load(node, v.src));
-    window_(node, Math.max(v.at, shot.start), Math.min(v.until, shot.end));
+    loads.push(load(media, v.src));
+    const from = Math.max(v.at, shot.start), to = Math.min(v.until, shot.end);
+    // A child shown with \`visibility\` shows even when its parent is hidden:
+    // a patch's window stays inside its picture's.
+    for (const c of v.covers || []) {
+      const patch = el("div", "cover", node);
+      patch.style.cssText = "left:" + (c.x * W - left) + "px;top:" + (c.y * H - top) + "px;width:" + c.w * W +
+        "px;height:" + c.h * H + "px;background:" + c.color;
+      window_(patch, Math.max(c.at, from), Math.max(Math.max(c.at, from), Math.min(c.until, to)));
+    }
+    window_(node, from, to);
     fades(node, v.at, v.fadeIn, v.until, v.fadeOut);
     if (v.path.length) {
       const cx = left + w / 2, cy = top + h / 2;
@@ -125,6 +137,14 @@ window.__goscreenReady = document.fonts.ready.then(() => {
         probe = el("span", "probe", row);
       }
     });
+    // Words measured further apart than a space (chips, columns) go to their
+    // place, left to right; never closer than a narrow space.
+    for (const { w, span } of words) {
+      if (w.x === undefined) continue;
+      const left = span.getBoundingClientRect().left - box.getBoundingClientRect().left;
+      const want = w.x * W - shot.x * W;
+      if (want > left + px * 0.05) span.style.marginLeft = want - left + "px";
+    }
     // Put the last baseline at y.
     const baseline = probe.offsetTop + probe.offsetHeight;
     box.style.top = shot.y * H - baseline + "px";

@@ -19,6 +19,10 @@ import {
   frameDiff,
   hex,
   inkColor,
+  aroundColor,
+  isMark,
+  isMasked,
+  wordArea,
   parseTsv,
   patchOf,
   ppmReader,
@@ -129,15 +133,6 @@ async function ocrSamples(total) {
       background: hex(bg),
       words,
       rules: rules(frame.rgb, frame.width, frame.height),
-      // Big words are drawn as text; everything else is a picture
-      // (the same height as BIG_WORD in @goscreen/motion).
-      visuals: visualsOf(
-        frame.rgb,
-        frame.width,
-        frame.height,
-        bg,
-        words.filter((w) => w.h >= frame.height * 0.03),
-      ),
     });
     emit({ type: "progress", step: "ocr", done: samples.length, total });
   };
@@ -260,8 +255,9 @@ async function visualTracks(samples, grey, info) {
         for (let v = queue.shift(); v; v = queue.shift()) {
           const { x, y, w, h } = v.box;
           const crop = `crop=${w}:${h}:${x}:${y}`;
+          const still = v.kind === "image";
           const file = join(dirname(job.out), v.image);
-          if (v.kind === "image")
+          if (still)
             await run(job.ffmpeg, [
               "-v", "error", "-y", "-ss", String(v.best), "-i", job.video,
               "-frames:v", "1", "-vf", crop, file,
@@ -281,6 +277,44 @@ async function visualTracks(samples, grey, info) {
     );
   }
   return visuals.map(({ best, ...v }) => v);
+}
+
+/**
+ * Second pass over the frames, once the words are known: the pictures of
+ * each sample, with every word the renderer draws left out for as long as it
+ * is on screen, coming in included (blurred, OCR cannot read it yet, and it
+ * rises from below).
+ */
+async function visualSamples(samples, words) {
+  const masked = words.filter((w) => w.masked);
+  const reader = ppmReader();
+  let i = 0;
+  await run(
+    job.ffmpeg,
+    [
+      "-v", "error", "-t", String(MAX_SECONDS), "-i", job.video,
+      "-vf", `fps=${OCR_FPS}`, "-f", "image2pipe", "-vcodec", "ppm", "-",
+    ],
+    {
+      onStdout: (d) => {
+        for (const frame of reader.push(d)) {
+          const s = samples[i++];
+          if (!s) continue;
+          const bg = s.background.match(/\w\w/g).map((h) => parseInt(h, 16));
+          const on = masked.filter((w) => s.t >= w.start - 0.4 && s.t <= w.end + 0.2);
+          s.visuals = visualsOf(frame.rgb, frame.width, frame.height, bg, on.map((w) => wordArea(w.box)));
+          // The colour behind a word, read once it has settled: what hides it
+          // in a picture shown with the text (a card's, not always the background's).
+          for (const w of on)
+            if (!w.around && s.t >= w.settled) {
+              const c = aroundColor(frame.rgb, frame.width, frame.height, wordArea(w.box));
+              if (c) w.around = hex(c);
+            }
+          emit({ type: "progress", step: "pictures", done: i, total: samples.length });
+        }
+      },
+    },
+  );
 }
 
 async function main() {
@@ -319,9 +353,17 @@ async function main() {
       // 1 / OCR_FPS apart, entries and exits last well under a second).
       const from = Math.max(0, Math.floor((track.first - 1) * TIME_FPS));
       const to = Math.min(grey.length, Math.ceil((track.last + 1) * TIME_FPS));
-      return { ...track, ...timing(curve, TIME_FPS, best, { from, to }) };
+      const word = { text: track.text, ...track.box };
+      return {
+        ...track,
+        ...timing(curve, TIME_FPS, best, { from, to }),
+        // Left out of the pictures (the renderer draws it), or a logo's lettering.
+        masked: isMasked(word, info.height),
+        mark: isMark(word),
+      };
     });
 
+    await visualSamples(samples, words);
     const visuals = await visualTracks(samples, grey, info);
 
     const out = {

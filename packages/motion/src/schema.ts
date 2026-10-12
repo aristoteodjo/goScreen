@@ -23,6 +23,8 @@ export const Word = z.object({
   strike: time.optional(),
   /** Faded copies stacked above it, like an echo. */
   echo: z.boolean().default(false),
+  /** Measured left edge: words spaced apart (in chips, columns) keep their place. */
+  x: fraction.optional(),
 });
 
 export const Line = z.object({ words: z.array(Word).min(1) });
@@ -64,6 +66,20 @@ export const VisualPoint = z.object({
 });
 
 /**
+ * A patch drawn over a picture, in the colour around it, while a word that
+ * the renderer draws as text is in it: the text is never seen twice.
+ */
+export const Cover = z.object({
+  x: fraction,
+  y: fraction,
+  w: z.number().positive().max(3),
+  h: z.number().positive().max(3),
+  color: hex,
+  at: time,
+  until: time,
+});
+
+/**
  * A picture placed in a shot: a still image moved along a path, or a clip
  * (a part of the reference that animates inside, like an interface) played
  * from `at`. Its file lives next to the spec, named without any folder.
@@ -87,6 +103,8 @@ export const Visual = z.object({
   fadeOut: z.number().min(0).default(0),
   /** Measured moves; empty = it stays at rest. */
   path: z.array(VisualPoint).default([]),
+  /** Where its words are hidden (frame fractions, they follow its moves). */
+  covers: z.array(Cover).default([]),
 });
 
 /**
@@ -210,6 +228,7 @@ export type Enter = z.infer<typeof Enter>;
 export type Underline = z.infer<typeof Underline>;
 export type Label = z.infer<typeof Label>;
 export type VisualPoint = z.infer<typeof VisualPoint>;
+export type Cover = z.infer<typeof Cover>;
 export type Visual = z.infer<typeof Visual>;
 export type TextShot = z.infer<typeof TextShot>;
 export type PlaceholderShot = z.infer<typeof PlaceholderShot>;

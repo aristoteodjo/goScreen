@@ -16,14 +16,13 @@ export const ObservedWord = z.object({
   start: z.number(),
   settled: z.number(),
   end: z.number(),
+  /** Left out of the pictures the analyser cut: the renderer must draw it. */
+  masked: z.boolean().default(false),
+  /** The lettering of a logo (letters spread apart): part of a picture, not text. */
+  mark: z.boolean().default(false),
+  /** The colour just around it once settled: what hides it in a picture. */
+  around: z.string().nullable().default(null),
 });
-
-/**
- * A word this tall (OCR box, fraction of the frame height) is drawn as text
- * by the renderer, so the analyser leaves it out of the pictures it cuts.
- * analyze.mjs uses the same value.
- */
-export const BIG_WORD = 0.03;
 
 export const ObservedRule = Box.extend({ t: z.number(), color: z.string() });
 

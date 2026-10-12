@@ -332,6 +332,19 @@ export function timing(
   return { start: s(start), settled: s(settled), end: s(end + 1) };
 }
 
+/** A word this tall (fraction of the frame height) is drawn as text by the renderer. */
+export const BIG_WORD = 0.03;
+
+/**
+ * Lettering of a logo rather than text: letters spread far apart (a
+ * wordmark like « R E M A I N »). Text, even in capitals, is about one letter
+ * height wide per letter; such a word stays in the picture it belongs to.
+ */
+export const isMark = (w) => w.text.length >= 3 && w.w / (w.text.length * w.h) > 1.2;
+
+/** A word the renderer draws as text, so the pictures leave it out. */
+export const isMasked = (w, height) => w.h >= height * BIG_WORD && !isMark(w);
+
 // Visual elements: whatever is not the background nor a big word (a logo, an
 // interface, a bullet, a shape). Found on a grid of cells, followed across
 // samples, then cut out of the video as images the renderer can place.
@@ -438,15 +451,11 @@ export function thumbnail(rgb, width, box) {
 }
 
 /**
- * The visual elements of one frame, in pixels: lit cells grouped, big words
- * (drawn as text by the renderer) left out with a small margin.
+ * The visual elements of one frame, in pixels: lit cells grouped, the areas
+ * of `skip` (words drawn as text by the renderer, with their margin) left out.
  */
-export function visualsOf(rgb, width, height, bg, bigWords = []) {
+export function visualsOf(rgb, width, height, bg, skip = []) {
   const cell = Math.max(4, Math.round(width / 240));
-  const skip = bigWords.map((w) => {
-    const m = Math.round(w.h * 0.18);
-    return { x: w.x - m, y: w.y - m, w: w.w + 2 * m, h: w.h + 2 * m };
-  });
   return cellGroups(visualCells(rgb, width, height, bg, { cell, skip }))
     .map((b) => {
       const x = b.x0 * cell;
@@ -528,4 +537,38 @@ export function unionBox(path) {
     w: Math.max(...path.map((b) => b.x + b.w)) - x,
     h: Math.max(...path.map((b) => b.y + b.h)) - y,
   };
+}
+
+/**
+ * The area a word drawn as text takes while it is on screen, its margin
+ * included (it comes in blurred, rising from below): left out of the
+ * pictures the analyser looks for.
+ */
+export const wordArea = (b) => ({
+  x: b.x - b.h * 0.2,
+  y: b.y - b.h * 0.3,
+  w: b.w + b.h * 0.4,
+  h: b.h * 1.9,
+});
+
+/** The colour just around a box (a ring a few pixels outside), median per channel. */
+export function aroundColor(rgb, width, height, box, gap = 3, ring = 4) {
+  const c = [[], [], []];
+  const add = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const i = (Math.floor(y) * width + Math.floor(x)) * 3;
+    for (let k = 0; k < 3; k++) c[k].push(rgb[i + k]);
+  };
+  for (let d = gap; d < gap + ring; d++) {
+    for (let x = box.x - d; x <= box.x + box.w + d; x += 2) {
+      add(x, box.y - d);
+      add(x, box.y + box.h + d);
+    }
+    for (let y = box.y - d; y <= box.y + box.h + d; y += 2) {
+      add(box.x - d, y);
+      add(box.x + box.w + d, y);
+    }
+  }
+  if (!c[0].length) return null;
+  return c.map((v) => v.sort((a, b) => a - b)[Math.floor(v.length / 2)]);
 }

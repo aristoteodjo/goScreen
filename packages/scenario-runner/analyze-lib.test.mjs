@@ -3,7 +3,10 @@ import { test } from "node:test";
 import {
   background,
   cutsFrom,
+  aroundColor,
   editDistance,
+  isMark,
+  isMasked,
   parseTsv,
   ppmReader,
   presence,
@@ -92,7 +95,7 @@ test("visualsOf finds a picture and leaves big words out", () => {
   };
   fill(40, 40, 120, 100, [20, 30, 200]); // a logo
   fill(300, 150, 400, 180, [0, 0, 0]); // a big word, read by OCR
-  const found = visualsOf(rgb, w, h, [255, 255, 255], [{ x: 300, y: 150, w: 100, h: 30 }]);
+  const found = visualsOf(rgb, w, h, [255, 255, 255], [{ x: 295, y: 145, w: 110, h: 40 }]);
   assert.equal(found.length, 1);
   const [v] = found;
   assert.ok(v.x <= 40 && v.y <= 40 && v.x + v.w >= 120 && v.y + v.h >= 100);
@@ -114,4 +117,20 @@ test("trackVisuals follows a moving picture and tells a clip by its changes", ()
   // Somewhere else entirely: another element.
   const apart = [still[0], { t: 0.25, visuals: [{ x: 900, y: 600, w: 200, h: 100, thumb: thumb(40) }] }];
   assert.equal(trackVisuals(apart).length, 2);
+});
+
+test("a spread-out wordmark is a picture, a word of text is masked", () => {
+  assert.equal(isMark({ text: "REMAIN", w: 699, h: 83 }), true);
+  assert.equal(isMark({ text: "REPORTING", w: 560, h: 70 }), false);
+  assert.equal(isMark({ text: "minutes,", w: 446, h: 101 }), false);
+  assert.equal(isMasked({ text: "minutes,", w: 446, h: 101 }, 1080), true);
+  assert.equal(isMasked({ text: "REMAIN", w: 699, h: 83 }, 1080), false);
+  assert.equal(isMasked({ text: "AUDIT", w: 69, h: 19 }, 1080), false);
+});
+
+test("aroundColor reads the colour just around a word (a card's)", () => {
+  const w = 100, h = 60;
+  const rgb = image(w, h, [245, 246, 251]);
+  for (let y = 10; y < 50; y++) for (let x = 10; x < 90; x++) rgb.set([255, 255, 255], (y * w + x) * 3);
+  assert.deepEqual(aroundColor(rgb, w, h, { x: 30, y: 20, w: 40, h: 15 }), [255, 255, 255]);
 });

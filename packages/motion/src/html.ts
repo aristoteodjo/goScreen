@@ -26,7 +26,9 @@ html,body{width:${spec.width}px;height:${spec.height}px;overflow:hidden;backgrou
 .echo{position:absolute;left:0;top:0;pointer-events:none}
 .underline{position:absolute;border-radius:99px}
 .label{position:absolute;font-family:${spec.fonts.text};letter-spacing:-0.02em;white-space:nowrap;line-height:1}
-.visual{position:absolute;display:block;object-fit:fill;transform-origin:50% 50%}
+.visual{position:absolute;transform-origin:50% 50%}
+.media{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:fill}
+.cover{position:absolute}
 .placeholder{position:absolute;inset:auto 0 6% 0;text-align:center;font:500 ${Math.round(spec.height * 0.018)}px ${spec.fonts.mono};letter-spacing:.15em;text-transform:uppercase;color:#8a94a6;opacity:.6}
 </style></head><body><div id="film" data-assets="${assets.replace(/[^A-Za-z0-9:/._~%-]/g, "")}"></div>
 <script type="application/json" id="spec">${json}</script>
