@@ -9,7 +9,10 @@ import {
   presence,
   rules,
   timing,
+  trackVisuals,
   trackWords,
+  unionBox,
+  visualsOf,
 } from "./analyze-lib.mjs";
 
 const image = (w, h, fill) => {
@@ -79,4 +82,36 @@ test("timing reads in, settled and out, within bounds", () => {
   const curve = [0, 0, 0.2, 0.6, 0.9, 1, 1, 1, 0.3, 0];
   assert.deepEqual(timing(curve, 10, 6), { start: 0.2, settled: 0.4, end: 0.8 });
   assert.deepEqual(timing(curve, 10, 6, { from: 3 }), { start: 0.3, settled: 0.4, end: 0.8 });
+});
+
+test("visualsOf finds a picture and leaves big words out", () => {
+  const w = 480, h = 270;
+  const rgb = image(w, h, [255, 255, 255]);
+  const fill = (x0, y0, x1, y1, c) => {
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) rgb.set(c, (y * w + x) * 3);
+  };
+  fill(40, 40, 120, 100, [20, 30, 200]); // a logo
+  fill(300, 150, 400, 180, [0, 0, 0]); // a big word, read by OCR
+  const found = visualsOf(rgb, w, h, [255, 255, 255], [{ x: 300, y: 150, w: 100, h: 30 }]);
+  assert.equal(found.length, 1);
+  const [v] = found;
+  assert.ok(v.x <= 40 && v.y <= 40 && v.x + v.w >= 120 && v.y + v.h >= 100);
+  assert.ok(v.w < 100 && v.h < 80);
+});
+
+test("trackVisuals follows a moving picture and tells a clip by its changes", () => {
+  const thumb = (g) => new Array(64).fill(g);
+  const still = [0, 0.25, 0.5].map((t, i) => ({
+    t,
+    visuals: [{ x: 100 + i * 10, y: 100, w: 200, h: 100, thumb: thumb(40) }],
+  }));
+  const [k] = trackVisuals(still);
+  assert.equal(k.path.length, 3);
+  assert.equal(k.changes, 0);
+  assert.deepEqual(unionBox(k.path), { x: 100, y: 100, w: 220, h: 100 });
+  const anim = still.map((s, i) => ({ ...s, visuals: [{ ...s.visuals[0], thumb: thumb(40 + i * 20) }] }));
+  assert.ok(trackVisuals(anim)[0].changes >= 20);
+  // Somewhere else entirely: another element.
+  const apart = [still[0], { t: 0.25, visuals: [{ x: 900, y: 600, w: 200, h: 100, thumb: thumb(40) }] }];
+  assert.equal(trackVisuals(apart).length, 2);
 });

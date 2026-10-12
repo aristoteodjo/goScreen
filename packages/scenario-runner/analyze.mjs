@@ -5,12 +5,14 @@
 // Facts only: turning them into a motion spec is @goscreen/motion's job.
 //
 // Usage: analyze.mjs <job.json> with { video, ffmpeg, tesseract, out,
-// ocrFps?, timeFps?, lang?, tessdata? }. Progress on stdout, one JSON per line.
+// ocrFps?, timeFps?, lang?, tessdata?, crops? }. With `crops`, every visual
+// element (not a word) is also cut out next to `out`, as `<stem>.visual-N.png`
+// (still) or `.webm` (animated inside). Progress on stdout, one JSON per line.
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   background,
   cutsFrom,
@@ -23,7 +25,10 @@ import {
   presence,
   rules,
   timing,
+  trackVisuals,
   trackWords,
+  unionBox,
+  visualsOf,
 } from "./analyze-lib.mjs";
 
 const emit = (e) => process.stdout.write(`${JSON.stringify(e)}\n`);
@@ -124,6 +129,15 @@ async function ocrSamples(total) {
       background: hex(bg),
       words,
       rules: rules(frame.rgb, frame.width, frame.height),
+      // Big words are drawn as text; everything else is a picture
+      // (the same height as BIG_WORD in @goscreen/motion).
+      visuals: visualsOf(
+        frame.rgb,
+        frame.width,
+        frame.height,
+        bg,
+        words.filter((w) => w.h >= frame.height * 0.03),
+      ),
     });
     emit({ type: "progress", step: "ocr", done: samples.length, total });
   };
@@ -153,6 +167,120 @@ async function ocrSamples(total) {
     rmSync(dir, { recursive: true, force: true });
   }
   return samples.sort((a, b) => a.t - b.t);
+}
+
+const MAX_VISUALS = 160;
+
+/** Presence over time of a box of the source, from the small grey frames. */
+function presenceTiming(grey, info, box, settledAt, first, last, bgHex) {
+  const sx = SMALL.width / info.width;
+  const sy = SMALL.height / info.height;
+  const small = {
+    x: Math.max(0, Math.floor(box.x * sx)),
+    y: Math.max(0, Math.floor(box.y * sy)),
+    w: Math.max(1, Math.ceil(box.w * sx)),
+    h: Math.max(1, Math.ceil(box.h * sy)),
+  };
+  small.w = Math.min(small.w, SMALL.width - small.x);
+  small.h = Math.min(small.h, SMALL.height - small.y);
+  const best = Math.min(grey.length - 1, Math.round(settledAt * TIME_FPS));
+  const ref = patchOf(grey[best], SMALL.width, small);
+  const c = bgHex.match(/\w\w/g).map((h) => parseInt(h, 16));
+  const bgGrey = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  const curve = grey.map((f) => presence(patchOf(f, SMALL.width, small), ref, bgGrey));
+  const from = Math.max(0, Math.floor((first - 1) * TIME_FPS));
+  const to = Math.min(grey.length, Math.ceil((last + 1) * TIME_FPS));
+  return timing(curve, TIME_FPS, best, { from, to });
+}
+
+/**
+ * How much a track may change inside before it is replayed as a clip; a long
+ * one (dark, low contrast) is a clip at the first sign of movement.
+ */
+const CLIP_CHANGES = 12;
+const LONG_CLIP_CHANGES = 4;
+const isClip = (k) =>
+  k.path.length >= 3 &&
+  (k.changes > CLIP_CHANGES || (k.path.length >= 2 * OCR_FPS && k.changes > LONG_CLIP_CHANGES));
+
+/**
+ * Visual elements followed across the samples, timed like the words. A still
+ * one (a logo, a bullet) becomes an image that moves along its measured path;
+ * one that animates inside (an interface) a clip of its area. With
+ * `job.crops`, both are cut out of the video next to `out`.
+ */
+async function visualTracks(samples, grey, info) {
+  const area = info.width * info.height;
+  const tracks = trackVisuals(samples)
+    // Seen once and small: noise, or a frame of a transition.
+    .filter((k) => k.path.length >= 2 || k.box.w * k.box.h > area * 0.01)
+    .sort((a, b) => (b.last - b.first + 0.25) * Math.sqrt(b.box.w * b.box.h) -
+      (a.last - a.first + 0.25) * Math.sqrt(a.box.w * a.box.h))
+    .slice(0, MAX_VISUALS)
+    .sort((a, b) => a.first - b.first);
+  const stem = basename(job.out).replace(/\.observations\.json$/, "").replace(/\.json$/, "");
+  // A small margin keeps soft edges (shadows, antialiasing).
+  const pad = (b, m = 4) => {
+    const x = Math.max(0, b.x - m);
+    const y = Math.max(0, b.y - m);
+    // Even sizes: the clip encoder needs them.
+    const w = Math.min(info.width - x, b.w + 2 * m) & ~1;
+    const h = Math.min(info.height - y, b.h + 2 * m) & ~1;
+    return { x, y, w, h };
+  };
+  const visuals = tracks.map((k, i) => {
+    const sample = samples.find((s) => s.t === k.best);
+    const t = presenceTiming(grey, info, k.box, k.best, k.first, k.last, sample?.background ?? "#ffffff");
+    const clip = isClip(k);
+    const start = Math.min(t.start, k.first);
+    const end = Math.max(t.end, k.last + 0.5 / OCR_FPS);
+    return {
+      kind: clip ? "clip" : "image",
+      image: job.crops ? `${stem}.visual-${i + 1}.${clip ? "webm" : "png"}` : null,
+      // A clip holds every place the element goes; an image its picture at rest.
+      box: pad(clip ? unionBox(k.path) : k.box),
+      best: k.best,
+      // Seen before its presence rose: it moved in rather than faded in.
+      start,
+      settled: Math.max(t.settled, start),
+      end,
+      changes: Math.round(k.changes * 10) / 10,
+      path: k.path,
+    };
+  });
+  if (job.crops) {
+    // The pictures of an earlier analysis go: their numbers no longer match.
+    for (const f of readdirSync(dirname(job.out)))
+      if (f.startsWith(`${stem}.visual-`)) rmSync(join(dirname(job.out), f), { force: true });
+    let done = 0;
+    const queue = [...visuals];
+    const limit = Math.max(1, availableParallelism() - 2);
+    await Promise.all(
+      Array.from({ length: limit }, async () => {
+        for (let v = queue.shift(); v; v = queue.shift()) {
+          const { x, y, w, h } = v.box;
+          const crop = `crop=${w}:${h}:${x}:${y}`;
+          const file = join(dirname(job.out), v.image);
+          if (v.kind === "image")
+            await run(job.ffmpeg, [
+              "-v", "error", "-y", "-ss", String(v.best), "-i", job.video,
+              "-frames:v", "1", "-vf", crop, file,
+            ]);
+          else
+            // VP9: what every Chromium plays; a key frame every half second
+            // so the renderer's seeks stay quick.
+            await run(job.ffmpeg, [
+              "-v", "error", "-y", "-ss", String(v.start), "-t", String(v.end - v.start),
+              "-i", job.video, "-an", "-vf", crop,
+              "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "28", "-deadline", "good",
+              "-cpu-used", "4", "-row-mt", "1", "-g", "15", file,
+            ]);
+          emit({ type: "progress", step: "crops", done: ++done, total: visuals.length });
+        }
+      }),
+    );
+  }
+  return visuals.map(({ best, ...v }) => v);
 }
 
 async function main() {
@@ -194,6 +322,8 @@ async function main() {
       return { ...track, ...timing(curve, TIME_FPS, best, { from, to }) };
     });
 
+    const visuals = await visualTracks(samples, grey, info);
+
     const out = {
       version: 1,
       source: job.video,
@@ -203,6 +333,7 @@ async function main() {
       backgrounds: samples.map((s) => ({ t: s.t, color: s.background })),
       rules: samples.flatMap((s) => s.rules.map((r) => ({ t: s.t, ...r }))),
       words: words.sort((a, b) => a.start - b.start || a.box.x - b.box.x),
+      visuals,
     };
     writeFileSync(job.out, JSON.stringify(out, null, 1));
     emit({ type: "done", file: job.out, words: out.words.length, cuts: cuts.length });

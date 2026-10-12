@@ -172,3 +172,29 @@ export function composeArgs({ fps, out, transparent }, os = process.platform) {
 /** The file extension a composition gets. */
 export const composeExt = (transparent, os = process.platform) =>
   !transparent ? "mp4" : os === "darwin" ? "mov" : "webm";
+
+/**
+ * The file a composition asks for at http://goscreen.assets/<name>: a plain
+ * file name (no folder, no hidden file) of a picture or a clip, else null.
+ */
+export function assetName(url) {
+  const prefix = "http://goscreen.assets/";
+  if (!url.startsWith(prefix)) return null;
+  let name;
+  try {
+    name = decodeURIComponent(url.slice(prefix.length).split(/[?#]/)[0]);
+  } catch {
+    return null;
+  }
+  return /^[A-Za-z0-9_-][A-Za-z0-9._-]*\.(png|jpe?g|webp|webm|mp4)$/i.test(name) ? name : null;
+}
+
+/** The bytes an HTTP `Range: bytes=a-b` header asks for, within `size`; null for all. */
+export function byteRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header ?? "");
+  if (!m || (!m[1] && !m[2]) || size === 0) return null;
+  // `bytes=-n`: the last n bytes.
+  const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+  const end = m[1] && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1;
+  return start <= end && start < size ? { start, end } : null;
+}

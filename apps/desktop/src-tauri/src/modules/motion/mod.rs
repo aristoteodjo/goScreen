@@ -1,6 +1,7 @@
 //! Reference videos to rebuild: each one gets a folder in
 //! `<Videos>/goScreen/References/<id>/` with `reference.json` (the source),
-//! the analyser's measurements (`*.observations.json`), the motion spec the
+//! the analyser's measurements (`*.observations.json`) with the pictures and
+//! clips it cut out of the video (`reference.visual-N.png|webm`), the motion spec the
 //! studio or an AI writes (`spec.json`) and its renderings (`render-N.mp4`).
 //! Node runs the analyser and the renderer (`packages/scenario-runner`); their
 //! progress becomes `motion-progress` events. The studio sends ids and file
@@ -277,6 +278,9 @@ pub fn motion_analyze(app: AppHandle, state: State<'_, MotionState>, id: String,
         "ffmpeg": ffmpeg.to_string_lossy(),
         "tesseract": tesseract.to_string_lossy(),
         "out": dir.join(&file).to_string_lossy(),
+        // The reference's pictures and clips are cut out, to be placed in its
+        // renderings; a rendering is only measured.
+        "crops": video == "reference",
     });
     // French and English when the reading pack is installed (accents).
     if let Some(data) = local_ai::tessdata() {
@@ -319,6 +323,8 @@ pub fn motion_render(
         "transparent": false,
         "out": dir.join(&file).to_string_lossy(),
         "ffmpeg": ffmpeg.to_string_lossy(),
+        // The spec's visuals, served by name from the reference's folder.
+        "assets": dir.to_string_lossy(),
     });
     run_script(&app, &state, "compose.mjs", job)?;
     Ok(file)

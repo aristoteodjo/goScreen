@@ -343,6 +343,18 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
 - `@goscreen/motion` (pur, testé) : `specFromObservations` (plans entre les coupes, lignes, taille, accent,
   barré, sans IA) -> `specHtml` (une page autonome, une Web Animation par élément, rendue par `compose.mjs`) ->
   `measureShots` + `fidelity` (le rendu repasse par le même analyseur : on compare des mesures entre elles).
+- **Éléments visuels** (tout ce qui n'est ni un mot ni le fond : interface, logo, puce, forme). L'analyseur
+  (`visualsOf`, `trackVisuals`) trouve sur une grille les cellules qui diffèrent du fond, sans les gros mots
+  (`BIG_WORD`, dessinés en texte), et les suit d'un échantillon à l'autre. Un élément stable devient une image
+  (`reference.visual-N.png`) qui suit sa trajectoire mesurée (centre, échelle, bord de cadre compris) ; un élément
+  qui s'anime à l'intérieur (une interface) devient un **clip** VP9 de sa zone (`.webm`, une image clé par demi-seconde).
+  Dans la spec : `shot.visuals` (derrière le texte ; dans un plan texte, ce qui touche ses mots ou ressemble à son
+  soulignement est écarté) et, pour les plans non textuels, `labels` (leurs gros mots, en texte à leur place).
+  `compose.mjs` sert ces fichiers par nom seulement (`http://goscreen.assets/<nom>`, `assetName`, avec `Range`
+  pour les clips) et attend que chaque clip ait l'image voulue avant la capture (`__goscreenSeek`). Les plans
+  non textuels sont notés sur leurs images (`visuals` : part des éléments de la référence retrouvés au même
+  endroit et au même moment). Limite : un mot de logo lu par l'OCR (« REMAIN ») part en texte, pas dans l'image.
+  Une référence mesurée avant cette version doit être ré-analysée pour avoir ses images.
 - **Relecture** (`review.ts`) : une IA regarde une image par plan et corrige ce que l'OCR ne sait pas (texte
   exact, accents, mots mis en avant ou barrés, nature d'un plan qui n'est pas du texte). Le minutage et la mise
   en page restent mesurés, l'IA ne les invente jamais. Même contrat (`ShotReview`) pour tous les modèles.

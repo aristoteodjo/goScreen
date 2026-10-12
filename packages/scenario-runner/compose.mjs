@@ -4,12 +4,15 @@
 // result is exact and the same on every run (the HyperFrames way).
 //
 // Usage: compose.mjs <job.json> with { html, width, height, fps, duration,
-// transparent, out, ffmpeg }. Progress on stdout, one JSON per line.
+// transparent, out, ffmpeg, assets? }. With `assets` (a folder), the page may
+// load the pictures and clips of that folder, by name only, from
+// http://goscreen.assets/<name>; nothing else. Progress on stdout, one JSON per line.
 
 import { spawn } from "node:child_process";
 import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright-core";
-import { composeArgs, framesFor } from "./lib.mjs";
+import { assetName, byteRange, composeArgs, framesFor } from "./lib.mjs";
 
 const emit = (e) => process.stdout.write(`${JSON.stringify(e)}\n`);
 const job = JSON.parse(readFileSync(process.argv[2], "utf8"));
@@ -22,14 +25,17 @@ async function launch() {
   }
 }
 
-// Runs in the page: every animation at `t` seconds; a page may also listen.
+// Runs in the page: every animation at `t` seconds; a page may also listen
+// (and return a promise: its clips are sought before the screenshot).
 function seek(t) {
   for (const a of document.getAnimations()) {
     a.pause();
     a.currentTime = t * 1000;
   }
-  window.__goscreenSeek?.(t);
+  return window.__goscreenSeek?.(t);
 }
+
+const TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", webm: "video/webm", mp4: "video/mp4" };
 
 async function main() {
   const browser = await launch();
@@ -39,8 +45,31 @@ async function main() {
       viewport: { width: job.width, height: job.height },
       deviceScaleFactor: 1,
     });
-    // Only the composition: no network (blocks are self-contained).
-    await page.route("**/*", (route) => route.abort());
+    // Only the composition: no network (blocks are self-contained), except
+    // the files of `assets`, by name.
+    await page.route("**/*", (route) => {
+      const name = job.assets ? assetName(route.request().url()) : null;
+      if (!name) return route.abort();
+      let body;
+      try {
+        body = readFileSync(join(job.assets, name));
+      } catch {
+        return route.fulfill({ status: 404, body: "" });
+      }
+      const contentType = TYPES[name.split(".").pop().toLowerCase()];
+      // A clip is sought frame by frame: Chrome asks for byte ranges.
+      const range = byteRange(route.request().headers().range, body.length);
+      if (!range) return route.fulfill({ status: 200, body, contentType, headers: { "Accept-Ranges": "bytes" } });
+      return route.fulfill({
+        status: 206,
+        body: body.subarray(range.start, range.end + 1),
+        contentType,
+        headers: {
+          "Accept-Ranges": "bytes",
+          "Content-Range": `bytes ${range.start}-${range.end}/${body.length}`,
+        },
+      });
+    });
     await page.setContent(job.html, { waitUntil: "load" });
     await page.evaluate(() => document.fonts?.ready);
     // A page that builds its animations from script says when it is done.

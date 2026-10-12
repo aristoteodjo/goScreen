@@ -786,6 +786,9 @@ function Measures({ score: m }: { score: ShotScore }) {
     ["Size gap", `${(m.size * 100).toFixed(0)} %`],
     ["Colour gap", `${(m.color * 100).toFixed(0)} %`],
   ];
+  // Reports written before pictures were measured have no such field.
+  if (typeof m.refVisuals === "number")
+    items.push(["Pictures found", m.refVisuals ? `${pct(m.visuals)} of ${m.refVisuals}` : "none"]);
   return (
     <section className="flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center gap-2">
@@ -793,7 +796,7 @@ function Measures({ score: m }: { score: ShotScore }) {
         <h3 className="text-xs font-medium">Rendering: {pct(m.fidelity)} faithful</h3>
         <span className="text-[11px] text-muted-foreground">passes at {pct(FIDELITY_PASS)}</span>
       </div>
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-6 gap-2">
         {items.map(([label, value]) => (
           <div key={label}>
             <div className="text-xs tabular-nums">{value}</div>

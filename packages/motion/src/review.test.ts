@@ -11,6 +11,7 @@ const shot: TextShot = {
   ] }],
   enter: { y: 0.35, blur: 0.12, duration: 0.35, ease: [0.22, 1, 0.36, 1] },
   exit: "cut",
+  visuals: [],
 };
 
 describe("applyReview", () => {

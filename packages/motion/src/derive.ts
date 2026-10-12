@@ -1,10 +1,21 @@
+import { BIG_WORD } from "./observations.ts";
 import type {
   Box,
   Observations,
   ObservedRule,
+  ObservedVisual,
   ObservedWord,
 } from "./observations.ts";
-import type { Line, MotionSpec, Shot, TextShot, Word } from "./schema.ts";
+import type {
+  Label,
+  Line,
+  MotionSpec,
+  Shot,
+  TextShot,
+  Visual,
+  VisualPoint,
+  Word,
+} from "./schema.ts";
 
 // From measurements to a first motion spec, without any AI: shots between the
 // cuts, text shots where words come and go together, lines by height, font
@@ -221,6 +232,7 @@ function textShot(
     lines,
     enter: { y: 0.35, blur: 0.12, duration: 0.35, ease: [0.22, 1, 0.36, 1] },
     exit,
+    visuals: [],
   };
   if (kickerRow)
     shot.kicker = {
@@ -238,6 +250,130 @@ function textShot(
     };
   }
   return shot;
+}
+
+/** A visual's path as the renderer reads it: centre and scale, edges undone. */
+export function visualPath(
+  v: ObservedVisual,
+  width: number,
+  height: number,
+): VisualPoint[] {
+  if (v.kind === "clip" || v.path.length < 2) return [];
+  // The picture at rest (the analyser cut it with a 4 px margin).
+  const rest = v.path.reduce((a, p) =>
+    Math.abs(p.w * p.h - (v.box.w - 8) * (v.box.h - 8)) <
+    Math.abs(a.w * a.h - (v.box.w - 8) * (v.box.h - 8))
+      ? p
+      : a,
+  );
+  const points = v.path.map((p): VisualPoint => {
+    // Cut by an edge of the frame (coming in, going out): its size is the
+    // other side's, and it hangs from the edge that is not cut.
+    const cutX = (p.x <= 1 || p.x + p.w >= width - 1) && p.w < rest.w * 0.97;
+    const cutY = (p.y <= 1 || p.y + p.h >= height - 1) && p.h < rest.h * 0.97;
+    const scale = cutX && cutY ? 1 : cutX ? p.h / rest.h : cutY ? p.w / rest.w : (p.w / rest.w + p.h / rest.h) / 2;
+    const w = rest.w * scale;
+    const h = rest.h * scale;
+    const x = cutX && p.x <= 1 ? p.x + p.w - w : p.x;
+    const y = cutY && p.y <= 1 ? p.y + p.h - h : p.y;
+    return {
+      t: round(p.t),
+      x: round((x + w / 2) / width, 10000),
+      y: round((y + h / 2) / height, 10000),
+      scale: round(scale, 1000),
+    };
+  });
+  // Only the points where it moved; none at all if it never did.
+  const kept = [points[0]];
+  for (const p of points.slice(1)) {
+    const q = kept[kept.length - 1];
+    if (Math.hypot(p.x - q.x, p.y - q.y) > 0.004 || Math.abs(p.scale - q.scale) > 0.015) kept.push(p);
+  }
+  const last = points[points.length - 1];
+  if (kept[kept.length - 1] !== last) kept.push(last);
+  const centre = { x: (rest.x + rest.w / 2) / width, y: (rest.y + rest.h / 2) / height };
+  const still = kept.every(
+    (p) => Math.hypot(p.x - centre.x, p.y - centre.y) < 0.006 && Math.abs(p.scale - 1) < 0.03,
+  );
+  return still ? [] : kept;
+}
+
+/**
+ * The pictures of a shot, from the visuals the analyser cut out. In a text
+ * shot, what overlaps its words is the text itself (blurred while it comes
+ * in, a label) and the thin coloured lines are its underline or strikes:
+ * the renderer draws those, so only what is around the text stays.
+ */
+export function visualsFor(
+  obs: Observations,
+  start: number,
+  end: number,
+  words: ObservedWord[] | null,
+): Visual[] {
+  const { width: W, height: H } = obs;
+  return obs.visuals
+    .filter((v) => v.image && v.start < end && v.end > start)
+    // A flash of a transition, seen once.
+    .filter((v) => v.path.length >= 2 || v.end - v.start >= 0.3)
+    .filter(
+      (v) =>
+        !words ||
+        (!words.some((w) => overlap(v.box, w.box) > 0.3) &&
+          !(v.box.h <= H * 0.025 && v.box.w > W * 0.03)),
+    )
+    // The biggest behind.
+    .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h)
+    .map((v): Visual => {
+      const path = visualPath(v, W, H);
+      const fadeIn = path.length ? 0 : Math.min(1, Math.max(0, v.settled - v.start));
+      return {
+        kind: v.kind,
+        src: v.image as string,
+        x: round(v.box.x / W, 10000),
+        y: round(v.box.y / H, 10000),
+        w: round(v.box.w / W, 10000),
+        h: round(v.box.h / H, 10000),
+        at: round(v.start),
+        fadeIn: round(fadeIn),
+        until: round(Math.max(v.end, v.start + 0.05)),
+        // Leaves before the cut: it went away on its own, softly.
+        fadeOut: v.end < end - 0.1 ? 0.15 : 0,
+        path,
+      };
+    });
+}
+
+/**
+ * The big words of a shot that is not kinetic text: the pictures were cut
+ * without them, so they are drawn as text at their measured place. A word
+ * inside a picture is already in it (a figure on a dashboard).
+ */
+export function labelsFor(
+  obs: Observations,
+  words: ObservedWord[],
+  visuals: Visual[],
+): Label[] {
+  const { width: W, height: H } = obs;
+  const bg = at(obs.backgrounds, words[0]?.settled ?? 0);
+  return words
+    .filter((w) => w.box.h >= H * BIG_WORD)
+    .filter(
+      (w) =>
+        !visuals.some(
+          (v) => overlap({ x: v.x * W, y: v.y * H, w: v.w * W, h: v.h * H }, w.box) > 0.5,
+        ),
+    )
+    .map((w) => ({
+      text: w.text,
+      x: round(w.box.x / W, 10000),
+      y: round(baselineOf([w]) / H, 10000),
+      size: round(fontSizeOf([w]) / H, 10000),
+      color: w.color ?? inkOf([w], bg),
+      weight: 600,
+      at: round(w.start),
+      fadeIn: round(Math.min(0.6, Math.max(0, w.settled - w.start))),
+      until: round(Math.max(w.end, w.start + 0.05)),
+    }));
 }
 
 /**
@@ -265,13 +401,16 @@ export function specFromObservations(obs: Observations): MotionSpec {
     });
     const groups = groupByTime(inside);
     if (!groups.length || !isKineticText(groups, obs.height)) {
+      const visuals = visualsFor(obs, from, to, null);
       shots.push({
         kind: "placeholder",
         id: `shot-${shots.length + 1}`,
         start: round(from),
         end: round(to),
         background: at(obs.backgrounds, (from + to) / 2),
-        label: groups.length ? "interface" : "",
+        label: groups.length ? "interface" : visuals.length ? "picture" : "",
+        visuals,
+        labels: labelsFor(obs, inside, visuals),
       });
       continue;
     }
@@ -279,17 +418,19 @@ export function specFromObservations(obs: Observations): MotionSpec {
       const start = k === 0 ? from : Math.max(...groups[k - 1].map((w) => w.end));
       const end =
         k === groups.length - 1 ? to : Math.max(...g.map((w) => w.end));
-      shots.push(
-        textShot(
-          `shot-${shots.length + 1}`,
-          g,
-          obs.rules,
-          obs,
-          start,
-          Math.max(end, start + 0.1),
-          k === groups.length - 1 ? "cut" : "blur",
-        ),
+      const shot = textShot(
+        `shot-${shots.length + 1}`,
+        g,
+        obs.rules,
+        obs,
+        start,
+        Math.max(end, start + 0.1),
+        k === groups.length - 1 ? "cut" : "blur",
       );
+      // Every word of the cut, not only this group's: a word in transit
+      // belongs to the text, whichever group it ends up in.
+      shot.visuals = visualsFor(obs, shot.start, shot.end, inside);
+      shots.push(shot);
     });
   }
   return {

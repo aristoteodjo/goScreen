@@ -1,6 +1,8 @@
 // The script of a rendered spec (see html.ts). It builds the DOM from the spec
 // and one Web Animation per moving part, measured once the fonts are in, so
 // any frame can be drawn by seeking `document.getAnimations()` (compose.mjs).
+// Clips are videos: `__goscreenSeek(t)` seeks each one and resolves once its
+// frame is there.
 // Kept as plain JavaScript in a string: it runs in a sandboxed page, never in
 // the app, and must not depend on how the app is bundled.
 
@@ -33,6 +35,69 @@ window.__goscreenReady = document.fonts.ready.then(() => {
   };
 
   let lastLine = null; // the previous underline, so the next one grows from it
+
+  const assets = root.dataset.assets || "";
+  const loads = [];
+  const clips = [];
+  const offset = (t) => Math.max(0, Math.min(1, (t * 1000) / D));
+  // Opacity over the whole film: 0, fade in from \`at\`, 1, fade out to \`until\`.
+  const fades = (node, from, fadeIn, to, fadeOut) => {
+    const a = offset(from), b = Math.max(a, offset(from + fadeIn));
+    const d = offset(to), c = Math.max(b, Math.min(d, offset(to - fadeOut)));
+    animate(node, [
+      { opacity: fadeIn > 0 ? 0 : 1, offset: 0 },
+      { opacity: fadeIn > 0 ? 0 : 1, offset: a },
+      { opacity: 1, offset: b },
+      { opacity: 1, offset: c },
+      { opacity: fadeOut > 0 ? 0 : 1, offset: d },
+      { opacity: fadeOut > 0 ? 0 : 1, offset: 1 },
+    ], { duration: D, easing: "linear" });
+  };
+  // Sets the source and resolves once the picture (or a clip's first frame) is in.
+  const load = (node, name) => new Promise((resolve, reject) => {
+    const fail = () => reject(new Error("Could not load " + name));
+    const timer = setTimeout(fail, 20000);
+    const ok = () => { clearTimeout(timer); resolve(); };
+    if (node.tagName === "VIDEO") {
+      node.addEventListener("loadeddata", ok, { once: true });
+      node.addEventListener("error", fail, { once: true });
+      node.src = assets + encodeURIComponent(name);
+    } else {
+      node.src = assets + encodeURIComponent(name);
+      node.decode().then(ok, fail);
+    }
+  });
+
+  const visual = (v, shot, frame) => {
+    const node = el(v.kind === "clip" ? "video" : "img", "visual", frame);
+    const left = v.x * W, top = v.y * H, w = v.w * W, h = v.h * H;
+    // Soft edges, except where it touches the frame (it would show a seam).
+    const f = Math.max(2, Math.min(w, h) * 0.02);
+    const edge = (near) => (near ? "0px" : f + "px");
+    const fx = "linear-gradient(90deg,transparent,#000 " + edge(left <= 1) + ",#000 calc(100% - " + edge(left + w >= W - 1) + "),transparent)";
+    const fy = "linear-gradient(180deg,transparent,#000 " + edge(top <= 1) + ",#000 calc(100% - " + edge(top + h >= H - 1) + "),transparent)";
+    node.style.cssText = "left:" + left + "px;top:" + top + "px;width:" + w + "px;height:" + h + "px;" +
+      "-webkit-mask-image:" + fx + "," + fy + ";-webkit-mask-composite:source-in;mask-image:" + fx + "," + fy + ";mask-composite:intersect";
+    if (v.kind === "clip") {
+      node.muted = true;
+      node.playsInline = true;
+      node.preload = "auto";
+      clips.push({ node, at: v.at, until: v.until });
+    }
+    loads.push(load(node, v.src));
+    window_(node, Math.max(v.at, shot.start), Math.min(v.until, shot.end));
+    fades(node, v.at, v.fadeIn, v.until, v.fadeOut);
+    if (v.path.length) {
+      const cx = left + w / 2, cy = top + h / 2;
+      const at = (p) => "translate(" + (p.x * W - cx) + "px," + (p.y * H - cy) + "px) scale(" + p.scale + ")";
+      const first = v.path[0], last = v.path[v.path.length - 1];
+      animate(node, [
+        { transform: at(first), offset: 0 },
+        ...v.path.map((p) => ({ transform: at(p), offset: offset(p.t) })),
+        { transform: at(last), offset: 1 },
+      ], { duration: D, easing: "linear" });
+    }
+  };
 
   const textShot = (shot, frame) => {
     const px = shot.size * H;
@@ -126,19 +191,50 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     }
   };
 
+  // A word of a slide: still, at its measured baseline.
+  const label = (l, shot, frame) => {
+    const px = l.size * H;
+    const node = el("div", "label", frame);
+    node.style.cssText = "left:" + l.x * W + "px;font-size:" + px + "px;font-weight:" + l.weight + ";color:" + l.color;
+    node.textContent = l.text;
+    const probe = el("span", "probe", node);
+    node.style.top = l.y * H - (probe.offsetTop + probe.offsetHeight) + "px";
+    window_(node, Math.max(l.at, shot.start), Math.min(l.until, shot.end));
+    fades(node, l.at, l.fadeIn, l.until, 0);
+  };
+
   for (const shot of spec.shots) {
     const frame = el("div", "shot", root);
     frame.style.background = shot.background;
     window_(frame, shot.start, shot.end);
+    // Pictures first: the text is drawn over them.
+    for (const v of shot.visuals || []) visual(v, shot, frame);
     if (shot.kind === "text") textShot(shot, frame);
     else {
       lastLine = null;
-      const label = el("div", "placeholder", frame);
-      label.textContent = shot.label;
+      for (const l of shot.labels || []) label(l, shot, frame);
+      if (!(shot.visuals || []).length && !(shot.labels || []).length) {
+        const label = el("div", "placeholder", frame);
+        label.textContent = shot.label;
+      }
     }
   }
   // Paused at 0 until someone plays or seeks (compose.mjs, the preview).
   for (const a of anims) { a.pause(); a.currentTime = 0; }
   window.__goscreenAnimations = anims;
+
+  // A clip shows its frame at t - at; only the ones on screen are sought.
+  const seekClip = (node, time) => new Promise((resolve) => {
+    if (Math.abs(node.currentTime - time) < 0.001 || !(node.duration > 0)) return resolve();
+    const timer = setTimeout(resolve, 3000);
+    node.addEventListener("seeked", () => { clearTimeout(timer); resolve(); }, { once: true });
+    node.currentTime = time;
+  });
+  window.__goscreenSeek = (t) => Promise.all(
+    clips
+      .filter((c) => t >= c.at && t < c.until)
+      .map((c) => seekClip(c.node, Math.max(0, Math.min(c.node.duration - 0.001, t - c.at)))),
+  );
+  return Promise.all(loads);
 });
 `;

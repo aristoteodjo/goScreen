@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASSET_BASE,
   cleanWords,
+  labelsFor,
+  visualPath,
+  visualsFor,
   fidelity,
   measureShots,
   type Observations,
+  type ObservedVisual,
   type ObservedWord,
   parseMotionSpec,
   specFromObservations,
@@ -33,6 +38,7 @@ const obs = (words: ObservedWord[], extra: Partial<Observations> = {}): Observat
   backgrounds: [{ t: 0, color: "#ffffff" }, { t: 3, color: "#0b0f19" }],
   rules: [{ t: 0.5, x: 190, y: 657, w: 1100, h: 6, color: "#1b4dff" }],
   words,
+  visuals: [],
   ...extra,
 });
 
@@ -111,3 +117,83 @@ describe("specHtml", () => {
     expect(html).toContain("\\u003c/script>");
   });
 });
+
+const visual = (extra: Partial<ObservedVisual> = {}): ObservedVisual => ({
+  kind: "image",
+  image: "reference.visual-1.png",
+  box: { x: 1500, y: 100, w: 208, h: 108 },
+  start: 0.2,
+  settled: 0.5,
+  end: 1.6,
+  changes: 0,
+  path: [
+    { t: 0.25, x: 1504, y: 104, w: 200, h: 100 },
+    { t: 0.5, x: 1504, y: 104, w: 200, h: 100 },
+  ],
+  ...extra,
+});
+
+describe("visuals", () => {
+  it("keeps a picture beside the text, not the text itself nor its underline", () => {
+    const words = [word("Chaque", 197, 0.15)];
+    const o = obs(words, {
+      visuals: [
+        visual(),
+        // The word while it comes in, blurred: OCR could not read it.
+        visual({ image: "reference.visual-2.png", box: { x: 190, y: 540, w: 520, h: 140 } }),
+        // The underline.
+        visual({ image: "reference.visual-3.png", box: { x: 190, y: 655, w: 1100, h: 10 } }),
+      ],
+    });
+    const found = visualsFor(o, 0, 2, words);
+    expect(found.map((v) => v.src)).toEqual(["reference.visual-1.png"]);
+    expect(found[0]).toMatchObject({ x: 0.7813, y: 0.0926, at: 0.2, fadeIn: 0.3, until: 1.6, path: [] });
+    const spec = specFromObservations(o);
+    expect(spec.shots[0].visuals).toHaveLength(1);
+  });
+
+  it("follows a picture that slides in from the left edge", () => {
+    const v = visual({
+      path: [
+        { t: 0, x: 0, y: 104, w: 100, h: 100 },
+        { t: 0.25, x: 0, y: 104, w: 200, h: 100 },
+        { t: 0.5, x: 300, y: 104, w: 200, h: 100 },
+        { t: 0.75, x: 300, y: 104, w: 200, h: 100 },
+      ],
+    });
+    const path = visualPath(v, 1920, 1080);
+    // Half of it out of the frame: its centre is at the edge, full size.
+    expect(path[0]).toMatchObject({ t: 0, x: 0, scale: 1 });
+    expect(path.at(-1)).toMatchObject({ x: round4(400 / 1920), scale: 1 });
+    expect(visualPath(visual(), 1920, 1080)).toEqual([]);
+    expect(visualPath(visual({ kind: "clip" }), 1920, 1080)).toEqual([]);
+  });
+
+  it("draws the big words of a slide as labels, unless a picture holds them", () => {
+    const words = [word("Audit", 197, 0.15), word("1281", 1550, 0.15, { box: { x: 1550, y: 130, w: 100, h: 50 } })];
+    const o = obs(words, { visuals: [visual()] });
+    const pictures = visualsFor(o, 0, 2, null);
+    expect(labelsFor(o, words, pictures).map((l) => l.text)).toEqual(["Audit"]);
+  });
+
+  it("renders pictures from the assets, and clips as videos", () => {
+    const o = obs([], { visuals: [visual(), visual({ kind: "clip", image: "reference.visual-2.webm" })], cuts: [] });
+    const spec = specFromObservations(o);
+    expect(spec.shots[0]).toMatchObject({ kind: "placeholder", label: "picture" });
+    const html = specHtml(spec);
+    expect(html).toContain(`data-assets="${ASSET_BASE}"`);
+    expect(html).toContain("reference.visual-2.webm");
+    expect(parseMotionSpec({ ...spec, shots: [{ ...spec.shots[0], visuals: [{ ...spec.shots[0].visuals[0], src: "../x.png" }] }] }).ok).toBe(false);
+  });
+
+  it("measures the pictures a rendering shows", () => {
+    const ref = obs([], { visuals: [visual()], cuts: [] });
+    const spec = specFromObservations(ref);
+    expect(measureShots(spec, ref, ref)[0]).toMatchObject({ kind: "placeholder", refVisuals: 1, visuals: 1 });
+    const [m] = measureShots(spec, ref, { ...ref, visuals: [] });
+    expect(m.visuals).toBe(0);
+    expect(fidelity(m)).toBe(0);
+  });
+});
+
+const round4 = (n: number) => Math.round(n * 10000) / 10000;

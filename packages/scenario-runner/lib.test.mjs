@@ -15,6 +15,8 @@ import {
   needsCode,
   sceneEvent,
   videoSize,
+  assetName,
+  byteRange,
 } from "./lib.mjs";
 
 test("a constant-rate take holds one frame per tick of wall time", () => {
@@ -139,4 +141,27 @@ test("compositions keep their transparency per platform", () => {
   assert.equal(composeExt(false, "darwin"), "mp4");
   assert.equal(framesFor(2, 30), 60);
   assert.equal(framesFor(0, 30), 1);
+});
+
+test("assetName only lets plain picture and clip names through", () => {
+  assert.equal(assetName("http://goscreen.assets/reference.visual-3.png"), "reference.visual-3.png");
+  assert.equal(assetName("http://goscreen.assets/a%20b.png"), null);
+  for (const bad of [
+    "http://goscreen.assets/..%2Fspec.json",
+    "http://goscreen.assets/%2Fetc%2Fpasswd.png",
+    "http://goscreen.assets/.hidden.png",
+    "http://goscreen.assets/spec.json",
+    "http://example.com/x.png",
+    "http://goscreen.assets/%E0%A4%A.png",
+  ])
+    assert.equal(assetName(bad), null, bad);
+});
+
+test("byteRange reads what a video element asks for", () => {
+  assert.deepEqual(byteRange("bytes=0-", 100), { start: 0, end: 99 });
+  assert.deepEqual(byteRange("bytes=10-19", 100), { start: 10, end: 19 });
+  assert.deepEqual(byteRange("bytes=90-500", 100), { start: 90, end: 99 });
+  assert.deepEqual(byteRange("bytes=-10", 100), { start: 90, end: 99 });
+  assert.equal(byteRange(undefined, 100), null);
+  assert.equal(byteRange("bytes=200-", 100), null);
 });

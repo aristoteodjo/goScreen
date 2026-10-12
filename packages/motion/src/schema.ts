@@ -55,6 +55,58 @@ export const Kicker = z.object({
   gap: z.number().default(0.35),
 });
 
+/** Where a visual is at a moment: its centre (fractions) and its scale. */
+export const VisualPoint = z.object({
+  t: time,
+  x: fraction,
+  y: fraction,
+  scale: z.number().positive().max(20),
+});
+
+/**
+ * A picture placed in a shot: a still image moved along a path, or a clip
+ * (a part of the reference that animates inside, like an interface) played
+ * from `at`. Its file lives next to the spec, named without any folder.
+ */
+export const Visual = z.object({
+  kind: z.enum(["image", "clip"]).default("image"),
+  src: z
+    .string()
+    .regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*\.(png|jpe?g|webp|webm|mp4)$/, "Expected a file name"),
+  /** Left, top, width and height of the picture at rest. */
+  x: fraction,
+  y: fraction,
+  w: z.number().positive().max(3),
+  h: z.number().positive().max(3),
+  /** Comes in (a clip's first frame is shown at this time). */
+  at: time,
+  /** Fade in, in seconds (0 = appears at once, or moves in along its path). */
+  fadeIn: z.number().min(0).default(0),
+  /** Leaves. */
+  until: time,
+  fadeOut: z.number().min(0).default(0),
+  /** Measured moves; empty = it stays at rest. */
+  path: z.array(VisualPoint).default([]),
+});
+
+/**
+ * A word as it reads in a shot that is not kinetic text (a slide, a page):
+ * measured place, size, colour and timing, drawn as text over the pictures.
+ */
+export const Label = z.object({
+  text: z.string().min(1),
+  /** Left edge and baseline. */
+  x: fraction,
+  y: fraction,
+  /** Font size. */
+  size: z.number().positive().max(1),
+  color: hex,
+  weight: z.number().int().min(100).max(900).default(600),
+  at: time,
+  fadeIn: z.number().min(0).default(0),
+  until: time,
+});
+
 export const TextShot = z.object({
   kind: z.literal("text"),
   id: z.string().min(1),
@@ -82,11 +134,14 @@ export const TextShot = z.object({
   }),
   /** How it leaves at `end`: a cut, or a quick blur upwards. */
   exit: z.enum(["cut", "blur"]).default("cut"),
+  /** Pictures around the text (bullets, a logo), drawn behind it. */
+  visuals: z.array(Visual).default([]),
 });
 
 /**
- * A shot goScreen cannot rebuild yet (a logo, an interface): it keeps its
- * place and length in the film, so the timing of everything else is right.
+ * A shot goScreen does not rebuild as text (a logo, an interface): its
+ * pictures are taken from the reference (`visuals`), at their measured place
+ * and timing; without any, it keeps its place and length in the film.
  */
 export const PlaceholderShot = z.object({
   kind: z.literal("placeholder"),
@@ -96,6 +151,10 @@ export const PlaceholderShot = z.object({
   background: hex,
   /** What the shot shows, as the analysis understood it. */
   label: z.string().default(""),
+  /** What it shows, cut out of the reference (an interface, a logo). */
+  visuals: z.array(Visual).default([]),
+  /** Its big words, which the pictures leave out. */
+  labels: z.array(Label).default([]),
 });
 
 export const Shot = z.discriminatedUnion("kind", [TextShot, PlaceholderShot]);
@@ -128,6 +187,14 @@ export const MotionSpec = z
   })
   .superRefine((spec, ctx) => {
     spec.shots.forEach((s, i) => {
+      s.visuals.forEach((v, k) => {
+        if (v.until <= v.at)
+          ctx.addIssue({
+            code: "custom",
+            path: ["shots", i, "visuals", k, "until"],
+            message: "A visual must leave after it comes in.",
+          });
+      });
       if (s.end <= s.start)
         ctx.addIssue({
           code: "custom",
@@ -141,6 +208,9 @@ export type Word = z.infer<typeof Word>;
 export type Line = z.infer<typeof Line>;
 export type Enter = z.infer<typeof Enter>;
 export type Underline = z.infer<typeof Underline>;
+export type Label = z.infer<typeof Label>;
+export type VisualPoint = z.infer<typeof VisualPoint>;
+export type Visual = z.infer<typeof Visual>;
 export type TextShot = z.infer<typeof TextShot>;
 export type PlaceholderShot = z.infer<typeof PlaceholderShot>;
 export type Shot = z.infer<typeof Shot>;

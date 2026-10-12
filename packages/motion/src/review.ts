@@ -113,6 +113,9 @@ export function applyReview(shot: Shot, review: ShotReview): Shot {
       end: shot.end,
       background: shot.background,
       label: review.description || review.kind,
+      // Pictures found around the text stay; the words are not pictures.
+      visuals: shot.visuals,
+      labels: shot.kind === "placeholder" ? shot.labels : [],
     };
   }
   if (shot.kind !== "text")

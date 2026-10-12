@@ -186,7 +186,7 @@ export async function reviewAll(
 
 export type RenderReport = {
   render: string;
-  /** Mean fidelity of the text shots, 0..1. */
+  /** Mean fidelity of the shots, 0..1. */
   score: number;
   shots: (ShotMeasure & { fidelity: number })[];
 };

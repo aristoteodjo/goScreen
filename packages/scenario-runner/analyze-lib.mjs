@@ -331,3 +331,201 @@ export function timing(
   const s = (i) => Math.round((i / fps) * 1000) / 1000;
   return { start: s(start), settled: s(settled), end: s(end + 1) };
 }
+
+// Visual elements: whatever is not the background nor a big word (a logo, an
+// interface, a bullet, a shape). Found on a grid of cells, followed across
+// samples, then cut out of the video as images the renderer can place.
+
+/** Grid of cells that differ from the background, big words left out. */
+export function visualCells(rgb, width, height, bg, { cell, skip = [], threshold = 18 }) {
+  const gw = Math.ceil(width / cell);
+  const gh = Math.ceil(height / cell);
+  const on = new Uint8Array(gw * gh);
+  const skipped = (x, y) =>
+    skip.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  for (let cy = 0; cy < gh; cy++)
+    for (let cx = 0; cx < gw; cx++) {
+      const x1 = Math.min(width, (cx + 1) * cell);
+      const y1 = Math.min(height, (cy + 1) * cell);
+      let hit = false;
+      for (let y = cy * cell; y < y1 && !hit; y += 2)
+        for (let x = cx * cell; x < x1 && !hit; x += 2) {
+          const i = (y * width + x) * 3;
+          if (dist([rgb[i], rgb[i + 1], rgb[i + 2]], bg) > threshold && !skipped(x, y)) hit = true;
+        }
+      on[cy * gw + cx] = hit ? 1 : 0;
+    }
+  return { on, gw, gh };
+}
+
+/**
+ * Boxes (in cells) of groups of lit cells; cells up to `gap` cells apart
+ * belong together, so an interface with text inside stays one element.
+ */
+export function cellGroups({ on, gw, gh }, gap = 1) {
+  const seen = new Uint8Array(on.length);
+  const boxes = [];
+  for (let start = 0; start < on.length; start++) {
+    if (!on[start] || seen[start]) continue;
+    const box = { x0: gw, y0: gh, x1: -1, y1: -1, n: 0 };
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length) {
+      const i = stack.pop();
+      const x = i % gw;
+      const y = (i - x) / gw;
+      box.x0 = Math.min(box.x0, x);
+      box.y0 = Math.min(box.y0, y);
+      box.x1 = Math.max(box.x1, x);
+      box.y1 = Math.max(box.y1, y);
+      box.n++;
+      for (let dy = -gap - 1; dy <= gap + 1; dy++)
+        for (let dx = -gap - 1; dx <= gap + 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+          const j = ny * gw + nx;
+          if (on[j] && !seen[j]) {
+            seen[j] = 1;
+            stack.push(j);
+          }
+        }
+    }
+    boxes.push(box);
+  }
+  // Boxes that overlap (a card around a group) are one element.
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let a = 0; a < boxes.length && !merged; a++)
+      for (let b = a + 1; b < boxes.length && !merged; b++) {
+        const p = boxes[a];
+        const q = boxes[b];
+        if (p.x0 <= q.x1 && q.x0 <= p.x1 && p.y0 <= q.y1 && q.y0 <= p.y1) {
+          boxes[a] = {
+            x0: Math.min(p.x0, q.x0),
+            y0: Math.min(p.y0, q.y0),
+            x1: Math.max(p.x1, q.x1),
+            y1: Math.max(p.y1, q.y1),
+            n: p.n + q.n,
+          };
+          boxes.splice(b, 1);
+          merged = true;
+        }
+      }
+  }
+  return boxes;
+}
+
+/**
+ * An 8×8 grey thumbnail of a box, each tile the mean of a few points: enough
+ * to tell two pictures apart, steady enough not to flicker on small text.
+ */
+export function thumbnail(rgb, width, box) {
+  const out = new Array(64).fill(0);
+  for (let ty = 0; ty < 8; ty++)
+    for (let tx = 0; tx < 8; tx++) {
+      let sum = 0;
+      for (let py = 0; py < 4; py++)
+        for (let px = 0; px < 4; px++) {
+          const x = Math.min(width - 1, Math.floor(box.x + ((tx + (px + 0.5) / 4) * box.w) / 8));
+          const y = Math.floor(box.y + ((ty + (py + 0.5) / 4) * box.h) / 8);
+          const i = (y * width + x) * 3;
+          sum += 0.299 * rgb[i] + 0.587 * rgb[i + 1] + 0.114 * rgb[i + 2];
+        }
+      out[ty * 8 + tx] = Math.round(sum / 16);
+    }
+  return out;
+}
+
+/**
+ * The visual elements of one frame, in pixels: lit cells grouped, big words
+ * (drawn as text by the renderer) left out with a small margin.
+ */
+export function visualsOf(rgb, width, height, bg, bigWords = []) {
+  const cell = Math.max(4, Math.round(width / 240));
+  const skip = bigWords.map((w) => {
+    const m = Math.round(w.h * 0.18);
+    return { x: w.x - m, y: w.y - m, w: w.w + 2 * m, h: w.h + 2 * m };
+  });
+  return cellGroups(visualCells(rgb, width, height, bg, { cell, skip }))
+    .map((b) => {
+      const x = b.x0 * cell;
+      const y = b.y0 * cell;
+      const box = {
+        x,
+        y,
+        w: Math.min(width, (b.x1 + 1) * cell) - x,
+        h: Math.min(height, (b.y1 + 1) * cell) - y,
+      };
+      return { ...box, thumb: thumbnail(rgb, width, box) };
+    })
+    .filter((v) => v.w >= cell && v.h >= cell);
+}
+
+const thumbDiff = (a, b) => {
+  let s = 0;
+  for (let i = 0; i < 64; i++) s += Math.abs(a[i] - b[i]);
+  return s / 64;
+};
+
+/**
+ * The same element in successive samples is one track: near where it was,
+ * about the same size, and not a different picture. `changes` says how much
+ * it changes inside (an interface that animates) compared with its picture
+ * of reference: such a track is better replayed as a clip than as an image.
+ */
+export function trackVisuals(samples, { maxGap = 0.6, maxDiff = 60 } = {}) {
+  const tracks = [];
+  for (const s of samples) {
+    const free = tracks.filter((k) => s.t - k.last <= maxGap);
+    for (const v of s.visuals ?? []) {
+      const fit = free
+        .filter((k) => k.last !== s.t)
+        .map((k) => {
+          const p = k.seen[k.seen.length - 1];
+          const d = Math.hypot(p.x + p.w / 2 - (v.x + v.w / 2), p.y + p.h / 2 - (v.y + v.h / 2));
+          const ratio = (v.w * v.h) / (p.w * p.h);
+          const ok = d <= 0.6 * Math.max(p.w, p.h, v.w, v.h) && ratio > 0.5 && ratio < 2 &&
+            thumbDiff(p.thumb, v.thumb) < maxDiff;
+          return { k, d, ok };
+        })
+        .filter((m) => m.ok)
+        .sort((a, b) => a.d - b.d)[0];
+      if (fit) {
+        fit.k.last = s.t;
+        fit.k.seen.push({ t: s.t, ...v });
+      } else tracks.push({ first: s.t, last: s.t, seen: [{ t: s.t, ...v }] });
+    }
+  }
+  return tracks.map((k) => {
+    // The picture of reference: the reading whose size is the most common
+    // (at rest), late rather than early (it may still be coming in).
+    const areas = k.seen.map((v) => v.w * v.h).sort((a, b) => a - b);
+    const typical = areas[Math.floor(areas.length / 2)];
+    let best = k.seen[0];
+    k.seen.forEach((v, i) => {
+      if (i >= k.seen.length / 3 && Math.abs(v.w * v.h - typical) <= Math.abs(best.w * best.h - typical))
+        best = v;
+    });
+    return {
+      first: k.first,
+      last: k.last,
+      best: best.t,
+      box: { x: best.x, y: best.y, w: best.w, h: best.h },
+      changes: Math.max(...k.seen.map((v) => thumbDiff(v.thumb, best.thumb))),
+      path: k.seen.map((v) => ({ t: v.t, x: v.x, y: v.y, w: v.w, h: v.h })),
+    };
+  });
+}
+
+/** The box that holds every position of a track. */
+export function unionBox(path) {
+  const x = Math.min(...path.map((b) => b.x));
+  const y = Math.min(...path.map((b) => b.y));
+  return {
+    x,
+    y,
+    w: Math.max(...path.map((b) => b.x + b.w)) - x,
+    h: Math.max(...path.map((b) => b.y + b.h)) - y,
+  };
+}
