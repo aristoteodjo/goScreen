@@ -137,13 +137,30 @@ window.__goscreenReady = document.fonts.ready.then(() => {
         probe = el("span", "probe", row);
       }
     });
-    // Words measured further apart than a space (chips, columns) go to their
-    // place, left to right; never closer than a narrow space.
+    // Each measured word is fitted on the reference's letters: as wide (its
+    // letter spacing, within reason: the font is not the same) and at the same
+    // place, left to right. The ink is measured, as OCR measured it.
+    const ink = document.createElement("canvas").getContext("2d");
+    const letters = new Map(); // span -> its ink, from its left edge
     for (const { w, span } of words) {
       if (w.x === undefined) continue;
-      const left = span.getBoundingClientRect().left - box.getBoundingClientRect().left;
-      const want = w.x * W - shot.x * W;
-      if (want > left + px * 0.05) span.style.marginLeft = want - left + "px";
+      const cs = getComputedStyle(span);
+      ink.font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+      const n = [...w.text].length;
+      const base = parseFloat(cs.letterSpacing) || 0;
+      ink.letterSpacing = base + "px";
+      let m = ink.measureText(w.text);
+      if (w.w !== undefined && n > 1) {
+        const width = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
+        const extra = Math.max(-0.08 * px, Math.min(0.15 * px, (w.w * W - width) / (n - 1)));
+        span.style.letterSpacing = base + extra + "px";
+        ink.letterSpacing = base + extra + "px";
+        m = ink.measureText(w.text);
+      }
+      const origin = span.getBoundingClientRect().left;
+      const delta = w.x * W - (origin - m.actualBoundingBoxLeft);
+      span.style.marginLeft = (parseFloat(span.style.marginLeft) || 0) + delta + "px";
+      letters.set(span, { left: -m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight });
     }
     // Put the last baseline at y.
     const baseline = probe.offsetTop + probe.offsetHeight;
@@ -157,6 +174,9 @@ window.__goscreenReady = document.fonts.ready.then(() => {
       if (w.strike !== undefined) {
         const bar = el("span", "strike", span);
         bar.style.background = shot.accent;
+        // Over the letters, as drawn in the reference, not the word's box.
+        const l = letters.get(span);
+        if (l) bar.style.cssText += ";left:" + (l.left - px * 0.02) + "px;right:auto;width:" + (l.right - l.left + px * 0.04) + "px";
         animate(bar, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }],
           { delay: w.strike * 1000, duration: 300, easing: bez([0.65, 0, 0.35, 1]) });
       }
@@ -178,7 +198,7 @@ window.__goscreenReady = document.fonts.ready.then(() => {
 
     if (shot.underline) {
       const u = shot.underline;
-      const left = shot.x * W;
+      const left = (u.x ?? shot.x) * W;
       const lastRow = words.filter((x) => x.line === shot.lines.length - 1);
       const line = el("div", "underline", frame);
       const thick = Math.max(2, u.thickness * px);

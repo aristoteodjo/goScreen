@@ -358,10 +358,21 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
   pour ses mots masqués hors de toute image. La décision texte / image se prend **par groupe de mots** : un groupe
   posé sur une image bien plus grande que lui (`onPicture`, un tableau de bord) appartient à l'image. Une lettre
   isolée lue une fois est écartée (un morceau de logo).
+- Mesures fiables (vérifiées sur `presentation.mp4`, fidélité moyenne 0,77 -> 0,94, tous les plans au-dessus de
+  `FIDELITY_PASS`) : la couleur d'un mot est sa lecture la plus éloignée du fond (`sharpestColor` : entrée et
+  sortie sont pâles), la « saturation » est une chroma (un quasi-noir n'est pas un accent) ; un mot lu par l'OCR
+  commence au plus tard à sa première lecture ; seuls les mots que la spec garde sont masqués (`isReliable`, même
+  règle que `cleanWords`). Un mot mesuré est calé sur l'encre de la référence (`Word.x`, `Word.w` : position et
+  interlettrage via `measureText`), le barré sur ses lettres ; une ligne minuscule sous le texte n'en fait pas
+  partie ; le soulignement peut partir à gauche du texte (`Underline.x`) et sous des pastilles. L'image de
+  référence d'un élément est son aspect habituel au repos (vignette médiane, lectures tardives) ; un élément
+  englobé par une nouvelle forme (halo) est tenu un échantillon ; un élément vu une seule fois est écarté ;
+  un clip n'a pas de fondu ajouté (il porte le sien) et démarre un échantillon plus tôt.
 - `compose.mjs` sert ces fichiers par nom seulement (`http://goscreen.assets/<nom>`, `assetName`, avec `Range`
   pour les clips) et attend que chaque clip ait l'image voulue avant la capture (`__goscreenSeek`). Les plans
-  non textuels sont notés sur leurs images (`visuals` : part des éléments de la référence retrouvés au même
-  endroit et au même moment). Une référence mesurée avant cette version doit être ré-analysée.
+  non textuels sont notés sur leurs images (`visuals` : part de la surface des images de la référence que
+  celles du rendu couvrent aussi, sur une grille, tous les quarts de seconde ; un logo trouvé en 16 morceaux
+  d'un côté et 6 de l'autre reste comparable). Une référence mesurée avant cette version doit être ré-analysée.
 - **Relecture** (`review.ts`) : une IA regarde une image par plan et corrige ce que l'OCR ne sait pas (texte
   exact, accents, mots mis en avant ou barrés, nature d'un plan qui n'est pas du texte). Le minutage et la mise
   en page restent mesurés, l'IA ne les invente jamais. Même contrat (`ShotReview`) pour tous les modèles.

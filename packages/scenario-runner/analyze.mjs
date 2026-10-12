@@ -22,6 +22,7 @@ import {
   aroundColor,
   isMark,
   isMasked,
+  isReliable,
   wordArea,
   parseTsv,
   patchOf,
@@ -227,8 +228,10 @@ async function visualTracks(samples, grey, info) {
     const sample = samples.find((s) => s.t === k.best);
     const t = presenceTiming(grey, info, k.box, k.best, k.first, k.last, sample?.background ?? "#ffffff");
     const clip = isClip(k);
-    const start = Math.min(t.start, k.first);
-    const end = Math.max(t.end, k.last + 0.5 / OCR_FPS);
+    // A clip carries its own way in and out: it starts a sample early so its
+    // first frames are not lost (before, it shows the background).
+    const start = Math.max(0, Math.min(t.start, k.first) - (clip ? 1 / OCR_FPS : 0));
+    const end = Math.min(info.duration, Math.max(t.end, k.last + 0.5 / OCR_FPS) + (clip ? 1 / OCR_FPS : 0));
     return {
       kind: clip ? "clip" : "image",
       image: job.crops ? `${stem}.visual-${i + 1}.${clip ? "webm" : "png"}` : null,
@@ -354,11 +357,20 @@ async function main() {
       const from = Math.max(0, Math.floor((track.first - 1) * TIME_FPS));
       const to = Math.min(grey.length, Math.ceil((track.last + 1) * TIME_FPS));
       const word = { text: track.text, ...track.box };
-      return {
+      const t = timing(curve, TIME_FPS, best, { from, to });
+      // OCR read it, so it was there: a presence that rises later (the word
+      // moved since, so its picture of reference differs) is not its start.
+      const read = t.start > track.first;
+      const timed = {
         ...track,
-        ...timing(curve, TIME_FPS, best, { from, to }),
+        start: read ? track.first : t.start,
+        settled: read ? track.first : t.settled,
+        end: Math.max(t.end, track.last),
+      };
+      return {
+        ...timed,
         // Left out of the pictures (the renderer draws it), or a logo's lettering.
-        masked: isMasked(word, info.height),
+        masked: isMasked(word, info.height) && isReliable(timed),
         mark: isMark(word),
       };
     });

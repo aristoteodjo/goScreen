@@ -34,10 +34,13 @@ export function colorDistance(a: string, b: string): number {
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) / 441.7;
 }
 
+/**
+ * How colourful a colour is, 0 (grey, black, white) to 1: its chroma. Not the
+ * HSV saturation, which calls a near black (#090b12) half saturated.
+ */
 export const saturation = (hex: string) => {
   const c = rgb(hex);
-  const max = Math.max(...c);
-  return max === 0 ? 0 : (max - Math.min(...c)) / max;
+  return (Math.max(...c) - Math.min(...c)) / 255;
 };
 
 const round = (n: number, k = 1000) => Math.round(n * k) / k;
@@ -144,7 +147,7 @@ const at = (backgrounds: Observations["backgrounds"], t: number) =>
 
 const inkOf = (words: ObservedWord[], bg: string) => {
   const colors = words.map((w) => w.color).filter((c): c is string => !!c);
-  const plain = colors.filter((c) => saturation(c) < 0.35);
+  const plain = colors.filter((c) => saturation(c) < 0.2);
   const pick = plain.length ? plain : colors;
   if (!pick.length) return colorDistance(bg, "#000000") > 0.5 ? "#0b0f19" : "#ffffff";
   // The colour furthest from the background is the truest (no antialiasing).
@@ -152,7 +155,7 @@ const inkOf = (words: ObservedWord[], bg: string) => {
 };
 
 const isAccent = (color: string | null, ink: string) =>
-  !!color && saturation(color) > 0.45 && colorDistance(color, ink) > 0.25;
+  !!color && saturation(color) > 0.35 && colorDistance(color, ink) > 0.25;
 
 function textShot(
   id: string,
@@ -179,6 +182,13 @@ function textShot(
   const kickerRow =
     rows.length > 1 && sizes[0] < main * 0.5 ? rows.shift() : undefined;
   if (kickerRow) sizes.shift();
+  // A tiny row below them is not part of the text (a logo's baseline, a
+  // credit): it stays in the pictures, and the lines keep their place.
+  for (let i = rows.length - 1; i > 0; i--)
+    if (sizes[i] < main * 0.35) {
+      rows.splice(i, 1);
+      sizes.splice(i, 1);
+    }
   const size = median(sizes);
   const lastBase = baselineOf(rows[rows.length - 1]);
   const left = Math.min(...rows.map((r) => r[0].box.x));
@@ -193,11 +203,15 @@ function textShot(
         r.x < w.box.x + w.box.w * 0.3 &&
         r.x + r.w > w.box.x + w.box.w * 0.7,
     )?.t;
+  // It may start left of the text (under a bullet, a chip, a word kept as a
+  // picture) as long as it runs under it, and sit lower under chips (another
+  // row of text would be words, not a line).
   const under = inShot.filter(
     (r) =>
       r.y > lastBase &&
-      r.y < lastBase + size * 0.7 &&
-      Math.abs(r.x - left) < size * 0.4,
+      r.y < lastBase + size * 1.3 &&
+      r.x < left + size * 0.4 &&
+      r.x + r.w > left + size,
   );
   const accentColor =
     under[0]?.color ??
@@ -212,6 +226,7 @@ function textShot(
         accent: isAccent(w.color, ink),
         echo: false,
         x: round(w.box.x / obs.width, 10000),
+        w: round(w.box.w / obs.width, 10000),
         ...(struck(w) !== undefined ? { strike: round(struck(w) as number) } : {}),
       }),
     ),
@@ -247,6 +262,7 @@ function textShot(
     const u = under[0];
     shot.underline = {
       at: round(start),
+      ...(Math.abs(u.x - left) > size * 0.2 ? { x: round(u.x / obs.width, 10000) } : {}),
       offset: round((u.y - lastBase) / size, 100),
       thickness: round(Math.max(1, u.h) / size, 1000),
       overshoot: 0.1,
@@ -338,29 +354,43 @@ export function visualsFor(
   words: ObservedWord[] | null,
 ): Visual[] {
   const { width: W, height: H } = obs;
-  // The words there with it for a good part of its time (not one leaving as
-  // it comes in).
+  // The words there with it for a good part of its time, coming in included
+  // (blurred before OCR reads them): not one leaving as it comes in, nor one
+  // that only starts once it is gone (the next shot's, at the same place).
   const during = (v: ObservedVisual) =>
     (words ?? []).filter(
       (w) =>
-        Math.min(v.end, w.end + 0.2) - Math.max(v.start, w.start - 0.4) >
-        0.25 * (v.end - v.start),
+        w.start < v.end &&
+        Math.min(v.end, w.end + 0.2) - Math.max(v.start, w.start - 0.4) > 0.25 * (v.end - v.start),
+    );
+  // A thin piece on the row of an underline or a strike (its tip, drawing in)
+  // is that line: the renderer draws it.
+  const onRule = (v: ObservedVisual) =>
+    obs.rules.some(
+      (r) =>
+        r.t >= v.start - 0.3 &&
+        r.t <= v.end &&
+        r.y < v.box.y + v.box.h + 6 &&
+        r.y + r.h > v.box.y - 6,
     );
   return obs.visuals
     .filter((v) => v.image && v.start < end && v.end > start)
-    // A flash of a transition, seen once.
-    .filter((v) => v.path.length >= 2 || v.end - v.start >= 0.3)
+    // Seen once: a flash of a transition, or noise (its presence, measured
+    // against a picture of almost nothing, may last; it is not there).
+    .filter((v) => v.path.length >= 2)
     .filter(
       (v) =>
         !words ||
         (coveredBy(v.box, during(v)) < 0.6 &&
-          !(v.box.h <= H * 0.025 && v.box.w > W * 0.03)),
+          !(v.box.h <= H * 0.025 && (v.box.w > W * 0.03 || onRule(v)))),
     )
     // The biggest behind.
     .sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h)
     .map((v): Visual => {
       const path = visualPath(v, W, H);
-      const fadeIn = path.length ? 0 : Math.min(1, Math.max(0, v.settled - v.start));
+      // A clip is the video itself, its way in and out included: no fade on top.
+      const clip = v.kind === "clip";
+      const fadeIn = path.length || clip ? 0 : Math.min(1, Math.max(0, v.settled - v.start));
       return {
         kind: v.kind,
         src: v.image as string,
@@ -372,7 +402,7 @@ export function visualsFor(
         fadeIn: round(fadeIn),
         until: round(Math.max(v.end, v.start + 0.05)),
         // Leaves before the cut: it went away on its own, softly.
-        fadeOut: v.end < end - 0.1 ? 0.15 : 0,
+        fadeOut: !clip && v.end < end - 0.1 ? 0.15 : 0,
         path,
         covers: coversOf(v, during(v), W, H),
       };

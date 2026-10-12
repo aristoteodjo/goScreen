@@ -27,48 +27,9 @@ export type ShotMeasure = {
   color: number;
   /** Pictures of the reference in this shot, and how many the rendering shows. */
   refVisuals: number;
-  /** Share of the reference's pictures found in the rendering (0..1, 1 if none). */
+  /** Share of the area of the reference's pictures the rendering's take too (0..1, 1 if none). */
   visuals: number;
 };
-
-const iou = (a: Visual, b: Visual) => {
-  const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-  const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  return (x * y) / (a.w * a.h + b.w * b.h - x * y || 1);
-};
-
-/**
- * The share of the reference's pictures in a shot that the rendering shows
- * at about the same place (in fractions, so sizes may differ) and time.
- * Both go through `visualsFor`, so the text of a text shot is left out alike.
- */
-function visualRecall(
-  ref: Observations,
-  out: Observations,
-  start: number,
-  end: number,
-  text: boolean,
-) {
-  const words = (o: Observations) =>
-    text ? cleanWords(o.words).filter((w) => inShot(w, start, end)) : null;
-  // The rendering is not cut out, so its pictures have no file: name them.
-  const named = {
-    ...out,
-    visuals: out.visuals.map((v) => ({ ...v, image: v.image ?? "render" })),
-  };
-  const a = visualsFor(ref, start, end, words(ref));
-  const b = visualsFor(named, start, end, words(named));
-  const found = a.filter((v) =>
-    b.some(
-      (o) =>
-        iou(v, o) > 0.4 && Math.min(v.until, o.until) > Math.max(v.at, o.at),
-    ),
-  );
-  return {
-    refVisuals: a.length,
-    visuals: a.length ? found.length / a.length : 1,
-  };
-}
 
 const norm = (s: string) =>
   s
@@ -86,6 +47,44 @@ const inShot = (w: ObservedWord, start: number, end: number) => {
   const mid = (w.start + w.settled) / 2;
   return mid >= start && mid < end;
 };
+
+/** Cells of a grid over the frame that the pictures cover at time `t`. */
+function coverage(visuals: Visual[], t: number, cols = 96, rows = 54): Set<number> {
+  const on = new Set<number>();
+  for (const v of visuals) {
+    if (t < v.at || t >= v.until) continue;
+    const x0 = Math.max(0, Math.floor(v.x * cols));
+    const x1 = Math.min(cols, Math.ceil((v.x + v.w) * cols));
+    const y0 = Math.max(0, Math.floor(v.y * rows));
+    const y1 = Math.min(rows, Math.ceil((v.y + v.h) * rows));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) on.add(y * cols + x);
+  }
+  return on;
+}
+
+/**
+ * The share of the area the reference's pictures take in a shot that the
+ * rendering's pictures take too, every quarter of a second: an area, not a
+ * count, so a logo found as 16 pieces in one and 6 in the other is alike.
+ * Both go through `visualsFor`, so the text of a text shot is left out alike.
+ */
+function visualRecall(ref: Observations, out: Observations, start: number, end: number, text: boolean) {
+  const words = (o: Observations) =>
+    text ? cleanWords(o.words).filter((w) => inShot(w, start, end)) : null;
+  // The rendering is not cut out, so its pictures have no file: name them.
+  const named = { ...out, visuals: out.visuals.map((v) => ({ ...v, image: v.image ?? "render" })) };
+  const a = visualsFor(ref, start, end, words(ref));
+  const b = visualsFor(named, start, end, words(named));
+  let total = 0;
+  let found = 0;
+  for (let t = start + 0.125; t < end; t += 0.25) {
+    const want = coverage(a, t);
+    const got = coverage(b, t);
+    total += want.size;
+    for (const c of want) if (got.has(c)) found++;
+  }
+  return { refVisuals: a.length, visuals: total ? found / total : 1 };
+}
 
 /** Measures every shot of `spec` between the reference and the rendering. */
 export function measureShots(

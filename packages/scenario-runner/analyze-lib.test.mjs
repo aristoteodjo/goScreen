@@ -7,6 +7,7 @@ import {
   editDistance,
   isMark,
   isMasked,
+  isReliable,
   parseTsv,
   ppmReader,
   presence,
@@ -133,4 +134,53 @@ test("aroundColor reads the colour just around a word (a card's)", () => {
   const rgb = image(w, h, [245, 246, 251]);
   for (let y = 10; y < 50; y++) for (let x = 10; x < 90; x++) rgb.set([255, 255, 255], (y * w + x) * 3);
   assert.deepEqual(aroundColor(rgb, w, h, { x: 30, y: 20, w: 40, h: 15 }), [255, 255, 255]);
+});
+
+test("a word's colour is its sharpest reading, not one blurred coming in or leaving", () => {
+  const w = (t, color) => ({ text: "qui", conf: 95, x: 100, y: 100, w: 200, h: 80, color, t });
+  const [k] = trackWords([
+    { t: 0, words: [w(0, "#737478")] },
+    { t: 0.25, words: [w(0.25, "#0c0c15")] },
+    { t: 0.5, words: [w(0.5, "#1c1d25")] },
+  ]);
+  assert.equal(k.color, "#0c0c15");
+});
+
+test("an element that something appears around is still there", () => {
+  const thumb = new Array(64).fill(200);
+  const letter = { x: 100, y: 100, w: 40, h: 50, thumb };
+  const [k] = trackVisuals([
+    { t: 0, visuals: [letter] },
+    { t: 0.25, visuals: [letter] },
+    // A glow behind it: one bigger piece.
+    { t: 0.5, visuals: [{ x: 60, y: 60, w: 200, h: 150, thumb: new Array(64).fill(90) }] },
+  ]);
+  assert.equal(k.last, 0.5);
+  assert.deepEqual(k.path.at(-1), { t: 0.5, x: 100, y: 100, w: 40, h: 50 });
+});
+
+test("only a reliable reading is left out of the pictures", () => {
+  assert.equal(isReliable({ text: "ll", seen: 1, conf: 57, start: 5.6, end: 6.4 }), false);
+  assert.equal(isReliable({ text: "temps", seen: 3, conf: 97, start: 5.7, end: 6.4 }), true);
+});
+
+test("a picture's reference is its most usual look at rest, not a frame coming in", () => {
+  const box = { x: 100, y: 100, w: 200, h: 100 };
+  const look = (g, t) => ({ t, background: "#ffffff", visuals: [{ ...box, thumb: new Array(64).fill(g) }] });
+  // Fading in (230, 215), then as it is (190) for a while.
+  const [k] = trackVisuals([look(230, 0), look(215, 0.25), look(190, 0.5), look(191, 0.75), look(190, 1)]);
+  assert.ok(k.best >= 0.5);
+});
+
+test("an element is held for one sample only", () => {
+  const thumb = new Array(64).fill(200);
+  const dot = { x: 100, y: 100, w: 30, h: 30, thumb };
+  const blob = { x: 80, y: 80, w: 80, h: 100, thumb: new Array(64).fill(90) };
+  const [k] = trackVisuals([
+    { t: 0, visuals: [dot] },
+    { t: 0.25, visuals: [dot] },
+    { t: 0.5, visuals: [blob] },
+    { t: 0.75, visuals: [blob] },
+  ]);
+  assert.equal(k.last, 0.5);
 });

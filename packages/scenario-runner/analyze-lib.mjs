@@ -222,6 +222,26 @@ const sameWord = (a, b) => {
   return editDistance(x, y) <= Math.floor(Math.max(x.length, y.length) / 4);
 };
 
+const rgbOf = (h) => h.match(/\w\w/g).map((x) => parseInt(x, 16));
+
+/**
+ * A word's colour: the reading furthest from the background. Coming in and
+ * leaving it is blurred or fading, so paler; sharp, it is its true colour.
+ */
+export function sharpestColor(readings) {
+  let best = null;
+  let far = -1;
+  for (const w of readings) {
+    if (!w.color) continue;
+    const d = dist(rgbOf(w.color), rgbOf(w.background ?? "#ffffff"));
+    if (d > far) {
+      far = d;
+      best = w.color;
+    }
+  }
+  return best;
+}
+
 /**
  * The same word seen in successive samples, at the same place, is one track.
  * A sample is `{ t, words }`; a gap longer than `maxGap` seconds ends a track.
@@ -240,7 +260,7 @@ export function trackWords(samples, maxGap = 0.6) {
       if (t) {
         t.last = s.t;
         t.lastT = s.t;
-        t.seen.push({ t: s.t, ...w });
+        t.seen.push({ t: s.t, background: s.background, ...w });
         t.texts.push(w);
         if (w.conf > t.best.conf) t.best = { t: s.t, ...w };
       } else
@@ -250,7 +270,7 @@ export function trackWords(samples, maxGap = 0.6) {
           lastT: s.t,
           box: w,
           texts: [w],
-          seen: [{ t: s.t, ...w }],
+          seen: [{ t: s.t, background: s.background, ...w }],
           best: { t: s.t, ...w },
         });
     }
@@ -276,7 +296,7 @@ export function trackWords(samples, maxGap = 0.6) {
       best: k.best.t,
       box: { x: med("x"), y: med("y"), w: med("w"), h: med("h") },
       seen: k.seen.length,
-      color: k.seen.find((w) => w.color)?.color ?? null,
+      color: sharpestColor(k.seen),
     };
   });
 }
@@ -342,7 +362,18 @@ export const BIG_WORD = 0.03;
  */
 export const isMark = (w) => w.text.length >= 3 && w.w / (w.text.length * w.h) > 1.2;
 
-/** A word the renderer draws as text, so the pictures leave it out. */
+/**
+ * A reading the motion spec keeps (the same rule as `cleanWords` in
+ * @goscreen/motion): read more than once, or very surely for a while.
+ */
+export const isReliable = (w) =>
+  w.seen >= 2 || (w.conf >= 90 && w.end - w.start >= 0.3 && w.text.length > 1);
+
+/**
+ * A word the renderer draws as text, so the pictures leave it out: big, not
+ * a logo's lettering, and kept by the spec (a word misread once stays in the
+ * picture, with its true pixels).
+ */
 export const isMasked = (w, height) => w.h >= height * BIG_WORD && !isMark(w);
 
 // Visual elements: whatever is not the background nor a big word (a logo, an
@@ -471,6 +502,13 @@ export function visualsOf(rgb, width, height, bg, skip = []) {
     .filter((v) => v.w >= cell && v.h >= cell);
 }
 
+/** The share of box `a` inside box `b`. */
+const inside = (a, b) => {
+  const x = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const y = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return (x * y) / (a.w * a.h || 1);
+};
+
 const thumbDiff = (a, b) => {
   let s = 0;
   for (let i = 0; i < 64; i++) s += Math.abs(a[i] - b[i]);
@@ -500,28 +538,51 @@ export function trackVisuals(samples, { maxGap = 0.6, maxDiff = 60 } = {}) {
         })
         .filter((m) => m.ok)
         .sort((a, b) => a.d - b.d)[0];
+      const reading = { t: s.t, background: s.background, ...v };
       if (fit) {
         fit.k.last = s.t;
-        fit.k.seen.push({ t: s.t, ...v });
-      } else tracks.push({ first: s.t, last: s.t, seen: [{ t: s.t, ...v }] });
+        fit.k.seen.push(reading);
+      } else tracks.push({ first: s.t, last: s.t, seen: [reading] });
+    }
+    // Something that appears around an element (a glow behind a logo) makes
+    // one bigger piece with it: the element is still there, where it was, for
+    // a sample (longer, the piece is something else at its place).
+    for (const k of free) {
+      if (k.last === s.t) continue;
+      const p = k.seen[k.seen.length - 1];
+      if (p.held) continue;
+      const around = (s.visuals ?? []).some(
+        (v) => v.w * v.h >= 2 * p.w * p.h && inside(p, v) >= 0.9,
+      );
+      if (around) {
+        k.last = s.t;
+        // Held, not seen: never its picture of reference.
+        k.seen.push({ ...p, t: s.t, held: true });
+      }
     }
   }
   return tracks.map((k) => {
-    // The picture of reference: the reading whose size is the most common
-    // (at rest), late rather than early (it may still be coming in).
-    const areas = k.seen.map((v) => v.w * v.h).sort((a, b) => a - b);
+    // The picture of reference: at rest (its most common size), late rather
+    // than early (it may still be coming in), and looking the most like it
+    // usually does (the median of its looks): not a frame coming in, fading,
+    // or of a transition.
+    const seen = k.seen.filter((v) => !v.held);
+    const areas = seen.map((v) => v.w * v.h).sort((a, b) => a - b);
     const typical = areas[Math.floor(areas.length / 2)];
-    let best = k.seen[0];
-    k.seen.forEach((v, i) => {
-      if (i >= k.seen.length / 3 && Math.abs(v.w * v.h - typical) <= Math.abs(best.w * best.h - typical))
-        best = v;
+    const rest = seen.filter((v) => Math.abs(v.w * v.h - typical) <= typical * 0.1);
+    const late = rest.filter((v) => seen.indexOf(v) >= seen.length / 3);
+    const atRest = late.length ? late : rest;
+    const look = atRest[0].thumb.map((_, i) => {
+      const c = atRest.map((v) => v.thumb[i]).sort((a, b) => a - b);
+      return c[Math.floor(c.length / 2)];
     });
+    const best = atRest.reduce((a, v) => (thumbDiff(v.thumb, look) < thumbDiff(a.thumb, look) ? v : a), atRest[0]);
     return {
       first: k.first,
       last: k.last,
       best: best.t,
       box: { x: best.x, y: best.y, w: best.w, h: best.h },
-      changes: Math.max(...k.seen.map((v) => thumbDiff(v.thumb, best.thumb))),
+      changes: Math.max(...seen.map((v) => thumbDiff(v.thumb, best.thumb))),
       path: k.seen.map((v) => ({ t: v.t, x: v.x, y: v.y, w: v.w, h: v.h })),
     };
   });

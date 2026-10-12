@@ -23,8 +23,9 @@ export const Word = z.object({
   strike: time.optional(),
   /** Faded copies stacked above it, like an echo. */
   echo: z.boolean().default(false),
-  /** Measured left edge: words spaced apart (in chips, columns) keep their place. */
+  /** Measured left edge and width of its letters: the renderer fits it there. */
   x: fraction.optional(),
+  w: z.number().positive().max(2).optional(),
 });
 
 export const Line = z.object({ words: z.array(Word).min(1) });
@@ -42,6 +43,8 @@ export const Enter = z.object({
 export const Underline = z.object({
   /** Starts drawing at this time, then follows the words as they come. */
   at: time,
+  /** Its left edge, when it does not start with the text (under a bullet). */
+  x: fraction.optional(),
   /** Gap below the last baseline, in font sizes. */
   offset: z.number().default(0.32),
   /** Thickness, in font sizes. */
