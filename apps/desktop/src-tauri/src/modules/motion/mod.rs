@@ -88,13 +88,23 @@ pub fn motion_references() -> Result<Vec<Reference>, String> {
     Ok(list)
 }
 
+/// A reference must be a video file: an AI (through MCP) names it by path,
+/// and its frames and stream are handed back, so nothing else is accepted.
+fn video_file(path: &str) -> Result<PathBuf, String> {
+    let src = PathBuf::from(path);
+    if super::media::asset_kind(&src) != Some("video") {
+        return Err(format!("{path} is not a video (mp4, mov, m4v or webm)."));
+    }
+    if !src.is_file() {
+        return Err(format!("{path} is not a file."));
+    }
+    Ok(src)
+}
+
 /// Starts a reference from a video the person picked.
 #[tauri::command]
 pub fn motion_reference_create(video: String) -> Result<Reference, String> {
-    let src = PathBuf::from(&video);
-    if !src.is_file() {
-        return Err(format!("{video} is not a file."));
-    }
+    let src = video_file(&video)?;
     let name = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "reference".into());
     let created = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default();
     let dir = references_dir()?.join(format!("{}-{created}", scenario::slug(&name)));
@@ -145,7 +155,7 @@ pub async fn motion_video_url(media: State<'_, super::media::MediaState>, id: St
 /// The video a file name stands for: the reference itself, or a rendering.
 fn video_of(dir: &Path, reference: &Reference, which: &str) -> Result<PathBuf, String> {
     if which == "reference" {
-        return Ok(PathBuf::from(&reference.video));
+        return video_file(&reference.video);
     }
     let path = dir.join(safe_name(which)?);
     if path.extension().is_some_and(|e| e == "mp4") && path.is_file() {
@@ -324,6 +334,14 @@ pub fn motion_cancel(state: State<'_, MotionState>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_videos_become_references() {
+        assert!(video_file("/etc/passwd").is_err());
+        assert!(video_file("/Users/x/.ssh/id_rsa").is_err());
+        assert!(video_file("/Users/x/notes.txt").is_err());
+        assert!(video_file("/nowhere/clip.mp4").unwrap_err().contains("not a file"));
+    }
 
     #[test]
     fn names_cannot_leave_the_folder() {
