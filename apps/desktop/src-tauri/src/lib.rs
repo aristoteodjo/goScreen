@@ -2,7 +2,7 @@
 pub mod dev_privacy;
 pub mod modules;
 
-use modules::{android, control, export, media, projects, proxy, recording, scenario};
+use modules::{android, control, export, local_ai, media, motion, projects, proxy, recording, scenario};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -18,8 +18,27 @@ pub fn run() {
         .manage(export::ExportState::default())
         .manage(scenario::ScenarioState::default())
         .manage(control::ControlState::default())
+        .manage(local_ai::LocalAiState::default())
+        .manage(motion::MotionState::default())
         .invoke_handler(tauri::generate_handler![
             proxy::server::proxy_open,
+            local_ai::local_ai_status,
+            local_ai::local_ai_install,
+            local_ai::local_ai_cancel_install,
+            local_ai::local_ai_remove,
+            local_ai::local_ai_start,
+            local_ai::local_ai_stop,
+            local_ai::local_ai_chat,
+            motion::motion_references,
+            motion::motion_reference_create,
+            motion::motion_reference_delete,
+            motion::motion_read,
+            motion::motion_write,
+            motion::motion_file_path,
+            motion::motion_frame,
+            motion::motion_analyze,
+            motion::motion_render,
+            motion::motion_cancel,
             recording::commands::ffmpeg_status,
             recording::commands::recording_start,
             recording::commands::recording_stop,
@@ -85,6 +104,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 recording::shutdown(&app.state::<recording::RecordingState>());
                 media::voiceover::shutdown(&app.state::<media::voiceover::VoiceOverState>());
+                local_ai::shutdown(&app.state::<local_ai::LocalAiState>());
             }
         });
 }

@@ -1,8 +1,10 @@
 pub mod android;
 pub mod control;
 pub mod export;
+pub mod local_ai;
 pub mod local_http;
 pub mod media;
+pub mod motion;
 pub mod projects;
 pub mod proxy;
 pub mod recording;

@@ -134,12 +134,12 @@ pub fn node_candidates(home: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-fn locate_node() -> Option<PathBuf> {
+pub(crate) fn locate_node() -> Option<PathBuf> {
     node_candidates(dirs::home_dir().as_deref()).into_iter().find(|p| p.is_file())
 }
 
 /// The runner script: `GOSCREEN_SCENARIO_RUNNER`, else the one in this repo.
-fn runner_path() -> Result<PathBuf, String> {
+pub(crate) fn runner_path() -> Result<PathBuf, String> {
     let path = std::env::var("GOSCREEN_SCENARIO_RUNNER").map(PathBuf::from).unwrap_or_else(|_| {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../packages/scenario-runner/run.mjs")
     });
@@ -154,7 +154,7 @@ fn runner_path() -> Result<PathBuf, String> {
 }
 
 /// Writes a file only the current user can read (the temp dir is shared).
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
@@ -166,7 +166,7 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     options.open(path)?.write_all(bytes)
 }
 
-fn kill(pid: u32) {
+pub(crate) fn kill(pid: u32) {
     #[cfg(unix)]
     let _ = Command::new("kill").args(["-TERM", &pid.to_string()]).status();
     #[cfg(windows)]
