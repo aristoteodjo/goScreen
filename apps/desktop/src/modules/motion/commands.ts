@@ -23,6 +23,7 @@ import {
   teachShot,
 } from "./pipeline";
 import { refreshMotion } from "./store";
+import { openInEditor } from "./toEditor";
 
 // The same steps as the Reproduce screen, for an AI through MCP. Claude is
 // the teacher here: `motion.teach` writes its answer into the spec and keeps
@@ -167,6 +168,18 @@ export function registerMotionCommands() {
       }
       refreshMotion();
       return answers;
+    },
+  });
+
+  defineCommand({
+    name: "motion.openInEditor",
+    title: "Open in the editor",
+    description:
+      "Turns a reproduced video into an edit of layers, written next to its latest rendering: one slide per shot, the plate and each picture as an image or video layer with its measured moves, each line of text as a text layer (words coming in), each counter as a counter block. Returns the video to open in the editor (edit.* commands then change it). Render first.",
+    input: z.object({ reference }),
+    run: async ({ reference }) => {
+      const video = await openInEditor(reference);
+      return { video };
     },
   });
 

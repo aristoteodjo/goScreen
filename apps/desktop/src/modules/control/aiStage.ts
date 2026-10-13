@@ -101,6 +101,8 @@ async function before(
       ? ['[data-ai="motion-new"]']
       : command === "motion.render"
         ? ['[data-ai="motion-render"]', '[data-ai="motion-steps"]']
+        : command === "motion.openInEditor"
+          ? ['[data-ai="motion-open-editor"]', '[data-ai="motion-steps"]']
         : command === "motion.teach" || command === "motion.setSpec"
           ? ['[data-ai="motion-correct"]', '[data-ai="motion-shots"]']
           : command.startsWith("motion.") && reference
@@ -180,6 +182,11 @@ async function after(
   } else if (command === "motion.render" && typeof result.score === "number") {
     await sleep(400);
     await aiPoint('[data-ai="motion-strip"]', `${Math.round(result.score * 100)} % faithful`);
+  } else if (command === "motion.openInEditor" && typeof result.video === "string") {
+    openPlace({ to: "/editor", search: { video: result.video } });
+    await until(() => useSession.getState().videoPath === result.video, 8000);
+    await sleep(500);
+    await aiPoint('[data-ai="timeline"]', "Every part is a layer");
   } else if (command === "motion.teach" || command === "motion.setSpec") {
     await aiPoint('[data-ai="motion-shots"]', "Spec updated");
   }

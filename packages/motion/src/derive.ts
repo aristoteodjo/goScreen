@@ -248,6 +248,15 @@ function textShot(
     ),
   }));
 
+  // A word left in the shot's ink on a line whose other words share another
+  // one (a dark tagline): a reading off, it takes its line's colour.
+  for (const line of lines) {
+    const coloured = line.words.filter((w) => w.color && !w.accent);
+    const plain = line.words.filter((w) => !w.color && !w.accent);
+    if (coloured.length > plain.length && plain.length)
+      for (const w of plain) w.color = coloured[0].color;
+  }
+
   const shot: TextShot = {
     kind: "text",
     id,

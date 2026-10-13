@@ -36,6 +36,9 @@ export const motionIpc = {
   },
   read: async (id: string, file: string) =>
     z.string().parse(await invoke("motion_read", { id, file })),
+  /** The path of a file of a reference (to import it into an edit). */
+  filePath: async (id: string, file: string) =>
+    z.string().parse(await invoke("motion_file_path", { id, file })),
   readJson: async (id: string, file: string): Promise<unknown> =>
     JSON.parse(await motionIpc.read(id, file)),
   write: async (id: string, file: string, value: unknown) => {
@@ -112,9 +115,11 @@ export const localAiIpc = {
   },
   start: async (id: string) => {
     await invoke("local_ai_start", { id });
+    remember(id);
   },
   stop: async () => {
     await invoke("local_ai_stop");
+    remember(null);
   },
   /** One answer of the running model, as text. */
   chat: async (request: unknown) => {
@@ -136,3 +141,26 @@ export const trainingIpc = {
   export: async (jsonl: string) =>
     z.string().min(1).parse(await invoke("training_export", { jsonl })),
 };
+
+// The model the person keeps running: started again when the app starts, and
+// before the local model is asked anything (it stops with the app).
+const KEEP_KEY = "goscreen.localModel";
+function remember(id: string | null) {
+  try {
+    if (id) localStorage.setItem(KEEP_KEY, id);
+    else localStorage.removeItem(KEEP_KEY);
+  } catch {}
+}
+
+/** The local model running, started again if it was kept on; whether it runs. */
+export async function ensureLocalModel(): Promise<boolean> {
+  const status = await localAiIpc.status();
+  if (status.running) return true;
+  let id: string | null = null;
+  try {
+    id = localStorage.getItem(KEEP_KEY);
+  } catch {}
+  if (!id || !status.models.some((m) => m.id === id && m.installed)) return false;
+  await invoke("local_ai_start", { id });
+  return true;
+}

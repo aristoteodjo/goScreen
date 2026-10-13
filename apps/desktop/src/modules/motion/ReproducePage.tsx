@@ -55,6 +55,8 @@ import {
   useVideoUrl,
 } from "./hooks";
 import { motionIpc, type Reference } from "./ipc";
+import { openInEditor } from "./toEditor";
+import { openPlace } from "@/modules/tabs/tabs";
 import { LocalModelBadge, LocalModelDialog } from "./LocalModelDialog";
 import {
   analyzeReference,
@@ -137,6 +139,14 @@ export function ReproducePage({ id }: { id: string }) {
       refreshMotion();
     },
   });
+  const toEditor = useMutation({
+    mutationFn: () => openInEditor(id),
+    onSuccess: (video) => {
+      if (typeof video !== "string" || !video) return;
+      openPlace({ to: "/editor", search: { video } });
+    },
+    onError: (e) => toast.error(message(e)),
+  });
   const renderIt = useMutation({
     mutationFn: () => renderAndMeasure(id),
     onSuccess: (r) => {
@@ -148,7 +158,7 @@ export function ReproducePage({ id }: { id: string }) {
     onSettled: refreshMotion,
   });
   // Work started elsewhere (the AI, another tab) shows and blocks the buttons too.
-  const busy = analyse.isPending || readAll.isPending || renderIt.isPending || !!job;
+  const busy = analyse.isPending || readAll.isPending || renderIt.isPending || toEditor.isPending || !!job;
   const progress = reviewing
     ? `Local model ${reviewing.done + 1}/${reviewing.total}`
     : (describeJob(job) ?? (busy ? "Working…" : null));
@@ -205,6 +215,17 @@ export function ReproducePage({ id }: { id: string }) {
                 onClick={() => readAll.mutate()}
               >
                 Read every shot
+              </Button>
+              <Button
+                data-ai="motion-open-editor"
+                size="sm"
+                variant="outline"
+                disabled={busy || !spec.data || renders.length === 0}
+                title={renders.length ? "Every part as a layer in the editor: change it, reuse it, extend it" : "Render first"}
+                onClick={() => toEditor.mutate()}
+              >
+                {toEditor.isPending ? <Spinner /> : null}
+                Open in editor
               </Button>
               <Button data-ai="motion-render" size="sm" disabled={busy || !spec.data} onClick={() => renderIt.mutate()}>
                 Render and compare

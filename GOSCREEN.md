@@ -411,6 +411,20 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
   nouvelle référence dès qu'elle existe, avec sa progression ; `motion.render` vise « Render and compare », puis
   attend sur la progression et montre la note ; les commandes d'un plan le sélectionnent. Le travail lancé par
   l'IA bloque les boutons de la page (`job`).
+- **Ouvrir dans l'éditeur** (bouton « Open in editor », IA `motion.openInEditor`) : une vidéo reproduite devient
+  un montage de calques, écrit à côté de son dernier rendu (`render-N.edit.json`, fichiers dans
+  `render-N.assets/`). `specToEdit` (pur, testé, `@goscreen/motion`, accepté tel quel par `parseEditState`) : une
+  diapositive par plan (sa couleur), le fond de plan et chaque découpe en calque image ou vidéo avec sa
+  trajectoire en images clés et ses fondus, chaque suite de mots d'une même encre en calque texte (mots qui
+  entrent un à un), le soulignement en forme, chaque compteur en **bloc `stat-counter`** (valeur et couleur
+  réglables, rendu par l'app). Tout se change, se réutilise dans une autre vidéo ou se complète avec les
+  commandes `edit.*`. Les caches ne passent pas (une forme `rect` n'est qu'un contour).
+- **Corriger sans perdre les mesures** (`applyReview`) : chaque ligne corrigée retrouve la ligne mesurée qui
+  partage le plus de mots, chaque mot sa mesure (place, largeur, couleur, compteur, minutage) par son texte ;
+  une ligne que le professeur a vue mais qui n'a pas été mesurée (une pastille dans une image) est apprise,
+  pas dessinée.
+- **Modèle local gardé en marche** : l'app retient le modèle démarré et le relance au lancement et avant
+  chaque question à l'élève (`ensureLocalModel`) ; il s'arrête sinon avec l'app.
 - **Écran Reproduce** (`/reproduce`, bouton « Reproduce a video » de l'accueil ; `/reproduce?reference=<id>`) :
   références en cartes (création = choisir une vidéo, mesure, première spec). Page d'une référence : la vidéo et
   un rendu côte à côte sur une seule horloge (`compare.ts` : la référence mène, le rendu suit à 80 ms près ;
@@ -581,9 +595,10 @@ n'en sait rien.
   cinétique, interfaces, logo) 0,878 et 12/18 ; `p_18r29XIlNmB9xA.mp4` (47 s, 1:1, compteur, mosaïque, dégradés,
   cartes à ombre, pastilles) 0,909 et 3/4.
 - **À faire** (relevé par ces tests) :
-  - les éléments ne sont que des pixels : une découpe d'interface, une pastille, un compteur ne sont pas des
-    composants réutilisables ; il faut les reconnaître comme blocs (`stat-counter`, `cta-button`, pastille, carte,
-    fenêtre…) avec leurs réglages, et ouvrir une référence dans l'éditeur en calques éditables ;
+  - éléments réutilisables, suite : le compteur est un bloc ; reconnaître aussi pastille, bouton (`cta-button`),
+    carte, fenêtre, liste (rôles appris par le modèle local) ; une **bibliothèque d'éléments** partagée entre les
+    vidéos (aujourd'hui les calques vivent dans `render-N.assets/`) ; regrouper les 150+ calques d'un plan
+    d'interface (un groupe par plan) pour que la timeline reste lisible ;
   - « Looks alike » montre les plans encore loin : textes de `presentation` (fonte et anticrénelage d'Inter
     face à la fonte d'origine, 0,76 à 0,81), carton de fin de la nouvelle vidéo (puces et bouton, 48 % d'images) ;
   - fond de plan d'une coupe qui change sans coupure franche (un logo arrivé sur un fond uni reste autour des

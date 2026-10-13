@@ -1,6 +1,9 @@
+import { parseEditState } from "@goscreen/render-engine";
 import { describe, expect, it } from "vitest";
 import {
   ASSET_BASE,
+  aspectOf,
+  specToEdit,
   cleanWords,
   counterOf,
   wordPath,
@@ -335,5 +338,43 @@ describe("label moves", () => {
     expect(path.at(-1)?.scale).toBe(1);
     const still = word("tools", 400, 1, { path: [{ t: 1, x: 400, y: 488, w: 300, h: 115 }, { t: 2, x: 401, y: 488, w: 300, h: 115 }] });
     expect(wordPath(still, 1920, 1080)).toEqual([]);
+  });
+});
+
+describe("specToEdit", () => {
+  it("turns a spec into editor layers that the editor accepts as they are", () => {
+    const fourteen = word("14", 400, 0.9, { box: { x: 400, y: 200, w: 300, h: 200 }, seen: 8, end: 3 });
+    const o = obs(
+      [
+        word("10", 400, 0.6, { box: { x: 400, y: 200, w: 300, h: 200 }, seen: 1, conf: 97, end: 0.8 }),
+        fourteen,
+        word("Chaque", 197, 0.15),
+      ],
+      {
+        visuals: [visual(), visual({ kind: "clip", image: "reference.visual-2.webm", box: { x: 100, y: 800, w: 300, h: 100 } })],
+        plates: [{ start: 0, end: 2, image: "reference.plate-1.png", seen: 1 }],
+      },
+    );
+    const spec = specFromObservations(o);
+    const asset = (file: string, kind: "image" | "video") => ({ id: file, name: file, kind, file, duration: null });
+    const assets = new Map([
+      ["reference.plate-1.png", asset("reference.plate-1.png", "image")],
+      ["reference.visual-1.png", asset("reference.visual-1.png", "image")],
+      ["reference.visual-2.webm", asset("reference.visual-2.webm", "video")],
+    ]);
+    const { edit, counters } = specToEdit(spec, assets);
+    expect(edit.clips.every((c) => c.kind === "slide")).toBe(true);
+    expect(edit.clips.reduce((s, c) => s + (c.kind === "slide" ? c.duration : 0), 0)).toBeCloseTo(spec.duration, 2);
+    const kinds = new Set(edit.overlays.map((v) => v.kind));
+    expect(kinds.has("image")).toBe(true);
+    expect(kinds.has("text")).toBe(true);
+    expect(counters.length).toBe(1);
+    expect(counters[0].value).toBe(14);
+    // The editor reads it back unchanged: nothing it does not know.
+    const back = parseEditState(JSON.parse(JSON.stringify(edit)));
+    expect(back?.overlays.length).toBe(edit.overlays.length);
+    expect(back?.assets.length).toBe(edit.assets.length);
+    expect(aspectOf(1920, 1080)).toBe("16:9");
+    expect(aspectOf(1000, 700)).toBe("auto");
   });
 });

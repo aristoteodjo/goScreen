@@ -62,3 +62,30 @@ describe("elements", () => {
     expect(reviewsAgree(a, b)).toBe(false);
   });
 });
+
+describe("applyReview keeps what was measured", () => {
+  it("keeps a counter and places when the teacher adds a line it saw in a picture", () => {
+    const counter: TextShot = {
+      ...shot,
+      lines: [
+        { words: [{ text: "14", at: 10.2, accent: false, echo: false, x: 0.3, w: 0.2, count: { from: 0, start: 10, end: 10.5 } }] },
+        { words: [{ text: "free", at: 10.6, accent: false, echo: false, x: 0.2, w: 0.08 }, { text: "TikTok", at: 10.7, accent: false, echo: false, x: 0.3, w: 0.1 }] },
+      ],
+    };
+    const review = ShotReview.parse({
+      kind: "text",
+      lines: [
+        [{ text: "14" }],
+        [{ text: "free" }, { text: "TikTok" }, { text: "tools" }],
+        [{ text: "No" }, { text: "signup." }],
+      ],
+    });
+    const next = applyReview(counter, review);
+    expect(next.kind).toBe("text");
+    if (next.kind !== "text") return;
+    // The pills' line was not measured: learnt, not drawn.
+    expect(next.lines).toHaveLength(2);
+    expect(next.lines[0].words[0].count).toEqual({ from: 0, start: 10, end: 10.5 });
+    expect(next.lines[1].words.map((w) => [w.text, w.x])).toEqual([["free", 0.2], ["TikTok", 0.3], ["tools", undefined]]);
+  });
+});

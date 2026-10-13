@@ -19,7 +19,7 @@ import {
   TrainingExample,
 } from "@goscreen/motion";
 import { z } from "zod";
-import { localAiIpc, motionIpc, trainingIpc } from "./ipc";
+import { ensureLocalModel, localAiIpc, motionIpc, trainingIpc } from "./ipc";
 
 // Reproducing a reference video, one step at a time: measure it, derive a
 // spec, let a model correct what OCR cannot know, render the spec, measure
@@ -91,6 +91,8 @@ const studentFile = (shotId: string) => `review-${shotId}.local.json`;
  * learnt so far. Its answer is kept, to be compared when the teacher passes.
  */
 export async function reviewShot(id: string, spec: MotionSpec, index: number) {
+  if (!(await ensureLocalModel()))
+    throw new Error("The local model is not running: start it in Local model.");
   const shot = spec.shots[index];
   const frame = await motionIpc.frame(id, "reference", shotKeyTime(shot), 768);
   const prompt = reviewPrompt(shot);

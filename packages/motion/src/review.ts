@@ -181,33 +181,58 @@ export function applyReview(shot: Shot, review: ShotReview): Shot {
   if (shot.kind !== "text")
     return { ...shot, label: review.description || shot.label };
   const measured = shot.lines.flatMap((l) => l.words);
-  const times = spreadTimes(
-    measured.map((w) => w.at),
-    review.lines.flat().length,
-  );
   const strikeAfter = (at: number) =>
     measured.find((w) => w.strike !== undefined)?.strike ?? round(at + 0.6);
-  let k = 0;
-  // Places stay with the words when the AI kept as many words on each line.
-  const same =
-    review.lines.length === shot.lines.length &&
-    review.lines.every((row, i) => row.length === shot.lines[i].words.length);
-  const lines: Line[] = review.lines.map((row, li) => ({
-    words: row.map((w, wi): Word => {
-      const at = round(times[k++]);
-      const was = same ? shot.lines[li].words[wi] : undefined;
-      const x = was?.x;
+  const norm = (t: string) =>
+    t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  // Each corrected line goes with the measured line it shares most words
+  // with, and keeps its measures (size, baseline); a line the AI saw that was
+  // not measured (a label inside a picture) is learnt, not drawn.
+  const used = new Set<number>();
+  const lines: Line[] = [];
+  for (const row of review.lines) {
+    let best = -1;
+    let shared = 0;
+    shot.lines.forEach((l, i) => {
+      if (used.has(i)) return;
+      const have = new Set(l.words.map((w) => norm(w.text)));
+      const n = row.filter((w) => have.has(norm(w.text))).length;
+      if (n > shared) {
+        shared = n;
+        best = i;
+      }
+    });
+    // Nothing in common: the line at the same place, when the counts match.
+    if (best < 0 && review.lines.length === shot.lines.length) {
+      const i = review.lines.indexOf(row);
+      if (!used.has(i)) best = i;
+    }
+    if (best < 0) continue;
+    used.add(best);
+    const source = shot.lines[best];
+    const free = [...source.words];
+    let last = source.words[0]?.at ?? shot.start;
+    const words = row.map((w, wi): Word => {
+      // The measured word: same text, else the one at the same place.
+      let k = free.findIndex((m) => norm(m.text) === norm(w.text));
+      if (k < 0 && row.length === source.words.length) k = free.indexOf(source.words[wi]);
+      const was = k >= 0 ? free.splice(k, 1)[0] : undefined;
+      const at = round(was?.at ?? last);
+      last = at;
       return {
         text: w.text,
         at,
         accent: w.accent,
-        echo: measured.find((m) => m.text === w.text)?.echo ?? false,
-        ...(x !== undefined ? { x, ...(was?.w !== undefined ? { w: was.w } : {}) } : {}),
+        echo: was?.echo ?? false,
+        ...(was?.x !== undefined ? { x: was.x, ...(was.w !== undefined ? { w: was.w } : {}) } : {}),
         ...(was?.color && !w.accent ? { color: was.color } : {}),
-        ...(w.strike ? { strike: strikeAfter(at) } : {}),
+        ...(was?.count && norm(w.text) === norm(was.text) ? { count: was.count } : {}),
+        ...(w.strike ? { strike: was?.strike ?? strikeAfter(at) } : {}),
       };
-    }),
-  }));
+    });
+    lines.push({ ...source, words });
+  }
+  if (!lines.length) return shot;
   const next: TextShot = { ...shot, lines };
   if (review.kicker)
     next.kicker = { text: review.kicker, at: shot.kicker?.at ?? shot.start, gap: shot.kicker?.gap ?? 0.35 };
