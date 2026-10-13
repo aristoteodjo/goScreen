@@ -185,13 +185,8 @@ function textShot(
   const kickerRow =
     rows.length > 1 && sizes[0] < main * 0.5 ? rows.shift() : undefined;
   if (kickerRow) sizes.shift();
-  // A tiny row below them is not part of the text (a logo's baseline, a
-  // credit): it stays in the pictures, and the lines keep their place.
-  for (let i = rows.length - 1; i > 0; i--)
-    if (sizes[i] < main * 0.35) {
-      rows.splice(i, 1);
-      sizes.splice(i, 1);
-    }
+  // Rows much smaller than the main one stay (a tagline under a giant
+  // counter): each line keeps its own size.
   const size = median(sizes);
   const lastBase = baselineOf(rows[rows.length - 1]);
   const left = Math.min(...rows.map((r) => r[0].box.x));
@@ -233,6 +228,15 @@ function textShot(
         text: w.text,
         at: round(Math.max(start, w.start)),
         accent: isAccent(w.color, ink),
+        // A number counting up to itself comes in with its first count.
+        ...(() => {
+          const count = counterOf(obs, w, start);
+          return count ? { count, at: round(Math.max(start, count.start)) } : {};
+        })(),
+        // A word of another ink, not the accent: drawn in its own colour.
+        ...(w.color && !isAccent(w.color, ink) && colorDistance(w.color, ink) > 0.3
+          ? { color: w.color }
+          : {}),
         echo: false,
         x: round(w.box.x / obs.width, 10000),
         w: round(w.box.w / obs.width, 10000),
@@ -465,12 +469,84 @@ function coversOf(v: ObservedVisual, words: ObservedWord[], W: number, H: number
  * without (`masked`): they are drawn as text at their measured place (the
  * pictures hide them under covers), a figure on a dashboard as much as a title.
  */
-export function labelsFor(obs: Observations, words: ObservedWord[]): Label[] {
+/**
+ * A word's measured moves as the renderer reads them: its centre and its
+ * scale (from its height) at each reading, against its box at rest; empty if
+ * it stays put.
+ */
+export function wordPath(w: ObservedWord, W: number, H: number): VisualPoint[] {
+  if (w.path.length < 2) return [];
+  const rest = w.box;
+  const points = w.path.map((p): VisualPoint => ({
+    t: round(p.t),
+    x: round((p.x + p.w / 2) / W, 10000),
+    y: round((p.y + p.h / 2) / H, 10000),
+    // From its width: the same letters, while its height jumps with what OCR
+    // takes in (an ascender, an accent).
+    scale: round(Math.min(20, Math.max(0.05, p.w / Math.max(1, rest.w))), 1000),
+  }));
+  const kept = [points[0]];
+  for (const p of points.slice(1)) {
+    const q = kept[kept.length - 1];
+    if (Math.hypot(p.x - q.x, p.y - q.y) > 0.004 || Math.abs(p.scale - q.scale) > 0.03) kept.push(p);
+  }
+  const last = points[points.length - 1];
+  if (kept[kept.length - 1] !== last) kept.push(last);
+  const centre = { x: (rest.x + rest.w / 2) / W, y: (rest.y + rest.h / 2) / H };
+  const still = kept.every(
+    (p) => Math.hypot(p.x - centre.x, p.y - centre.y) < 0.008 && Math.abs(p.scale - 1) < 0.1,
+  );
+  return still ? [] : kept;
+}
+
+/**
+ * A number that counts up in place: the smaller numbers OCR caught, once
+ * each, where it settles and before it does (a counter goes too fast to be
+ * read twice). Its pace, from those readings, gives where it starts.
+ */
+export function counterOf(
+  obs: Observations,
+  w: ObservedWord,
+  from: number,
+): Label["count"] | undefined {
+  if (!/^\d+$/.test(w.text)) return undefined;
+  const value = Number(w.text);
+  const near = (b: Box) => {
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    return cx > w.box.x - w.box.w * 0.3 && cx < w.box.x + w.box.w * 1.3 && cy > w.box.y - w.box.h * 0.3 && cy < w.box.y + w.box.h * 1.3;
+  };
+  const before = obs.words
+    .filter((o) => /^\d+$/.test(o.text) && o.conf >= 80 && Number(o.text) < value)
+    .filter((o) => o.start < w.start && o.start >= w.start - 3 && o.start >= from && near(o.box))
+    .sort((a, b) => a.start - b.start);
+  if (!before.length) return undefined;
+  const first = before[0];
+  const pace = (value - Number(first.text)) / Math.max(0.05, w.start - first.start);
+  if (!(pace > 0)) return undefined;
+  // From zero, where its pace says, but not before the shot.
+  const zero = first.start - Number(first.text) / pace;
+  const start = Math.max(from, zero);
+  return {
+    from: Math.max(0, Math.round(pace * (start - zero))),
+    start: round(start),
+    end: round(w.start),
+  };
+}
+
+export function labelsFor(obs: Observations, words: ObservedWord[], from = 0): Label[] {
   const { width: W, height: H } = obs;
   const bg = at(obs.backgrounds, words[0]?.settled ?? 0);
   return words
     .filter((w) => w.masked)
-    .map((w) => ({
+    .map((w) => {
+      const count = counterOf(obs, w, from);
+      return { ...labelOf(w), ...(count ? { count, at: count.start, fadeIn: 0 } : {}) };
+    });
+
+  function labelOf(w: ObservedWord): Label {
+    return {
+      path: wordPath(w, W, H),
       text: w.text,
       x: round(w.box.x / W, 10000),
       y: round(baselineOf([w]) / H, 10000),
@@ -481,7 +557,8 @@ export function labelsFor(obs: Observations, words: ObservedWord[]): Label[] {
       at: round(w.start),
       fadeIn: round(Math.min(0.6, Math.max(0, w.settled - w.start))),
       until: round(Math.max(w.end, w.start + 0.05)),
-    }));
+    };
+  }
 }
 
 /**
@@ -539,7 +616,14 @@ export function specFromObservations(obs: Observations): MotionSpec {
     // logo card, an interface); pictures that follow each other are one shot.
     const segments: { text: boolean; words: ObservedWord[] }[] = [];
     for (const g of groups) {
-      const text = isKineticText([g], obs.height) && !onPicture(obs, g);
+      // Text the renderer would draw: at least one word it draws (a word read
+      // on a photo, too small or unsure, leaves it a picture).
+      const drawable =
+        (!words.some((w) => w.masked) || g.some((w) => w.masked)) &&
+        // A flash of words read twice in under half a second (a label on a
+        // passing photo) is not a title.
+        Math.max(...g.map((w) => w.end - w.start)) >= 0.5;
+      const text = drawable && isKineticText([g], obs.height) && !onPicture(obs, g);
       const last = segments[segments.length - 1];
       if (!text && last && !last.text) last.words.push(...g);
       else segments.push({ text, words: [...g] });
@@ -568,7 +652,20 @@ export function specFromObservations(obs: Observations): MotionSpec {
         );
         shots.push(shot);
       } else {
-        const visuals = visualsFor(obs, start, end, null, drawnWords(seg.words));
+        const labels = labelsFor(obs, seg.words, start);
+        // Where a counter counts, the pictures are of its digits rolling by
+        // (too fast for OCR to leave them out): the counter is drawn instead.
+        const counting = labels.filter((l) => l.count);
+        const visuals = visualsFor(obs, start, end, null, drawnWords(seg.words)).filter(
+          (v) =>
+            !counting.some((l) => {
+              const box = { x: l.x - (l.w ?? 0.2) * 0.3, y: l.y - l.size * 1.2, w: (l.w ?? 0.2) * 1.6, h: l.size * 1.6 };
+              const cx = v.x + v.w / 2;
+              const cy = v.y + v.h / 2;
+              const inside = cx > box.x && cx < box.x + box.w && cy > box.y && cy < box.y + box.h;
+              return inside && v.at < (l.count?.end ?? 0) + 0.3 && v.w * v.h < box.w * box.h * 2;
+            }),
+        );
         shots.push({
           kind: "placeholder",
           id,
@@ -577,7 +674,7 @@ export function specFromObservations(obs: Observations): MotionSpec {
           background: at(obs.backgrounds, (start + end) / 2),
           label: seg.words.length ? "interface" : visuals.length ? "picture" : "",
           visuals,
-          labels: labelsFor(obs, seg.words),
+          labels,
         });
       }
       start = end;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyReview, ShotReview, shotKeyTime, spreadTimes, type TextShot } from "./index.ts";
+import { applyReview, reviewsAgree, ShotReview, shotKeyTime, spreadTimes, type TextShot } from "./index.ts";
 
 const shot: TextShot = {
   kind: "text", id: "s", start: 10, end: 12, background: "#ffffff", ink: "#0b0f19", accent: "#1f4fe8",
@@ -49,4 +49,16 @@ it("spreadTimes keeps measured times when counts match", () => {
 
 it("shotKeyTime waits for the last word, within the shot", () => {
   expect(shotKeyTime(shot)).toBeCloseTo(10.9, 5);
+});
+
+describe("elements", () => {
+  it("reads older answers without background or elements, and judges them when given", () => {
+    const old = ShotReview.parse({ kind: "interface", lines: [], kicker: null, description: "x" });
+    expect(old.background).toBeNull();
+    expect(old.elements).toEqual([]);
+    const a = ShotReview.parse({ ...old, background: { kind: "gradient", colors: ["#ffffff"] }, elements: [{ role: "window", shadow: true }] });
+    const b = ShotReview.parse({ ...old, background: { kind: "plain", colors: [] } });
+    expect(reviewsAgree(a, a)).toBe(true);
+    expect(reviewsAgree(a, b)).toBe(false);
+  });
 });

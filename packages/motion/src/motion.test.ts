@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   ASSET_BASE,
   cleanWords,
+  counterOf,
+  wordPath,
   labelsFor,
+  lookAlike,
   onPicture,
   visualPath,
   visualsFor,
@@ -27,6 +30,7 @@ const word = (text: string, x: number, start: number, extra: Partial<ObservedWor
   end: 1.4,
   masked: true,
   mark: false,
+  path: [],
   around: null,
   ...extra,
 });
@@ -44,6 +48,7 @@ const obs = (words: ObservedWord[], extra: Partial<Observations> = {}): Observat
   words,
   visuals: [],
   plates: [],
+  thumbs: null,
   ...extra,
 });
 
@@ -267,5 +272,68 @@ describe("cleanWords", () => {
     const six = word("6", 400, 0.45, { end: 1 });
     const misread = word("S", 400, 0.5, { end: 0.95, conf: 70 });
     expect(cleanWords([five, six, misread]).map((w) => w.text)).toEqual(["5", "6"]);
+  });
+});
+
+describe("lookAlike", () => {
+  const thumbs = (fill: number[]) => ({
+    cols: 2,
+    rows: 1,
+    frames: [0.25, 0.5].map((t) => ({ t, rgb: btoa(String.fromCharCode(...fill, ...fill)) })),
+  });
+  it("is 1 for the same frames and caps the fidelity of frames unlike", () => {
+    const ref = obs([], { thumbs: thumbs([200, 20, 20]), cuts: [] });
+    expect(lookAlike(ref, ref, 0, 1)).toBe(1);
+    const other = { ...ref, thumbs: thumbs([255, 255, 255]) };
+    expect(lookAlike(ref, other, 0, 1)).toBe(0);
+    const [m] = measureShots(specFromObservations(ref), ref, other);
+    expect(fidelity(m)).toBe(0);
+  });
+});
+
+describe("word colours", () => {
+  it("keeps a word of another ink than the shot's", () => {
+    const o = obs([
+      word("viewlify", 197, 0.15, { color: "#ffffff" }),
+      word("tools", 600, 0.15, { color: "#ffffff" }),
+      word("All", 197, 0.3, { color: "#241912", box: { x: 197, y: 650, w: 120, h: 60 } }),
+    ], { backgrounds: [{ t: 0, color: "#c0392b" }] });
+    const shot = specFromObservations(o).shots[0];
+    const words = shot.kind === "text" ? shot.lines.flatMap((l) => l.words) : [];
+    expect(words.find((w) => w.text === "All")?.color).toBe("#241912");
+    expect(words.find((w) => w.text === "tools")?.color).toBeUndefined();
+  });
+});
+
+describe("counters", () => {
+  it("makes a number that counts up in place from the smaller ones caught before", () => {
+    const at = (text: string, start: number, extra: Partial<ObservedWord> = {}) =>
+      word(text, 400, start, { box: { x: 400, y: 200, w: 300, h: 200 }, ...extra });
+    const fourteen = at("14", 0.9, { seen: 8, end: 4 });
+    const o = obs([at("10", 0.6, { seen: 1, conf: 97, end: 0.8 }), at("13", 0.8, { seen: 1, conf: 95, end: 0.9 }), fourteen]);
+    const count = counterOf(o, fourteen, 0);
+    expect(count).toBeDefined();
+    expect(count?.end).toBe(0.9);
+    expect(count?.start).toBeLessThan(0.6);
+    expect(labelsFor(o, [fourteen])[0].count).toEqual(count);
+    expect(counterOf(o, word("tools", 400, 1), 0)).toBeUndefined();
+  });
+});
+
+describe("label moves", () => {
+  it("follows a word that grows, and stays still for one that does not", () => {
+    const grows = word("14", 400, 0.9, {
+      box: { x: 400, y: 200, w: 300, h: 200 },
+      path: [
+        { t: 1, x: 475, y: 250, w: 150, h: 100 },
+        { t: 2, x: 437, y: 225, w: 225, h: 150 },
+        { t: 3, x: 400, y: 200, w: 300, h: 200 },
+      ],
+    });
+    const path = wordPath(grows, 1920, 1080);
+    expect(path[0].scale).toBe(0.5);
+    expect(path.at(-1)?.scale).toBe(1);
+    const still = word("tools", 400, 1, { path: [{ t: 1, x: 400, y: 488, w: 300, h: 115 }, { t: 2, x: 401, y: 488, w: 300, h: 115 }] });
+    expect(wordPath(still, 1920, 1080)).toEqual([]);
   });
 });

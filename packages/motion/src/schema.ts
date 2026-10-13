@@ -23,6 +23,10 @@ export const Word = z.object({
   strike: time.optional(),
   /** Faded copies stacked above it, like an echo. */
   echo: z.boolean().default(false),
+  /** A counter: counts from `from` (at `start`) up to its text (at `end`). */
+  count: z.object({ from: z.number(), start: time, end: time }).optional(),
+  /** Its own ink, when it is neither the shot's nor the accent (a dark tagline under a white URL). */
+  color: hex.optional(),
   /** Measured left edge and width of its letters: the renderer fits it there. */
   x: fraction.optional(),
   w: z.number().positive().max(2).optional(),
@@ -137,6 +141,13 @@ export const Label = z.object({
   at: time,
   fadeIn: z.number().min(0).default(0),
   until: time,
+  /**
+   * A counter: the number counts from `from` (at `start`) up to its text (at
+   * `end`), whole numbers, easing out.
+   */
+  count: z.object({ from: z.number(), start: time, end: time }).optional(),
+  /** Measured moves of its letters (centre and scale from rest); empty = it stays. */
+  path: z.array(VisualPoint).default([]),
 });
 
 export const TextShot = z.object({

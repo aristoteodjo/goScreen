@@ -372,6 +372,14 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
   `labels` pour chacun de ses mots dessinés (calés sur l'encre ; un mot court est mis à l'échelle plutôt
   qu'espacé). Les visuels gardent des **caches** (`covers`, couleur relevée autour du mot, bords adoucis) sur les
   mots redessinés par-dessus.
+- **Compteurs** : un nombre stable précédé, au même endroit, de nombres plus petits lus une seule fois (trop
+  rapides pour l'OCR) devient un compteur (`counterOf` : `count: { from, start, end }` sur un mot ou un label,
+  vitesse tirée des lectures) ; le rendu réécrit son nombre à chaque image (`__goscreenSeek`). Les images de ses
+  chiffres qui défilent sont écartées. Les boîtes des mots sont resserrées sur leur encre (`inkBox` : l'OCR gonfle
+  celles des très gros caractères), les mots et labels suivent leur trajectoire mesurée (`path`, échelle tirée de
+  la largeur), et un mot d'une autre encre que celle du plan garde sa couleur (`Word.color`).
+- **La note ne ment pas** : chaque échantillon garde une miniature couleur 48 × 48 (`thumbs`) ; `lookAlike`
+  compare référence et rendu case par case (« Looks alike ») et `fidelity` ne la dépasse jamais.
 - `compose.mjs` sert ces fichiers par nom seulement (`http://goscreen.assets/<nom>`, `assetName`, avec `Range`
   pour les clips) et attend que chaque clip ait l'image voulue avant la capture (`__goscreenSeek`). Les plans
   non textuels sont notés sur leurs images (`visuals` : part de la surface des images de la référence que
@@ -393,6 +401,16 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
 - IA : `motion.references`, `motion.create`, `motion.spec`, `motion.setSpec`, `motion.frame`, `motion.shot`,
   `motion.teach`, `motion.reviewLocal`, `motion.render`, `training.stats`, `training.export`
   (`modules/motion/commands.ts`). `motion_video_url` sert une référence ou un rendu par le serveur média.
+- **Contrat d'apprentissage** (`ShotReview`) : en plus du type, du texte et de la description, le **fond**
+  (`background` : uni, dégradé, texture, vidéo, image, et ses couleurs) et les **éléments** (`elements` : rôle carte,
+  fenêtre, pastille, bouton, logo, icône, photo, graphique, liste ; ombre ; libellé). Chaque test d'une référence
+  dans l'app se termine par la boucle d'apprentissage : `motion.reviewLocal` (l'élève répond), puis
+  `motion.teach` plan par plan (le professeur corrige, l'exemple est gardé). Pas encore utilisés par le rendu :
+  le fond et les éléments sont appris pour la suite (choisir un bloc, faire confiance au fond de plan).
+- **Suivre l'IA** couvre aussi la reproduction : `motion.create` ouvre l'accueil Reproduce puis la page de la
+  nouvelle référence dès qu'elle existe, avec sa progression ; `motion.render` vise « Render and compare », puis
+  attend sur la progression et montre la note ; les commandes d'un plan le sélectionnent. Le travail lancé par
+  l'IA bloque les boutons de la page (`job`).
 - **Écran Reproduce** (`/reproduce`, bouton « Reproduce a video » de l'accueil ; `/reproduce?reference=<id>`) :
   références en cartes (création = choisir une vidéo, mesure, première spec). Page d'une référence : la vidéo et
   un rendu côte à côte sur une seule horloge (`compare.ts` : la référence mène, le rendu suit à 80 ms près ;
@@ -559,18 +577,19 @@ n'en sait rien.
   gardaient sinon l'ancienne version). `pnpm bench:reproduce <vidéo>` joue la même boucle sans l'app, pour
   itérer entre deux tests ; il donne les mêmes notes. Toujours regarder aussi les images côte à côte : une note
   haute a déjà caché des défauts visibles.
-- Bases de test (2026-10-13, par l'app) : `presentation.mp4` (36 s, texte cinétique, interfaces, logo) 0,917 et
-  15/18 ; `p_18r29XIlNmB9xA.mp4` (47 s, 1:1, fond texturé, dégradés, cartes à ombre, pastilles) 0,842 et 2/4.
+- Bases de test (2026-10-13, par l'app, note honnête « Looks alike ») : `presentation.mp4` (36 s, texte
+  cinétique, interfaces, logo) 0,878 et 12/18 ; `p_18r29XIlNmB9xA.mp4` (47 s, 1:1, compteur, mosaïque, dégradés,
+  cartes à ombre, pastilles) 0,909 et 3/4.
 - **À faire** (relevé par ces tests) :
-  - un plan d'images est noté sur ses images seulement : les labels (titres redessinés) n'y comptent pas, et la
-    note d'un logo ou d'une slide (0,77 à 0,82) ne dit pas ce qui manque ;
-  - fond de plan d'une coupe qui change sans coupure franche (un logo qui arrive sur un fond uni) : un élément
-    présent plus de la moitié de la coupe y reste et se voit autour des mots d'avant ; les « coupes douces »
-    essayées multipliaient les fonds et cassaient d'autres plans ;
-  - titres en fondu enchaîné (« Trending videos » -> « sounds ») : un mot peut manquer pendant la transition ;
-  - texte avec ombre portée : sa couleur mesurée est celle de l'ombre (écart de couleur faux sur le carton de fin) ;
-  - un label est fixe : un chiffre qui grossit ou rétrécit (« 14 ») garde sa taille médiane ;
-  - un micro-plan parasite naît d'un mot lu sur une photo au tout début (« pAY », 0,4 s).
+  - les éléments ne sont que des pixels : une découpe d'interface, une pastille, un compteur ne sont pas des
+    composants réutilisables ; il faut les reconnaître comme blocs (`stat-counter`, `cta-button`, pastille, carte,
+    fenêtre…) avec leurs réglages, et ouvrir une référence dans l'éditeur en calques éditables ;
+  - « Looks alike » montre les plans encore loin : textes de `presentation` (fonte et anticrénelage d'Inter
+    face à la fonte d'origine, 0,76 à 0,81), carton de fin de la nouvelle vidéo (puces et bouton, 48 % d'images) ;
+  - fond de plan d'une coupe qui change sans coupure franche (un logo arrivé sur un fond uni reste autour des
+    mots d'avant) ;
+  - titres en fondu enchaîné : un mot peut manquer pendant la transition ;
+  - le fond et les éléments appris par le modèle local ne servent pas encore au rendu.
 
 ## Plan : vidéos produit automatiques, pilotées par la campagne
 

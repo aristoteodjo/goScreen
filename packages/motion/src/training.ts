@@ -35,6 +35,10 @@ const words = (r: ShotReview) =>
 /** Same kind, same words, same accents and strikes, same kicker. */
 export function reviewsAgree(a: ShotReview, b: ShotReview): boolean {
   if (a.kind !== b.kind) return false;
+  // What is behind and in front, when both said it: the same kinds of things.
+  if (a.background && b.background && a.background.kind !== b.background.kind) return false;
+  const roles = (r: ShotReview) => [...new Set(r.elements.map((e) => e.role))].sort().join(",");
+  if (a.elements.length && b.elements.length && roles(a) !== roles(b)) return false;
   if (a.kind !== "text") return true;
   return words(a) === words(b) && (a.kicker ?? "") === (b.kicker ?? "");
 }

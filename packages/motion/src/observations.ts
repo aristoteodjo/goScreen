@@ -20,6 +20,8 @@ export const ObservedWord = z.object({
   masked: z.boolean().default(false),
   /** The lettering of a logo (letters spread apart): part of a picture, not text. */
   mark: z.boolean().default(false),
+  /** Its box at each reading (a word that grows or moves). */
+  path: z.array(Box.extend({ t: z.number() })).default([]),
   /** The colour just around it once settled: what hides it in a picture. */
   around: z.string().nullable().default(null),
 });
@@ -66,6 +68,15 @@ export const Observations = z.object({
   plates: z
     .array(z.object({ start: z.number(), end: z.number(), image: z.string(), seen: z.number().default(1) }))
     .default([]),
+  /** Each sample as a small RGB picture (base64), to compare looks cell by cell. */
+  thumbs: z
+    .object({
+      cols: z.number().int().positive(),
+      rows: z.number().int().positive(),
+      frames: z.array(z.object({ t: z.number(), rgb: z.string() })),
+    })
+    .nullable()
+    .default(null),
 });
 
 export type Box = z.infer<typeof Box>;

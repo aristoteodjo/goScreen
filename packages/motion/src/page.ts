@@ -37,6 +37,8 @@ window.__goscreenReady = document.fonts.ready.then(() => {
   let lastLine = null; // the previous underline, so the next one grows from it
 
   const assets = root.dataset.assets || "";
+  const counters = [];
+  const pending = []; // work that needs a label's final place
   const loads = [];
   const clips = [];
   const offset = (t) => Math.max(0, Math.min(1, (t * 1000) / D));
@@ -138,7 +140,9 @@ window.__goscreenReady = document.fonts.ready.then(() => {
       line.words.forEach((w, wi) => {
         const span = el("span", "word", row);
         span.textContent = w.text;
+        if (w.count) counters.push({ text: span.firstChild, count: w.count, to: Number(w.text) });
         if (w.accent) span.style.color = shot.accent;
+        else if (w.color) span.style.color = w.color;
         if (wi < line.words.length - 1) span.style.marginRight = "0.26em";
         words.push({ w, span, line: li });
       });
@@ -258,6 +262,8 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     const node = el("div", "label", frame);
     node.style.cssText = "left:" + l.x * W + "px;font-size:" + px + "px;font-weight:" + l.weight + ";color:" + l.color;
     node.textContent = l.text;
+    // A counter shows its number of the moment (set at each seek).
+    if (l.count) counters.push({ text: node.firstChild, count: l.count, to: Number(l.text) });
     const probe = el("span", "probe", node);
     // Fitted on the reference's letters, as a word of a text shot.
     const cs = getComputedStyle(node);
@@ -281,7 +287,23 @@ window.__goscreenReady = document.fonts.ready.then(() => {
       node.style.transform = "scaleX(" + scale + ")";
     }
     node.style.left = l.x * W + m.actualBoundingBoxLeft * scale + "px";
+    // Its measured moves (a counter zooming in), around its letters' centre.
+    if (l.path && l.path.length) {
+      const nodeLeft = l.x * W + m.actualBoundingBoxLeft * scale;
+      const cx = (l.x + (l.w ?? 0) / 2) * W, cy = l.y * H - px * 0.36;
+      const at = (p) => "translate(" + (p.x * W - cx) + "px," + (p.y * H - cy) + "px) scale(" + p.scale + ")" + (scale !== 1 ? " scaleX(" + scale + ")" : "");
+      pending.push(() => {
+        node.style.transformOrigin = (cx - nodeLeft) + "px " + (cy - parseFloat(node.style.top)) + "px";
+        const first = l.path[0], last = l.path[l.path.length - 1];
+        animate(node, [
+          { transform: at(first), offset: 0 },
+          ...l.path.map((p) => ({ transform: at(p), offset: offset(p.t) })),
+          { transform: at(last), offset: 1 },
+        ], { duration: D, easing: "linear" });
+      });
+    }
     node.style.top = l.y * H - (probe.offsetTop + probe.offsetHeight) + "px";
+    while (pending.length) pending.shift()();
     window_(node, Math.max(l.at, shot.start), Math.min(l.until, shot.end));
     fades(node, l.at, l.fadeIn, l.until, 0);
   };
@@ -318,7 +340,16 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     node.addEventListener("seeked", () => { clearTimeout(timer); resolve(); }, { once: true });
     node.currentTime = time;
   });
-  window.__goscreenSeek = (t) => Promise.all(
+  const countAt = (c, t) => {
+    const k = Math.max(0, Math.min(1, (t - c.count.start) / Math.max(0.001, c.count.end - c.count.start)));
+    // Eases out, as counters do: fast, then settling on the value.
+    return Math.round(c.count.from + (c.to - c.count.from) * (1 - Math.pow(1 - k, 2)));
+  };
+  window.__goscreenSeek = (t) => {
+    for (const c of counters) c.text.nodeValue = String(countAt(c, t));
+    return seekClips(t);
+  };
+  const seekClips = (t) => Promise.all(
     clips
       .filter((c) => t >= c.at && t < c.until)
       .map((c) => seekClip(c.node, Math.max(0, Math.min(c.node.duration - 0.001, t - c.at)))),

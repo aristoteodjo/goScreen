@@ -29,7 +29,43 @@ export type ShotMeasure = {
   refVisuals: number;
   /** Share of the area of the reference's pictures the rendering's take too (0..1, 1 if none). */
   visuals: number;
+  /**
+   * How alike the frames look, cell by cell, colour included (0..1); null
+   * when either side was measured without its small pictures.
+   */
+  pixels: number | null;
 };
+
+const bytesOf = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+/**
+ * How alike a shot looks in the reference and the rendering: their small
+ * pictures at the same moments, cell by cell. A cell counts fully when its
+ * colour is the same, not at all past a gap of 48 (out of 255) per channel.
+ */
+export function lookAlike(ref: Observations, out: Observations, start: number, end: number): number | null {
+  const a = ref.thumbs;
+  const b = out.thumbs;
+  if (!a || !b || a.cols !== b.cols || a.rows !== b.rows) return null;
+  let sum = 0;
+  let n = 0;
+  for (const f of a.frames) {
+    if (f.t < start || f.t >= end) continue;
+    const g = b.frames.reduce<(typeof b.frames)[number] | null>(
+      (best, x) => (!best || Math.abs(x.t - f.t) < Math.abs(best.t - f.t) ? x : best),
+      null,
+    );
+    if (!g || Math.abs(g.t - f.t) > 0.13) continue;
+    const p = bytesOf(f.rgb);
+    const q = bytesOf(g.rgb);
+    for (let i = 0; i + 2 < p.length && i + 2 < q.length; i += 3) {
+      const d = (Math.abs(p[i] - q[i]) + Math.abs(p[i + 1] - q[i + 1]) + Math.abs(p[i + 2] - q[i + 2])) / 3;
+      sum += Math.max(0, 1 - d / 48);
+      n++;
+    }
+  }
+  return n ? sum / n : null;
+}
 
 const norm = (s: string) =>
   s
@@ -123,6 +159,7 @@ export function measureShots(
       id: shot.id,
       kind: shot.kind,
       ...visualRecall(ref, out, shot.start, shot.end, shot.kind === "text"),
+      pixels: lookAlike(ref, out, shot.start, shot.end),
       refWords: a.length,
       outWords: b.length,
       recall: a.length ? pairs.length / a.length : 1,
@@ -152,6 +189,12 @@ export function measureShots(
  * `FIDELITY_PASS`.
  */
 export function fidelity(m: ShotMeasure): number {
+  // Never more faithful than it looks: the measures below read words and
+  // boxes, the frames themselves say whether the two are alike.
+  return Math.min(m.pixels ?? 1, measured(m));
+}
+
+function measured(m: ShotMeasure): number {
   const visuals = m.visuals;
   // A shot of pictures (an interface, a logo) is judged on its pictures.
   if (m.kind === "placeholder") return visuals;

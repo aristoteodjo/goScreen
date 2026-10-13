@@ -76,9 +76,38 @@ async function before(
     seen.flow = useFlowDoc.getState().flow;
   }
 
+  const reference = str(input.reference);
+  if (command === "motion.create") {
+    openPlace({ to: "/reproduce", search: {} });
+    await until(() => document.querySelector('[data-ai="motion-new"]') !== null, 6000);
+    await sleep(300);
+  } else if (command.startsWith("motion.") && reference) {
+    await openReference(reference);
+    // A shot the command is about: shown, as the person would click it.
+    const shot = str(input.shot);
+    if (shot) {
+      const at = `[data-ai-item="${shot}"]`;
+      if (await aiPoint(at, `${title}…`)) {
+        await aiClick();
+        (document.querySelector(at) as HTMLElement | null)?.click();
+        await sleep(300);
+      }
+    }
+  }
+
   const item = str(input.overlay);
   const targets: string[] =
-    command === "edit.animate" || command === "edit.updateBlock"
+    command === "motion.create"
+      ? ['[data-ai="motion-new"]']
+      : command === "motion.render"
+        ? ['[data-ai="motion-render"]', '[data-ai="motion-steps"]']
+        : command === "motion.teach" || command === "motion.setSpec"
+          ? ['[data-ai="motion-correct"]', '[data-ai="motion-shots"]']
+          : command.startsWith("motion.") && reference
+            ? ['[data-ai="motion-shots"]', '[data-ai="motion-steps"]']
+            : command.startsWith("motion.") || command.startsWith("training.")
+              ? ['[data-ai="references"]', '[data-ai="tabs"]']
+              : command === "edit.animate" || command === "edit.updateBlock"
       ? [`[data-ai-item="${item}"]`, '[data-ai="timeline"]']
       : command === "edit.setFilm"
         ? ['[data-ai="inspector"]']
@@ -96,7 +125,33 @@ async function before(
                     ? ['[data-ai="projects"]', '[data-ai="tabs"]']
                     : ['[data-ai="tabs"]'];
   if (await aiPoint(targets, `${title}…`)) await aiClick();
+  // A long piece of work (measuring, rendering): the cursor waits where its
+  // progress shows.
+  if (command === "motion.render")
+    await aiPoint(['[data-ai="motion-progress"]', '[data-ai="motion-steps"]'], "Rendering and measuring…");
   return seen;
+}
+
+/** A reference's page, open and drawn. */
+async function openReference(reference: string) {
+  const s = router.state.location.search as { reference?: string };
+  if (router.state.location.pathname !== "/reproduce" || s.reference !== reference)
+    openPlace({ to: "/reproduce", search: { reference } });
+  await until(() => document.querySelector('[data-ai="motion-steps"]') !== null, 8000);
+  await sleep(300);
+}
+
+/**
+ * During a command: a reference the AI just made opens, with its progress,
+ * while the work goes on (measuring a video takes a while).
+ */
+export function aiShowReference(reference: string, label: string): Promise<void> {
+  if (!useAiWatch.getState().follow) return Promise.resolve();
+  return inTurn(async () => {
+    await openReference(reference);
+    await until(() => document.querySelector('[data-ai="motion-progress"]') !== null, 3000);
+    await aiPoint(['[data-ai="motion-progress"]', '[data-ai="motion-steps"]'], label);
+  });
 }
 
 async function after(
@@ -119,6 +174,14 @@ async function after(
     await aiPoint('[data-ai="program"]', "Film settings applied");
   } else if (command === "vsl.save" && was.flow) {
     await showFlowChanges(was.flow);
+  } else if (command === "motion.create" && Array.isArray(result.shots)) {
+    await until(() => document.querySelector('[data-ai="motion-shots"]') !== null, 4000);
+    await aiPoint('[data-ai="motion-shots"]', `${result.shots.length} shots found`);
+  } else if (command === "motion.render" && typeof result.score === "number") {
+    await sleep(400);
+    await aiPoint('[data-ai="motion-strip"]', `${Math.round(result.score * 100)} % faithful`);
+  } else if (command === "motion.teach" || command === "motion.setSpec") {
+    await aiPoint('[data-ai="motion-shots"]', "Spec updated");
   }
   aiRest();
 }

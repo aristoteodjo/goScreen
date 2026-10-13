@@ -108,6 +108,35 @@ export function inkColor(rgb, width, box, bg) {
   return sum.map((v) => v / top.length);
 }
 
+/**
+ * A word's box tightened on its ink: the pixels close to its colour, the
+ * outermost 1 % left out. OCR's box of a very big word can be far larger than
+ * its letters (a counter's « 14 » read as 838 × 484 for 430 × 280).
+ */
+export function inkBox(rgb, width, box, ink, near = 90) {
+  const xs = [];
+  const ys = [];
+  for (let y = box.y; y < box.y + box.h; y++)
+    for (let x = box.x; x < box.x + box.w; x++) {
+      const i = (y * width + x) * 3;
+      if (dist([rgb[i], rgb[i + 1], rgb[i + 2]], ink) < near) {
+        xs.push(x);
+        ys.push(y);
+      }
+    }
+  if (xs.length < 12) return box;
+  xs.sort((a, b) => a - b);
+  ys.sort((a, b) => a - b);
+  const q = (v, f) => v[Math.min(v.length - 1, Math.max(0, Math.round(f * (v.length - 1))))];
+  const x0 = q(xs, 0.01);
+  const x1 = q(xs, 0.99);
+  const y0 = q(ys, 0.01);
+  const y1 = q(ys, 0.99);
+  // Only ever tighter, and not a sliver of it.
+  if (x1 - x0 < box.w * 0.25 || y1 - y0 < box.h * 0.25) return box;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
 const saturation = (r, g, b) => {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -289,10 +318,17 @@ export function trackWords(samples, maxGap = 0.6) {
     // The picture of reference: late in the readings, once the word has
     // stopped moving, but not on the very last one (it may be leaving).
     const settledAt = k.seen[Math.floor((k.seen.length * 2) / 3)].t;
+    // Where it is at each reading: a word that grows or moves (a counter
+    // zooming in) is followed by the renderer.
+    const step = Math.max(1, Math.ceil(k.seen.length / 40));
+    const path = k.seen
+      .filter((_, i) => i % step === 0 || i === k.seen.length - 1)
+      .map((w) => ({ t: w.t, x: w.x, y: w.y, w: w.w, h: w.h }));
     return {
       text,
       conf: k.best.conf,
       settledAt,
+      path,
       first: k.first,
       last: k.last,
       best: k.best.t,
@@ -787,4 +823,31 @@ export function makePlate(frames, width, height) {
   const out = new Uint8Array(n * 3);
   for (let i = 0; i < out.length; i++) out[i] = Math.round(levels[0].col[i]);
   return { rgb: out, seen: seen / n };
+}
+
+/**
+ * A small colour picture of a frame (`cols` wide, its aspect kept), each cell
+ * the mean of a few points, as base64 RGB: what the rendering is compared
+ * with, cell by cell, to say how alike the two look.
+ */
+export function frameThumb(rgb, width, height, cols = 48) {
+  const rows = Math.max(1, Math.round((cols * height) / width));
+  const out = Buffer.alloc(cols * rows * 3);
+  for (let cy = 0; cy < rows; cy++)
+    for (let cx = 0; cx < cols; cx++) {
+      const sum = [0, 0, 0];
+      let n = 0;
+      for (let py = 0; py < 4; py++)
+        for (let px = 0; px < 4; px++) {
+          const x = Math.min(width - 1, Math.floor(((cx + (px + 0.5) / 4) * width) / cols));
+          const y = Math.min(height - 1, Math.floor(((cy + (py + 0.5) / 4) * height) / rows));
+          const i = (y * width + x) * 3;
+          sum[0] += rgb[i];
+          sum[1] += rgb[i + 1];
+          sum[2] += rgb[i + 2];
+          n++;
+        }
+      out.set(sum.map((v) => Math.round(v / n)), (cy * cols + cx) * 3);
+    }
+  return { cols, rows, rgb: out.toString("base64") };
 }

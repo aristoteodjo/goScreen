@@ -88,7 +88,7 @@ export function ReproduceHome() {
         <span className="text-[13px] text-muted-foreground">· Reference videos</span>
         <div className="ml-auto flex items-center gap-2">
           <LocalModelBadge onClick={() => setModel(true)} />
-          <Button size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
+          <Button data-ai="motion-new" size="sm" disabled={create.isPending} onClick={() => create.mutate()}>
             {create.isPending ? <Spinner /> : <HugeiconsIcon icon={VideoReplayIcon} size={15} />}
             {create.isPending ? (describeJob(job) ?? "Preparing…") : "New reference"}
           </Button>

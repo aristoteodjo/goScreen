@@ -147,7 +147,8 @@ export function ReproducePage({ id }: { id: string }) {
     onError: (e) => toast.error(message(e)),
     onSettled: refreshMotion,
   });
-  const busy = analyse.isPending || readAll.isPending || renderIt.isPending;
+  // Work started elsewhere (the AI, another tab) shows and blocks the buttons too.
+  const busy = analyse.isPending || readAll.isPending || renderIt.isPending || !!job;
   const progress = reviewing
     ? `Local model ${reviewing.done + 1}/${reviewing.total}`
     : (describeJob(job) ?? (busy ? "Working…" : null));
@@ -179,7 +180,7 @@ export function ReproducePage({ id }: { id: string }) {
         ) : null}
         <div data-ai="motion-steps" className="ml-auto flex items-center gap-2">
           {progress ? (
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span data-ai="motion-progress" className="flex items-center gap-2 text-xs text-muted-foreground">
               <Spinner />
               {progress}
             </span>
@@ -191,7 +192,7 @@ export function ReproducePage({ id }: { id: string }) {
           ) : null}
           <LocalModelBadge onClick={() => setModel(true)} />
           {!hasSpec ? (
-            <Button size="sm" disabled={busy} onClick={() => analyse.mutate()}>
+            <Button data-ai="motion-measure" size="sm" disabled={busy} onClick={() => analyse.mutate()}>
               Measure the video
             </Button>
           ) : (
@@ -205,7 +206,7 @@ export function ReproducePage({ id }: { id: string }) {
               >
                 Read every shot
               </Button>
-              <Button size="sm" disabled={busy || !spec.data} onClick={() => renderIt.mutate()}>
+              <Button data-ai="motion-render" size="sm" disabled={busy || !spec.data} onClick={() => renderIt.mutate()}>
                 Render and compare
               </Button>
               <DropdownMenu>
@@ -662,13 +663,23 @@ function ShotDetail({
   );
 }
 
-type Draft = { kind: ShotReview["kind"]; text: string; kicker: string; description: string };
+type Draft = {
+  kind: ShotReview["kind"];
+  text: string;
+  kicker: string;
+  description: string;
+  // Not edited here yet: kept from the answer the draft starts from.
+  background: ShotReview["background"];
+  elements: ShotReview["elements"];
+};
 
 const draftOf = (r: ShotReview): Draft => ({
   kind: r.kind,
   text: linesToText(r.lines),
   kicker: r.kicker ?? "",
   description: r.description,
+  background: r.background,
+  elements: r.elements,
 });
 
 const answerOf = (d: Draft): ShotReview => ({
@@ -676,6 +687,8 @@ const answerOf = (d: Draft): ShotReview => ({
   lines: d.kind === "text" ? textToLines(d.text) : [],
   kicker: d.kind === "text" && d.kicker.trim() ? d.kicker.trim() : null,
   description: d.description.trim(),
+  background: d.background,
+  elements: d.elements,
 });
 
 function Tile({ label, aspect, height, children }: { label: string; aspect: number; height: number; children: ReactNode }) {
@@ -789,6 +802,8 @@ function Measures({ score: m }: { score: ShotScore }) {
   // Reports written before pictures were measured have no such field.
   if (typeof m.refVisuals === "number")
     items.push(["Pictures found", m.refVisuals ? `${pct(m.visuals)} of ${m.refVisuals}` : "none"]);
+  // The frames compared themselves: the score never goes above it.
+  if (typeof m.pixels === "number") items.push(["Looks alike", pct(m.pixels)]);
   return (
     <section className="flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center gap-2">
@@ -796,7 +811,7 @@ function Measures({ score: m }: { score: ShotScore }) {
         <h3 className="text-xs font-medium">Rendering: {pct(m.fidelity)} faithful</h3>
         <span className="text-[11px] text-muted-foreground">passes at {pct(FIDELITY_PASS)}</span>
       </div>
-      <div className="grid grid-cols-6 gap-2">
+      <div className="grid grid-cols-7 gap-2">
         {items.map(([label, value]) => (
           <div key={label}>
             <div className="text-xs tabular-nums">{value}</div>

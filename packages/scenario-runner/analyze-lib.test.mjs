@@ -4,6 +4,8 @@ import {
   background,
   cutsFrom,
   aroundColor,
+  inkBox,
+  frameThumb,
   makePlate,
   editDistance,
   isMark,
@@ -239,3 +241,23 @@ test("a word that moves is followed from where it was last seen", () => {
   assert.equal(trackWords([at(0, 100), at(0.25, 140), at(0.5, 180), at(0.75, 220)]).length, 1);
 });
 
+
+test("frameThumb keeps the look of a frame in a few cells", () => {
+  const w = 96, h = 54;
+  const rgb = image(w, h, [255, 255, 255]);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w / 2; x++) rgb.set([200, 20, 20], (y * w + x) * 3);
+  const t = frameThumb(rgb, w, h, 16);
+  assert.equal(t.rows, 9);
+  const px = Buffer.from(t.rgb, "base64");
+  assert.deepEqual([...px.subarray(0, 3)], [200, 20, 20]);
+  assert.deepEqual([...px.subarray(15 * 3, 15 * 3 + 3)], [255, 255, 255]);
+});
+
+test("inkBox tightens an OCR box on the word's letters", () => {
+  const w = 200, h = 120;
+  const rgb = image(w, h, [190, 57, 43]);
+  for (let y = 40; y < 80; y++) for (let x = 70; x < 130; x++) rgb.set([255, 255, 255], (y * w + x) * 3);
+  assert.deepEqual(inkBox(rgb, w, { x: 10, y: 10, w: 180, h: 100 }, [255, 255, 255]), { x: 70, y: 40, w: 60, h: 40 });
+  // Nothing of its colour: the box stays.
+  assert.deepEqual(inkBox(rgb, w, { x: 0, y: 0, w: 20, h: 20 }, [255, 255, 255]), { x: 0, y: 0, w: 20, h: 20 });
+});

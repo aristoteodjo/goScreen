@@ -7,6 +7,20 @@ import type { Line, Shot, TextShot, Word } from "./schema.ts";
 // layout stay measured: the AI never invents them. Same contract for every
 // model (local Qwen3-VL in the app, Claude through MCP).
 
+/** What a visual element is, for the model to learn and the renderer to use. */
+export const ELEMENT_ROLES = [
+  "card",
+  "window",
+  "pill",
+  "button",
+  "logo",
+  "icon",
+  "photo",
+  "chart",
+  "list",
+  "other",
+] as const;
+
 export const ShotReview = z.object({
   kind: z.enum(["text", "logo", "interface", "other"]),
   /** Text shots: every line, every word, in reading order. */
@@ -24,6 +38,26 @@ export const ShotReview = z.object({
   kicker: z.string().nullable().default(null),
   /** What the shot shows, in a few words (for shots goScreen cannot rebuild). */
   description: z.string().default(""),
+  /** What is behind everything: what the renderer's plate should be. */
+  background: z
+    .object({
+      kind: z.enum(["plain", "gradient", "texture", "footage", "image"]),
+      colors: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)).max(4).default([]),
+    })
+    .nullable()
+    .default(null),
+  /** The visual elements in front of it, biggest first (not the words). */
+  elements: z
+    .array(
+      z.object({
+        role: z.enum(ELEMENT_ROLES),
+        /** It casts a soft shadow, or glows. */
+        shadow: z.boolean().default(false),
+        label: z.string().default(""),
+      }),
+    )
+    .max(12)
+    .default([]),
 });
 export type ShotReview = z.infer<typeof ShotReview>;
 
@@ -49,8 +83,29 @@ export const SHOT_REVIEW_SCHEMA = {
     },
     kicker: { type: ["string", "null"] },
     description: { type: "string" },
+    background: {
+      type: ["object", "null"],
+      properties: {
+        kind: { type: "string", enum: ["plain", "gradient", "texture", "footage", "image"] },
+        colors: { type: "array", items: { type: "string" }, maxItems: 4 },
+      },
+      required: ["kind", "colors"],
+    },
+    elements: {
+      type: "array",
+      maxItems: 12,
+      items: {
+        type: "object",
+        properties: {
+          role: { type: "string", enum: [...ELEMENT_ROLES] },
+          shadow: { type: "boolean" },
+          label: { type: "string" },
+        },
+        required: ["role", "shadow", "label"],
+      },
+    },
   },
-  required: ["kind", "lines", "kicker", "description"],
+  required: ["kind", "lines", "kicker", "description", "background", "elements"],
 } as const;
 
 /** When a shot is best seen: all its words in, just before it leaves. */
@@ -70,7 +125,12 @@ You receive a frame of the shot and what the measurements found. Answer in JSON 
   in a different colour from the others. strike = a line is drawn through the word.
 - kicker: the small label above the text, if any, else null.
 - description: what the shot shows, in at most 8 words.
-Never invent words that are not in the frame.`;
+- background: what is behind everything: "plain" (one colour), "gradient", "texture" (a pattern, a
+  mosaic), "footage" (moving video) or "image"; colors: its main colours as #rrggbb (at most 4).
+- elements: the visual things in front of the background, biggest first (not the words): role
+  (card, window, pill, button, logo, icon, photo, chart, list, other), shadow = it casts a soft
+  shadow or glows, label = what it says or shows, in a few words.
+Never invent words or elements that are not in the frame.`;
 
 /** The question about one shot. */
 export function reviewPrompt(shot: Shot): string {
@@ -135,13 +195,15 @@ export function applyReview(shot: Shot, review: ShotReview): Shot {
   const lines: Line[] = review.lines.map((row, li) => ({
     words: row.map((w, wi): Word => {
       const at = round(times[k++]);
-      const x = same ? shot.lines[li].words[wi].x : undefined;
+      const was = same ? shot.lines[li].words[wi] : undefined;
+      const x = was?.x;
       return {
         text: w.text,
         at,
         accent: w.accent,
         echo: measured.find((m) => m.text === w.text)?.echo ?? false,
-        ...(x !== undefined ? { x } : {}),
+        ...(x !== undefined ? { x, ...(was?.w !== undefined ? { w: was.w } : {}) } : {}),
+        ...(was?.color && !w.accent ? { color: was.color } : {}),
         ...(w.strike ? { strike: strikeAfter(at) } : {}),
       };
     }),

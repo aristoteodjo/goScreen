@@ -8,6 +8,7 @@ import {
   shotKeyTime,
 } from "@goscreen/motion";
 import { z } from "zod";
+import { aiShowReference } from "@/modules/control/aiStage";
 import { defineCommand } from "@/modules/control/registry";
 import { localAiIpc, motionIpc } from "./ipc";
 import {
@@ -60,6 +61,8 @@ export function registerMotionCommands() {
     input: z.object({ video: z.string().min(1).describe("Absolute path of the video") }),
     run: async ({ video }) => {
       const ref = await motionIpc.create(video);
+      // The person following the AI sees the new reference being measured.
+      void aiShowReference(ref.id, "Measuring the video…");
       await analyzeReference(ref.id);
       const spec = await deriveSpec(ref.id);
       refreshMotion();

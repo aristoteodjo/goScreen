@@ -21,7 +21,9 @@ import {
   background,
   cutsFrom,
   frameDiff,
+  frameThumb,
   hex,
+  inkBox,
   inkColor,
   aroundColor,
   isMark,
@@ -132,13 +134,17 @@ async function ocrSamples(total) {
     const bg = background(frame.rgb, frame.width, frame.height);
     const words = parseTsv(tsv).map((w) => {
       const c = inkColor(frame.rgb, frame.width, w, bg);
-      return { ...w, color: c ? hex(c) : null };
+      // Its box on its letters (OCR's can be far larger for big glyphs).
+      const box = c ? inkBox(frame.rgb, frame.width, w, c) : w;
+      return { ...w, ...box, color: c ? hex(c) : null };
     });
     samples.push({
       t,
       background: hex(bg),
       words,
       rules: rules(frame.rgb, frame.width, frame.height),
+      // How it looks, small: the rendering is compared with it.
+      thumb: frameThumb(frame.rgb, frame.width, frame.height),
     });
     emit({ type: "progress", step: "ocr", done: samples.length, total });
   };
@@ -497,6 +503,13 @@ async function main() {
       words: words.sort((a, b) => a.start - b.start || a.box.x - b.box.x),
       visuals,
       plates: plate.meta,
+      thumbs: samples.length
+        ? {
+            cols: samples[0].thumb.cols,
+            rows: samples[0].thumb.rows,
+            frames: samples.map((s) => ({ t: s.t, rgb: s.thumb.rgb })),
+          }
+        : null,
     };
     writeFileSync(job.out, JSON.stringify(out, null, 1));
     emit({ type: "done", file: job.out, words: out.words.length, cuts: cuts.length });
