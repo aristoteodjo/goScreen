@@ -4,6 +4,10 @@
 // in, settles and leaves), and the coloured lines (underlines, strikes).
 // Facts only: turning them into a motion spec is @goscreen/motion's job.
 //
+// Frames are taken with `fps=N:round=up`: the frame shown at each time. The
+// default rounding hands the last frame before the next slot, up to half a
+// period later (a sample at 4.5 s showed the shot that starts at 4.6 s).
+//
 // Usage: analyze.mjs <job.json> with { video, ffmpeg, tesseract, out,
 // ocrFps?, timeFps?, lang?, tessdata?, crops? }. With `crops`, every visual
 // element (not a word) is also cut out next to `out`, as `<stem>.visual-N.png`
@@ -25,6 +29,7 @@ import {
   isReliable,
   wordArea,
   parseTsv,
+  makePlate,
   patchOf,
   ppmReader,
   presence,
@@ -90,7 +95,7 @@ async function greyFrames() {
     job.ffmpeg,
     [
       "-v", "error", "-t", String(MAX_SECONDS), "-i", job.video,
-      "-vf", `fps=${TIME_FPS},scale=${SMALL.width}:${SMALL.height},format=gray`,
+      "-vf", `fps=${TIME_FPS}:round=up,scale=${SMALL.width}:${SMALL.height},format=gray`,
       "-f", "rawvideo", "-",
     ],
     {
@@ -142,7 +147,7 @@ async function ocrSamples(total) {
       job.ffmpeg,
       [
         "-v", "error", "-t", String(MAX_SECONDS), "-i", job.video,
-        "-vf", `fps=${OCR_FPS}`, "-f", "image2pipe", "-vcodec", "ppm", "-",
+        "-vf", `fps=${OCR_FPS}:round=up`, "-f", "image2pipe", "-vcodec", "ppm", "-",
       ],
       {
         onStdout: (d, proc) => {
@@ -288,7 +293,103 @@ async function visualTracks(samples, grey, info) {
  * is on screen, coming in included (blurred, OCR cannot read it yet, and it
  * rises from below).
  */
-async function visualSamples(samples, words) {
+/** Writes raw RGB pixels as a PNG, through FFmpeg. */
+function writePng(file, rgb, width, height) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(job.ffmpeg, [
+      "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", `${width}x${height}`,
+      "-i", "-", "-frames:v", "1", file,
+    ], { stdio: ["pipe", "ignore", "pipe"] });
+    let err = "";
+    p.stderr.on("data", (d) => (err += d));
+    p.on("error", reject);
+    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg (plate): ${err.trim()}`))));
+    p.stdin.end(Buffer.from(rgb.buffer, rgb.byteOffset, rgb.byteLength));
+  });
+}
+
+/** Frames spread over a cut that its plate is the median of. */
+const PLATE_FRAMES = 24;
+
+/** The cut each sample belongs to (index into the bounds). */
+const cutOf = (bounds, t) => Math.max(0, bounds.findIndex((b, j) => t >= b && t < (bounds[j + 1] ?? Infinity)));
+
+/** The words drawn as text on screen at a sample: left out of plates and pictures. */
+const wordsAt = (masked, t) => masked.filter((w) => t >= w.start - 0.4 && t <= w.end + 0.2);
+
+/**
+ * A pass over the frames for the plates: per cut, the median of frames spread
+ * over it (words left out). Returns each cut's plate pixels (or null), and
+ * with `job.crops` writes them as `<stem>.plate-N.png`.
+ */
+async function plates(samples, words, info, cuts) {
+  const masked = words.filter((w) => w.masked);
+  const bounds = [0, ...cuts.filter((c) => c > 0 && c < info.duration), info.duration];
+  // Which samples each cut keeps, evenly spread.
+  const keep = new Set();
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const idx = samples.map((s, i) => (cutOf(bounds, s.t) === k ? i : -1)).filter((i) => i >= 0);
+    const n = Math.min(PLATE_FRAMES, idx.length);
+    for (let j = 0; j < n; j++) keep.add(idx[Math.floor(((j + 0.5) * idx.length) / n)]);
+  }
+  const stem = basename(job.out).replace(/\.observations\.json$/, "").replace(/\.json$/, "");
+  const pixels = new Map();
+  const meta = [];
+  const writes = [];
+  let frames = [];
+  let cut = -1;
+  let size = null;
+  const close = () => {
+    if (cut < 0 || !frames.length) return;
+    const plate = makePlate(frames, size.width, size.height);
+    frames = [];
+    if (!plate || plate.seen < 0.05) return;
+    pixels.set(cut, plate.rgb);
+    if (job.crops) {
+      const image = `${stem}.plate-${meta.length + 1}.png`;
+      meta.push({ start: bounds[cut], end: bounds[cut + 1], image, seen: Math.round(plate.seen * 1000) / 1000 });
+      writes.push(writePng(join(dirname(job.out), image), plate.rgb, size.width, size.height));
+    }
+  };
+  const reader = ppmReader();
+  let i = 0;
+  await run(
+    job.ffmpeg,
+    [
+      "-v", "error", "-t", String(MAX_SECONDS), "-i", job.video,
+      "-vf", `fps=${OCR_FPS}:round=up`, "-f", "image2pipe", "-vcodec", "ppm", "-",
+    ],
+    {
+      onStdout: (d) => {
+        for (const frame of reader.push(d)) {
+          const index = i++;
+          const s = samples[index];
+          if (!s) continue;
+          const k = cutOf(bounds, s.t);
+          if (k !== cut) {
+            close();
+            cut = k;
+          }
+          size = { width: frame.width, height: frame.height };
+          if (keep.has(index))
+            frames.push({ rgb: new Uint8Array(frame.rgb), busy: wordsAt(masked, s.t).map((w) => wordArea(w.box)) });
+          emit({ type: "progress", step: "plates", done: i, total: samples.length });
+        }
+      },
+    },
+  );
+  close();
+  await Promise.all(writes);
+  return { bounds, pixels, meta };
+}
+
+/**
+ * Second pass over the frames, once the words and plates are known: the
+ * pictures of each sample are what differs from its cut's plate, with every
+ * word the renderer draws left out for as long as it is on screen, coming in
+ * included (blurred, OCR cannot read it yet, and it rises from below).
+ */
+async function visualSamples(samples, words, plate) {
   const masked = words.filter((w) => w.masked);
   const reader = ppmReader();
   let i = 0;
@@ -296,15 +397,17 @@ async function visualSamples(samples, words) {
     job.ffmpeg,
     [
       "-v", "error", "-t", String(MAX_SECONDS), "-i", job.video,
-      "-vf", `fps=${OCR_FPS}`, "-f", "image2pipe", "-vcodec", "ppm", "-",
+      "-vf", `fps=${OCR_FPS}:round=up`, "-f", "image2pipe", "-vcodec", "ppm", "-",
     ],
     {
       onStdout: (d) => {
         for (const frame of reader.push(d)) {
           const s = samples[i++];
           if (!s) continue;
-          const bg = s.background.match(/\w\w/g).map((h) => parseInt(h, 16));
-          const on = masked.filter((w) => s.t >= w.start - 0.4 && s.t <= w.end + 0.2);
+          const on = wordsAt(masked, s.t);
+          const bg =
+            plate.pixels.get(cutOf(plate.bounds, s.t)) ??
+            s.background.match(/\w\w/g).map((h) => parseInt(h, 16));
           s.visuals = visualsOf(frame.rgb, frame.width, frame.height, bg, on.map((w) => wordArea(w.box)));
           // The colour behind a word, read once it has settled: what hides it
           // in a picture shown with the text (a card's, not always the background's).
@@ -375,7 +478,12 @@ async function main() {
       };
     });
 
-    await visualSamples(samples, words);
+    if (job.crops)
+      for (const f of readdirSync(dirname(job.out)))
+        if (f.startsWith(`${basename(job.out).replace(/\.observations\.json$/, "")}.plate-`))
+          rmSync(join(dirname(job.out), f), { force: true });
+    const plate = await plates(samples, words, info, cuts);
+    await visualSamples(samples, words, plate);
     const visuals = await visualTracks(samples, grey, info);
 
     const out = {
@@ -388,6 +496,7 @@ async function main() {
       rules: samples.flatMap((s) => s.rules.map((r) => ({ t: s.t, ...r }))),
       words: words.sort((a, b) => a.start - b.start || a.box.x - b.box.x),
       visuals,
+      plates: plate.meta,
     };
     writeFileSync(job.out, JSON.stringify(out, null, 1));
     emit({ type: "done", file: job.out, words: out.words.length, cuts: cuts.length });

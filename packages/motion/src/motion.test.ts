@@ -43,6 +43,7 @@ const obs = (words: ObservedWord[], extra: Partial<Observations> = {}): Observat
   rules: [{ t: 0.5, x: 190, y: 657, w: 1100, h: 6, color: "#1b4dff" }],
   words,
   visuals: [],
+  plates: [],
   ...extra,
 });
 
@@ -173,14 +174,16 @@ describe("visuals", () => {
     expect(visualPath(visual({ kind: "clip" }), 1920, 1080)).toEqual([]);
   });
 
-  it("draws the big words of a slide as labels, unless a picture holds them", () => {
+  it("draws every word the pictures were cut without as a label, covered in them", () => {
     const words = [
       word("Audit", 197, 0.15),
-      word("1281", 1550, 0.15, { box: { x: 1550, y: 130, w: 100, h: 50 } }),
+      word("1281", 1550, 0.15, { box: { x: 1550, y: 130, w: 100, h: 50 }, around: "#ffffff" }),
       word("semaine", 197, 0.15, { masked: false, box: { x: 197, y: 620, w: 90, h: 20 } }),
     ];
     const o = obs(words, { visuals: [visual()] });
-    expect(labelsFor(o, words, visualsFor(o, 0, 2, null)).map((l) => l.text)).toEqual(["Audit"]);
+    expect(labelsFor(o, words).map((l) => l.text)).toEqual(["Audit", "1281"]);
+    // The dashboard's own figure is hidden under the label.
+    expect(visualsFor(o, 0, 2, null, words)[0].covers).toHaveLength(1);
   });
 
   it("keeps a chip around a word of a text shot, not the word alone", () => {
@@ -243,5 +246,26 @@ describe("onPicture", () => {
   it("does not mistake the words, seen blurred, for a picture", () => {
     const o = obs(words, { visuals: [visual({ box: { x: 590, y: 480, w: 320, h: 130 }, start: 0, end: 2 })] });
     expect(onPicture(o, words)).toBe(false);
+  });
+});
+
+describe("plates", () => {
+  it("puts each shot over the plate of its cut, rendered under everything", () => {
+    const o = obs([word("Chaque", 197, 0.15)], {
+      plates: [{ start: 0, end: 2, image: "reference.plate-1.png", seen: 0.8 }],
+    });
+    const spec = specFromObservations(o);
+    expect(spec.shots[0].plate).toBe("reference.plate-1.png");
+    expect(spec.shots[1].plate).toBeUndefined();
+    expect(specHtml(spec)).toContain("reference.plate-1.png");
+  });
+});
+
+describe("cleanWords", () => {
+  it("keeps words that follow each other at the same place, drops a misreading", () => {
+    const five = word("5", 400, 0, { end: 0.5 });
+    const six = word("6", 400, 0.45, { end: 1 });
+    const misread = word("S", 400, 0.5, { end: 0.95, conf: 70 });
+    expect(cleanWords([five, six, misread]).map((w) => w.text)).toEqual(["5", "6"]);
   });
 });

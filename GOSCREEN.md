@@ -343,31 +343,35 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
 - `@goscreen/motion` (pur, testé) : `specFromObservations` (plans entre les coupes, lignes, taille, accent,
   barré, sans IA) -> `specHtml` (une page autonome, une Web Animation par élément, rendue par `compose.mjs`) ->
   `measureShots` + `fidelity` (le rendu repasse par le même analyseur : on compare des mesures entre elles).
-- **Éléments visuels** (tout ce qui n'est ni un mot ni le fond : interface, logo, puce, pastille, forme).
-  L'analyseur suit d'abord les mots, puis repasse sur les images (`visualSamples`) : sur une grille, les cellules
-  qui diffèrent du fond, sans les mots que le rendu dessine (`masked` : assez grands, `BIG_WORD`, et pas un
-  lettrage de logo, `mark` : lettres très espacées comme « R E M A I N »), masqués pendant toute leur présence,
-  entrée floue comprise (`wordArea`). Les éléments sont suivis d'un échantillon à l'autre (`trackVisuals`).
-  Un élément stable devient une image (`reference.visual-N.png`) qui suit sa trajectoire mesurée (centre,
-  échelle, bord de cadre compris) ; un élément qui s'anime à l'intérieur (une interface) devient un **clip** VP9
-  de sa zone (`.webm`, une image clé par demi-seconde). Les découpes sont brutes (aucun mot repeint).
-- Dans la spec : `shot.visuals` (derrière le texte). Plan texte : un visuel fait surtout de ses mots (le mot flou
-  qui entre) ou qui ressemble à son soulignement est écarté ; les autres (pastille, puce, écho) gardent des
-  **caches** (`covers`, couleur relevée autour du mot, `around`) sur les mots que le rendu redessine. Les mots
-  gardent leur position mesurée (`Word.x`) quand ils sont plus espacés qu'une espace. Plan non textuel : `labels`
-  pour ses mots masqués hors de toute image. La décision texte / image se prend **par groupe de mots** : un groupe
-  posé sur une image bien plus grande que lui (`onPicture`, un tableau de bord) appartient à l'image. Une lettre
-  isolée lue une fois est écartée (un morceau de logo).
-- Mesures fiables (vérifiées sur `presentation.mp4`, fidélité moyenne 0,77 -> 0,94, tous les plans au-dessus de
-  `FIDELITY_PASS`) : la couleur d'un mot est sa lecture la plus éloignée du fond (`sharpestColor` : entrée et
-  sortie sont pâles), la « saturation » est une chroma (un quasi-noir n'est pas un accent) ; un mot lu par l'OCR
-  commence au plus tard à sa première lecture ; seuls les mots que la spec garde sont masqués (`isReliable`, même
-  règle que `cleanWords`). Un mot mesuré est calé sur l'encre de la référence (`Word.x`, `Word.w` : position et
-  interlettrage via `measureText`), le barré sur ses lettres ; une ligne minuscule sous le texte n'en fait pas
-  partie ; le soulignement peut partir à gauche du texte (`Underline.x`) et sous des pastilles. L'image de
-  référence d'un élément est son aspect habituel au repos (vignette médiane, lectures tardives) ; un élément
-  englobé par une nouvelle forme (halo) est tenu un échantillon ; un élément vu une seule fois est écarté ;
-  un clip n'a pas de fondu ajouté (il porte le sien) et démarre un échantillon plus tôt.
+- **Minutage exact** : toute image est extraite avec `fps=N:round=up` (l'image affichée à cet instant ; l'arrondi
+  par défaut de FFmpeg rendait jusqu'à une demi-période plus tard : l'échantillon de 4,5 s montrait le plan de 4,6 s).
+- **Fond de plan** (`plates`, `reference.plate-N.png`, un par coupe) : médiane, pixel par pixel, de 24 images
+  réparties sur la coupe, sans les zones des mots dessinés (`makePlate`) ; un pixel libre dans moins de la moitié
+  des images est comblé depuis ses voisins (pyramide push-pull). Dégradés, trames et ombres fixes y sont nets. Le
+  rendu le pose sous tout le plan (`shot.plate`, sur la couleur `background`).
+- **Éléments visuels** = ce qui **diffère du fond de plan** (pixel par pixel, `visualsOf`), sans les mots dessinés
+  pendant toute leur présence, entrée floue comprise (`wordArea`). Partout où une image s'écarte du fond, il y a
+  donc une découpe des vrais pixels à son moment. Chaque découpe **grandit jusqu'à ce que son bord soit du fond**
+  (`growToBackground` : un halo, une ombre douce ne sont jamais coupés en rectangle). Suivi d'un échantillon à
+  l'autre (`trackVisuals`, depuis la dernière place) ; un élément englobé par une nouvelle forme (halo) est tenu un
+  échantillon ; vu une seule fois, il est écarté. Stable : une image (`reference.visual-N.png`, son aspect habituel
+  au repos : vignette médiane, lectures tardives) qui suit sa trajectoire mesurée ; animé à l'intérieur
+  (interface) : un **clip** VP9 de sa zone (`.webm`), sans fondu ajouté, démarré un échantillon plus tôt.
+- **Mots** : `masked` (dessinés par le rendu, donc hors des images) = assez grands (`BIG_WORD`), pas un lettrage
+  de logo (`mark`, lettres très espacées), lus au moins deux fois avec 65 de confiance (`isReliable`, même règle
+  que `cleanWords`) ; un mot lu une fois ou peu sûr reste dans l'image avec ses vrais pixels. Deux mots qui se
+  suivent au même endroit (compteur, titres en fondu) restent tous les deux. Couleur = lecture la plus éloignée
+  du fond (`sharpestColor`), accent jugé à la chroma ; un mot commence au plus tard à sa première lecture et
+  appartient à la coupe où il est posé.
+- Dans la spec : `shot.visuals` (derrière le texte). La décision texte / image se prend par groupe de mots (un
+  groupe posé sur une image bien plus grande que lui, `onPicture`, appartient à l'image). **Plan texte** : ses
+  lignes sont les mots dessinés (les petits restent dans les images) ; chaque ligne a sa taille et sa ligne de
+  base mesurées (`Line.size`, `Line.y`), chaque mot sa place et la largeur de son encre (`Word.x`, `Word.w` :
+  interlettrage via `measureText`), le barré est posé sur ses lettres et démarre un échantillon avant d'être vu ;
+  un visuel fait surtout des mots du plan (ou un morceau de soulignement) est écarté. **Plan non textuel** :
+  `labels` pour chacun de ses mots dessinés (calés sur l'encre ; un mot court est mis à l'échelle plutôt
+  qu'espacé). Les visuels gardent des **caches** (`covers`, couleur relevée autour du mot, bords adoucis) sur les
+  mots redessinés par-dessus.
 - `compose.mjs` sert ces fichiers par nom seulement (`http://goscreen.assets/<nom>`, `assetName`, avec `Range`
   pour les clips) et attend que chaque clip ait l'image voulue avant la capture (`__goscreenSeek`). Les plans
   non textuels sont notés sur leurs images (`visuals` : part de la surface des images de la référence que
@@ -548,12 +552,25 @@ n'en sait rien.
 
 - Frontend : `pnpm -r check-types`, `pnpm -r test`, `pnpm lint`
 - Rust : `cd apps/desktop/src-tauri && cargo test` (via `portly temp`)
-- Reproduction : `pnpm bench:reproduce <vidéo>` (via `portly temp`, quelques minutes) joue la boucle de l'écran
-  Reproduce sans l'app (mesure, spec, rendu, mesure du rendu) et note chaque plan ; code 1 si un plan reste sous
-  `FIDELITY_PASS`. Base de test : `presentation.mp4` (36 s, texte cinétique, interfaces, logo), 0,938 et 17/17 au
-  2026-10-12. L'app donne la même spec et les mêmes notes (`motion.create` puis `motion.render`), à condition que
-  sa page ait été rechargée après un changement de `@goscreen/motion` : les commandes de l'IA gardaient sinon
-  l'ancienne version (redémarrer `goScreen/desktop` avec Portly).
+- **Reproduction : tout test passe par goScreen.** `pnpm reproduce:app <vidéo>` (via `portly temp`, l'app lancée
+  par Portly) pilote l'app avec les commandes des boutons (`motion.create`, puis `motion.render`), note chaque
+  plan et laisse la référence dans l'écran Reproduce pour la regarder côte à côte ; code 1 si un plan reste sous
+  `FIDELITY_PASS`. Redémarrer `goScreen/desktop` avant, après un changement de `@goscreen/motion` (les commandes
+  gardaient sinon l'ancienne version). `pnpm bench:reproduce <vidéo>` joue la même boucle sans l'app, pour
+  itérer entre deux tests ; il donne les mêmes notes. Toujours regarder aussi les images côte à côte : une note
+  haute a déjà caché des défauts visibles.
+- Bases de test (2026-10-13, par l'app) : `presentation.mp4` (36 s, texte cinétique, interfaces, logo) 0,917 et
+  15/18 ; `p_18r29XIlNmB9xA.mp4` (47 s, 1:1, fond texturé, dégradés, cartes à ombre, pastilles) 0,842 et 2/4.
+- **À faire** (relevé par ces tests) :
+  - un plan d'images est noté sur ses images seulement : les labels (titres redessinés) n'y comptent pas, et la
+    note d'un logo ou d'une slide (0,77 à 0,82) ne dit pas ce qui manque ;
+  - fond de plan d'une coupe qui change sans coupure franche (un logo qui arrive sur un fond uni) : un élément
+    présent plus de la moitié de la coupe y reste et se voit autour des mots d'avant ; les « coupes douces »
+    essayées multipliaient les fonds et cassaient d'autres plans ;
+  - titres en fondu enchaîné (« Trending videos » -> « sounds ») : un mot peut manquer pendant la transition ;
+  - texte avec ombre portée : sa couleur mesurée est celle de l'ombre (écart de couleur faux sur le carton de fin) ;
+  - un label est fixe : un chiffre qui grossit ou rétrécit (« 14 ») garde sa taille médiane ;
+  - un micro-plan parasite naît d'un mot lu sur une photo au tout début (« pAY », 0,4 s).
 
 ## Plan : vidéos produit automatiques, pilotées par la campagne
 

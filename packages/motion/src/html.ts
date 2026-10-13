@@ -26,6 +26,7 @@ html,body{width:${spec.width}px;height:${spec.height}px;overflow:hidden;backgrou
 .echo{position:absolute;left:0;top:0;pointer-events:none}
 .underline{position:absolute;border-radius:99px}
 .label{position:absolute;font-family:${spec.fonts.text};letter-spacing:-0.02em;white-space:nowrap;line-height:1}
+.plate{position:absolute;inset:0;width:100%;height:100%;display:block}
 .visual{position:absolute;transform-origin:50% 50%}
 .media{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:fill}
 .cover{position:absolute}

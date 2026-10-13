@@ -28,7 +28,13 @@ export const Word = z.object({
   w: z.number().positive().max(2).optional(),
 });
 
-export const Line = z.object({ words: z.array(Word).min(1) });
+export const Line = z.object({
+  words: z.array(Word).min(1),
+  /** Its own font size, when it is not the shot's (a tagline under a title). */
+  size: z.number().positive().max(1).optional(),
+  /** Its measured baseline: each line sits where it was, whatever its size. */
+  y: fraction.optional(),
+});
 
 /** How each word comes in: from below, blurred, faded. */
 export const Enter = z.object({
@@ -60,6 +66,11 @@ export const Kicker = z.object({
   gap: z.number().default(0.35),
 });
 
+/** A picture file next to the spec, named without any folder. */
+const fileName = z
+  .string()
+  .regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*\.(png|jpe?g|webp|webm|mp4)$/, "Expected a file name");
+
 /** Where a visual is at a moment: its centre (fractions) and its scale. */
 export const VisualPoint = z.object({
   t: time,
@@ -89,9 +100,7 @@ export const Cover = z.object({
  */
 export const Visual = z.object({
   kind: z.enum(["image", "clip"]).default("image"),
-  src: z
-    .string()
-    .regex(/^[A-Za-z0-9_-][A-Za-z0-9._-]*\.(png|jpe?g|webp|webm|mp4)$/, "Expected a file name"),
+  src: fileName,
   /** Left, top, width and height of the picture at rest. */
   x: fraction,
   y: fraction,
@@ -121,6 +130,8 @@ export const Label = z.object({
   y: fraction,
   /** Font size. */
   size: z.number().positive().max(1),
+  /** Measured width of its letters: the renderer fits it there. */
+  w: z.number().positive().max(2).optional(),
   color: hex,
   weight: z.number().int().min(100).max(900).default(600),
   at: time,
@@ -134,6 +145,8 @@ export const TextShot = z.object({
   start: time,
   end: time,
   background: hex,
+  /** The background as it is (gradient, texture, shadows), over `background`. */
+  plate: fileName.optional(),
   ink: hex,
   accent: hex,
   /** Left edge of the text. */
@@ -170,6 +183,7 @@ export const PlaceholderShot = z.object({
   start: time,
   end: time,
   background: hex,
+  plate: fileName.optional(),
   /** What the shot shows, as the analysis understood it. */
   label: z.string().default(""),
   /** What it shows, cut out of the reference (an interface, a logo). */

@@ -93,8 +93,14 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     // a patch's window stays inside its picture's.
     for (const c of v.covers || []) {
       const patch = el("div", "cover", node);
+      // The colour around the word, its edges softened: on a gradient a hard
+      // edge would show. (Not the plate: it may hold the very word.)
+      const soft = Math.min(c.w * W, c.h * H) * 0.25 + "px";
+      const fx = "linear-gradient(90deg,transparent,#000 " + soft + ",#000 calc(100% - " + soft + "),transparent)";
+      const fy = "linear-gradient(180deg,transparent,#000 " + soft + ",#000 calc(100% - " + soft + "),transparent)";
       patch.style.cssText = "left:" + (c.x * W - left) + "px;top:" + (c.y * H - top) + "px;width:" + c.w * W +
-        "px;height:" + c.h * H + "px;background:" + c.color;
+        "px;height:" + c.h * H + "px;background:" + c.color + ";-webkit-mask-image:" + fx + "," + fy +
+        ";-webkit-mask-composite:source-in;mask-image:" + fx + "," + fy + ";mask-composite:intersect";
       window_(patch, Math.max(c.at, from), Math.max(Math.max(c.at, from), Math.min(c.until, to)));
     }
     window_(node, from, to);
@@ -124,8 +130,11 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     }
     const words = [];
     let probe = null;
+    const rows = [];
     shot.lines.forEach((line, li) => {
       const row = el("div", "line", box);
+      if (line.size) row.style.fontSize = line.size * H + "px";
+      rows.push({ line, row, probe: null });
       line.words.forEach((w, wi) => {
         const span = el("span", "word", row);
         span.textContent = w.text;
@@ -133,9 +142,8 @@ window.__goscreenReady = document.fonts.ready.then(() => {
         if (wi < line.words.length - 1) span.style.marginRight = "0.26em";
         words.push({ w, span, line: li });
       });
-      if (li === shot.lines.length - 1) {
-        probe = el("span", "probe", row);
-      }
+      rows[li].probe = el("span", "probe", row);
+      if (li === shot.lines.length - 1) probe = rows[li].probe;
     });
     // Each measured word is fitted on the reference's letters: as wide (its
     // letter spacing, within reason: the font is not the same) and at the same
@@ -152,7 +160,8 @@ window.__goscreenReady = document.fonts.ready.then(() => {
       let m = ink.measureText(w.text);
       if (w.w !== undefined && n > 1) {
         const width = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
-        const extra = Math.max(-0.08 * px, Math.min(0.15 * px, (w.w * W - width) / (n - 1)));
+        const size = parseFloat(cs.fontSize);
+        const extra = Math.max(-0.08 * size, Math.min(0.15 * size, (w.w * W - width) / (n - 1)));
         span.style.letterSpacing = base + extra + "px";
         ink.letterSpacing = base + extra + "px";
         m = ink.measureText(w.text);
@@ -162,9 +171,21 @@ window.__goscreenReady = document.fonts.ready.then(() => {
       span.style.marginLeft = (parseFloat(span.style.marginLeft) || 0) + delta + "px";
       letters.set(span, { left: -m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight });
     }
-    // Put the last baseline at y.
-    const baseline = probe.offsetTop + probe.offsetHeight;
-    box.style.top = shot.y * H - baseline + "px";
+    if (rows.every((r) => r.line.y !== undefined)) {
+      // Every line on its measured baseline, top to bottom; the kicker above
+      // the first one.
+      box.style.top = "0px";
+      if (kicker) kicker.style.cssText += ";position:absolute;left:0;top:0";
+      for (const { line, row, probe: p } of rows) {
+        const baseline = p.offsetTop + p.offsetHeight;
+        row.style.marginTop = (parseFloat(row.style.marginTop) || 0) + line.y * H - baseline + "px";
+      }
+      if (kicker) kicker.style.top = rows[0].row.offsetTop - kicker.offsetHeight - shot.kicker.gap * px + "px";
+    } else {
+      // Put the last baseline at y.
+      const baseline = probe.offsetTop + probe.offsetHeight;
+      box.style.top = shot.y * H - baseline + "px";
+    }
     const e = shot.enter;
     for (const { w, span } of words) {
       animate(span, [
@@ -238,6 +259,28 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     node.style.cssText = "left:" + l.x * W + "px;font-size:" + px + "px;font-weight:" + l.weight + ";color:" + l.color;
     node.textContent = l.text;
     const probe = el("span", "probe", node);
+    // Fitted on the reference's letters, as a word of a text shot.
+    const cs = getComputedStyle(node);
+    const ink = document.createElement("canvas").getContext("2d");
+    ink.font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+    const base = parseFloat(cs.letterSpacing) || 0;
+    ink.letterSpacing = base + "px";
+    let m = ink.measureText(l.text);
+    const n = [...l.text].length;
+    let scale = 1;
+    if (l.w !== undefined && n > 3) {
+      const extra = Math.max(-0.08 * px, Math.min(0.15 * px, (l.w * W - (m.actualBoundingBoxLeft + m.actualBoundingBoxRight)) / (n - 1)));
+      node.style.letterSpacing = base + extra + "px";
+      ink.letterSpacing = base + extra + "px";
+      m = ink.measureText(l.text);
+    } else if (l.w !== undefined) {
+      // A short word (a figure): spacing its few letters would pull them
+      // apart; it is narrowed or widened a little instead.
+      scale = Math.max(0.8, Math.min(1.25, (l.w * W) / (m.actualBoundingBoxLeft + m.actualBoundingBoxRight || 1)));
+      node.style.transformOrigin = "0 0";
+      node.style.transform = "scaleX(" + scale + ")";
+    }
+    node.style.left = l.x * W + m.actualBoundingBoxLeft * scale + "px";
     node.style.top = l.y * H - (probe.offsetTop + probe.offsetHeight) + "px";
     window_(node, Math.max(l.at, shot.start), Math.min(l.until, shot.end));
     fades(node, l.at, l.fadeIn, l.until, 0);
@@ -247,6 +290,11 @@ window.__goscreenReady = document.fonts.ready.then(() => {
     const frame = el("div", "shot", root);
     frame.style.background = shot.background;
     window_(frame, shot.start, shot.end);
+    // The background as it is, under everything.
+    if (shot.plate) {
+      const plate = el("img", "plate", frame);
+      loads.push(load(plate, shot.plate));
+    }
     // Pictures first: the text is drawn over them.
     for (const v of shot.visuals || []) visual(v, shot, frame);
     if (shot.kind === "text") textShot(shot, frame);

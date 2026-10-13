@@ -13,7 +13,8 @@
     "test": "pnpm -r test",
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "bench:reproduce": "node packages/motion/bench/reproduce.ts"
+    "bench:reproduce": "node packages/motion/bench/reproduce.ts",
+    "reproduce:app": "node packages/motion/bench/app.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

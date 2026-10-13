@@ -4,6 +4,7 @@ import {
   background,
   cutsFrom,
   aroundColor,
+  makePlate,
   editDistance,
   isMark,
   isMasked,
@@ -17,6 +18,7 @@ import {
   trackWords,
   unionBox,
   visualsOf,
+  growToBackground,
 } from "./analyze-lib.mjs";
 
 const image = (w, h, fill) => {
@@ -100,7 +102,7 @@ test("visualsOf finds a picture and leaves big words out", () => {
   assert.equal(found.length, 1);
   const [v] = found;
   assert.ok(v.x <= 40 && v.y <= 40 && v.x + v.w >= 120 && v.y + v.h >= 100);
-  assert.ok(v.w < 100 && v.h < 80);
+  assert.ok(v.w < 110 && v.h < 90);
 });
 
 test("trackVisuals follows a moving picture and tells a clip by its changes", () => {
@@ -184,3 +186,56 @@ test("an element is held for one sample only", () => {
   ]);
   assert.equal(k.last, 0.5);
 });
+
+test("a plate keeps what stays, drops what passes, and fills under words", () => {
+  const w = 8, h = 4;
+  const gradient = Buffer.alloc(w * h * 3);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) gradient.set([x * 30, 0, 0], (y * w + x) * 3);
+  const withBox = (f, x0, c) => {
+    const o = Buffer.from(f);
+    for (let y = 1; y < 3; y++) for (let x = x0; x < x0 + 2; x++) o.set(c, (y * w + x) * 3);
+    return o;
+  };
+  // A card that moves (passes), a word over the same place in every frame.
+  const word = [{ x: 6, y: 0, w: 2, h: 1 }];
+  const frames = [0, 2, 4].map((x0) => ({ rgb: withBox(gradient, x0, [255, 255, 255]), busy: word }));
+  const { rgb, seen } = makePlate(frames, w, h);
+  assert.equal(seen, 30 / 32);
+  // Where the card passed: the gradient (it was there in most frames).
+  assert.equal(rgb[(1 * w + 2) * 3], 60);
+  // Under the word: filled from around, not left black.
+  assert.ok(rgb[(0 * w + 6) * 3] > 0);
+});
+
+test("pictures are what differs from the plate, not from one colour", () => {
+  const w = 48, h = 24;
+  const plate = Buffer.alloc(w * h * 3);
+  for (let i = 0; i < w * h; i++) plate.set([(i % w) * 5, 40, 40], i * 3);
+  const frame = Buffer.from(plate);
+  for (let y = 8; y < 16; y++) for (let x = 20; x < 28; x++) frame.set([255, 255, 255], (y * w + x) * 3);
+  // Against one colour, the gradient itself would light up everywhere.
+  const found = visualsOf(frame, w, h, plate);
+  assert.equal(found.length, 1);
+  assert.ok(found[0].x <= 20 && found[0].x + found[0].w >= 28);
+});
+
+test("a picture grows until its edges are background: a glow is not cut", () => {
+  const w = 400, h = 300;
+  const rgb = image(w, h, [10, 12, 20]);
+  // A glow: bright in the middle, fading out over 60 px.
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const d = Math.hypot(x - 200, y - 150);
+      const g = Math.max(0, 120 - d * 2);
+      rgb.set([10, 12, 20 + g], (y * w + x) * 3);
+    }
+  // Cut where it stopped counting as different (about 50 px out).
+  const grown = growToBackground(rgb, w, h, [10, 12, 20], { x: 150, y: 100, w: 100, h: 100 }, 2);
+  assert.ok(grown.x < 150 && grown.x + grown.w > 250, JSON.stringify(grown));
+});
+
+test("a word that moves is followed from where it was last seen", () => {
+  const at = (t, x) => ({ t, words: [{ text: "HELLO", conf: 95, x, y: 100, w: 120, h: 40 }] });
+  assert.equal(trackWords([at(0, 100), at(0.25, 140), at(0.5, 180), at(0.75, 220)]).length, 1);
+});
+

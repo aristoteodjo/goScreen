@@ -59,6 +59,13 @@ export const Observations = z.object({
   words: z.array(ObservedWord),
   /** Older measurements have none. */
   visuals: z.array(ObservedVisual).default([]),
+  /**
+   * The background of each cut with nothing on it (gradient, texture, fixed
+   * shadows), cut out as an image; `seen` = share of its pixels ever free.
+   */
+  plates: z
+    .array(z.object({ start: z.number(), end: z.number(), image: z.string(), seen: z.number().default(1) }))
+    .default([]),
 });
 
 export type Box = z.infer<typeof Box>;

@@ -1,4 +1,4 @@
-import { cleanWords, colorDistance, visualsFor } from "./derive.ts";
+import { cleanWords, colorDistance, drawnWords, visualsFor } from "./derive.ts";
 import type { Observations, ObservedWord } from "./observations.ts";
 import type { MotionSpec, Visual } from "./schema.ts";
 
@@ -70,7 +70,7 @@ function coverage(visuals: Visual[], t: number, cols = 96, rows = 54): Set<numbe
  */
 function visualRecall(ref: Observations, out: Observations, start: number, end: number, text: boolean) {
   const words = (o: Observations) =>
-    text ? cleanWords(o.words).filter((w) => inShot(w, start, end)) : null;
+    text ? drawnWords(cleanWords(o.words)).filter((w) => inShot(w, start, end)) : null;
   // The rendering is not cut out, so its pictures have no file: name them.
   const named = { ...out, visuals: out.visuals.map((v) => ({ ...v, image: v.image ?? "render" })) };
   const a = visualsFor(ref, start, end, words(ref));

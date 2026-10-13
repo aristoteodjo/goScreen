@@ -260,6 +260,8 @@ export function trackWords(samples, maxGap = 0.6) {
       if (t) {
         t.last = s.t;
         t.lastT = s.t;
+        // Matched where it was last seen: a word that moves stays one track.
+        t.box = w;
         t.seen.push({ t: s.t, background: s.background, ...w });
         t.texts.push(w);
         if (w.conf > t.best.conf) t.best = { t: s.t, ...w };
@@ -364,10 +366,12 @@ export const isMark = (w) => w.text.length >= 3 && w.w / (w.text.length * w.h) >
 
 /**
  * A reading the motion spec keeps (the same rule as `cleanWords` in
- * @goscreen/motion): read more than once, or very surely for a while.
+ * @goscreen/motion): read more than once, and surely enough.
  */
-export const isReliable = (w) =>
-  w.seen >= 2 || (w.conf >= 90 && w.end - w.start >= 0.3 && w.text.length > 1);
+export const isReliable = (w) => w.seen >= 2 && w.conf >= MIN_CONF;
+
+/** Below this confidence, a word read even several times is OCR guessing at a picture. */
+export const MIN_CONF = 65;
 
 /**
  * A word the renderer draws as text, so the pictures leave it out: big, not
@@ -380,8 +384,10 @@ export const isMasked = (w, height) => w.h >= height * BIG_WORD && !isMark(w);
 // interface, a bullet, a shape). Found on a grid of cells, followed across
 // samples, then cut out of the video as images the renderer can place.
 
-/** Grid of cells that differ from the background, big words left out. */
+/** Grid of cells that differ from the background (a colour or a plate), big words left out. */
 export function visualCells(rgb, width, height, bg, { cell, skip = [], threshold = 18 }) {
+  // `bg`: an [r, g, b] colour, or a plate (RGB pixels of the same size).
+  const plate = bg.length > 3;
   const gw = Math.ceil(width / cell);
   const gh = Math.ceil(height / cell);
   const on = new Uint8Array(gw * gh);
@@ -395,7 +401,9 @@ export function visualCells(rgb, width, height, bg, { cell, skip = [], threshold
       for (let y = cy * cell; y < y1 && !hit; y += 2)
         for (let x = cx * cell; x < x1 && !hit; x += 2) {
           const i = (y * width + x) * 3;
-          if (dist([rgb[i], rgb[i + 1], rgb[i + 2]], bg) > threshold && !skipped(x, y)) hit = true;
+          // Against one colour, or pixel by pixel against the shot's plate.
+          const ref = plate ? [bg[i], bg[i + 1], bg[i + 2]] : bg;
+          if (dist([rgb[i], rgb[i + 1], rgb[i + 2]], ref) > threshold && !skipped(x, y)) hit = true;
         }
       on[cy * gw + cx] = hit ? 1 : 0;
     }
@@ -491,15 +499,69 @@ export function visualsOf(rgb, width, height, bg, skip = []) {
     .map((b) => {
       const x = b.x0 * cell;
       const y = b.y0 * cell;
-      const box = {
+      const box = growToBackground(rgb, width, height, bg, {
         x,
         y,
         w: Math.min(width, (b.x1 + 1) * cell) - x,
         h: Math.min(height, (b.y1 + 1) * cell) - y,
-      };
+      }, cell);
       return { ...box, thumb: thumbnail(rgb, width, box) };
     })
     .filter((v) => v.w >= cell && v.h >= cell);
+}
+
+/** Mean gap to the background along one side of a box (sampled). */
+function edgeGap(rgb, width, bg, x0, y0, x1, y1) {
+  const plate = bg.length > 3;
+  let sum = 0;
+  let n = 0;
+  for (let y = y0; y <= y1; y += 2)
+    for (let x = x0; x <= x1; x += 2) {
+      const i = (y * width + x) * 3;
+      const ref = plate ? [bg[i], bg[i + 1], bg[i + 2]] : bg;
+      sum += dist([rgb[i], rgb[i + 1], rgb[i + 2]], ref);
+      n++;
+    }
+  return n ? sum / n : 0;
+}
+
+/**
+ * A box grown, side by side, until its edges are background again: a glow
+ * or a soft shadow fades past where it stopped counting as different, and a
+ * cut there would show as a rectangle.
+ */
+export function growToBackground(rgb, width, height, bg, box, step = 4, still = 5) {
+  let { x, y, w, h } = box;
+  // As much again, or a sixth of the frame for a small element in a wide glow.
+  const maxW = box.w + Math.max(box.w, width * 0.15);
+  const maxH = box.h + Math.max(box.h, height * 0.15);
+  for (let k = 0; k < 64; k++) {
+    let grew = false;
+    const x1 = x + w - 1;
+    const y1 = y + h - 1;
+    if (x > 0 && w < maxW && edgeGap(rgb, width, bg, x, y, x, y1) > still) {
+      const d = Math.min(step, x);
+      x -= d;
+      w += d;
+      grew = true;
+    }
+    if (x1 < width - 1 && w < maxW && edgeGap(rgb, width, bg, x1, y, x1, y1) > still) {
+      w = Math.min(width - x, w + step);
+      grew = true;
+    }
+    if (y > 0 && h < maxH && edgeGap(rgb, width, bg, x, y, x1, y) > still) {
+      const d = Math.min(step, y);
+      y -= d;
+      h += d;
+      grew = true;
+    }
+    if (y1 < height - 1 && h < maxH && edgeGap(rgb, width, bg, x, y1, x1, y1) > still) {
+      h = Math.min(height - y, h + step);
+      grew = true;
+    }
+    if (!grew) break;
+  }
+  return { x, y, w, h };
 }
 
 /** The share of box `a` inside box `b`. */
@@ -632,4 +694,97 @@ export function aroundColor(rgb, width, height, box, gap = 3, ring = 4) {
   }
   if (!c[0].length) return null;
   return c.map((v) => v.sort((a, b) => a - b)[Math.floor(v.length / 2)]);
+}
+
+// The plate of a cut: its background with nothing moving on it (a gradient,
+// a texture, a fixed shadow), the per-pixel median of frames spread over the
+// cut, words left out. Pictures are what differs from it, so wherever a frame
+// is not the plate there is a picture of the real pixels, at its time.
+
+/** Busy boxes (in pixels) as a mask: 1 = free. */
+function freeMask(width, height, busy) {
+  const free = new Uint8Array(width * height).fill(1);
+  for (const b of busy) {
+    const x0 = Math.max(0, Math.floor(b.x));
+    const y0 = Math.max(0, Math.floor(b.y));
+    const x1 = Math.min(width, Math.ceil(b.x + b.w));
+    const y1 = Math.min(height, Math.ceil(b.y + b.h));
+    for (let y = y0; y < y1; y++) free.fill(0, y * width + x0, y * width + x1);
+  }
+  return free;
+}
+
+/**
+ * The plate from frames `{ rgb, busy }`: per pixel, the median of its free
+ * readings; a pixel never free (under a word all along) takes its free
+ * neighbours' colour, from a pyramid of halves (push-pull). Null if nothing
+ * was ever free; `seen` = share of pixels read at least once.
+ */
+export function makePlate(frames, width, height) {
+  const n = width * height;
+  const masks = frames.map((f) => freeMask(width, height, f.busy));
+  let col = new Float32Array(n * 3);
+  let wt = new Float32Array(n);
+  let seen = 0;
+  const v = [[], [], []];
+  for (let i = 0; i < n; i++) {
+    v[0].length = v[1].length = v[2].length = 0;
+    for (let f = 0; f < frames.length; f++) {
+      if (!masks[f][i]) continue;
+      const rgb = frames[f].rgb;
+      v[0].push(rgb[i * 3]);
+      v[1].push(rgb[i * 3 + 1]);
+      v[2].push(rgb[i * 3 + 2]);
+    }
+    // Free in less than half the frames (a word sits there most of the
+    // time): its readings are of things passing; it is filled from around.
+    if (v[0].length < Math.max(1, Math.ceil(frames.length * 0.5))) continue;
+    seen++;
+    wt[i] = 1;
+    for (let k = 0; k < 3; k++) {
+      const c = v[k].sort((a, b) => a - b);
+      col[i * 3 + k] = c[c.length >> 1];
+    }
+  }
+  if (!seen) return null;
+  let w = width;
+  let h = height;
+  const levels = [{ col, wt, w, h }];
+  while (w > 1 || h > 1) {
+    const nw = Math.max(1, Math.ceil(w / 2));
+    const nh = Math.max(1, Math.ceil(h / 2));
+    const nc = new Float32Array(nw * nh * 3);
+    const nwt = new Float32Array(nw * nh);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (!wt[i]) continue;
+        const j = (y >> 1) * nw + (x >> 1);
+        nwt[j] += wt[i];
+        for (let k = 0; k < 3; k++) nc[j * 3 + k] += col[i * 3 + k] * wt[i];
+      }
+    for (let j = 0; j < nw * nh; j++)
+      if (nwt[j]) for (let k = 0; k < 3; k++) nc[j * 3 + k] /= nwt[j];
+    col = nc;
+    wt = nwt;
+    w = nw;
+    h = nh;
+    levels.push({ col, wt, w, h });
+  }
+  // Pull: each hole takes the colour of the level above.
+  for (let l = levels.length - 2; l >= 0; l--) {
+    const a = levels[l];
+    const up = levels[l + 1];
+    for (let y = 0; y < a.h; y++)
+      for (let x = 0; x < a.w; x++) {
+        const i = y * a.w + x;
+        if (a.wt[i]) continue;
+        const j = (y >> 1) * up.w + (x >> 1);
+        for (let k = 0; k < 3; k++) a.col[i * 3 + k] = up.col[j * 3 + k];
+        a.wt[i] = 1e-6;
+      }
+  }
+  const out = new Uint8Array(n * 3);
+  for (let i = 0; i < out.length; i++) out[i] = Math.round(levels[0].col[i]);
+  return { rgb: out, seen: seen / n };
 }
