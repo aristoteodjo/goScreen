@@ -10,6 +10,7 @@ import {
   type Proposal,
   type Site,
 } from "@goscreen/campaign";
+import { genresForRecipe } from "@goscreen/inspiration";
 import { outputSize, stageArea } from "@goscreen/render-engine";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ipc } from "@/lib/ipc";
+import { useInspirationDialog } from "@/modules/inspiration/InspirationDialog";
 import { useProject } from "@/modules/studio/store/project";
 import { initialLayers } from "./devices";
 import { Section } from "./PanelKit";
@@ -54,6 +56,10 @@ function apply(proposal: Proposal, site: Site, campaign: Campaign) {
   useEdit.getState().change(() => ({ ...edit, layers: placed }));
   player.seek(0);
 }
+
+// Shared prompts of the same kind of film, to choose its direction.
+const ideas = (recipe: string) =>
+  useInspirationDialog.getState().show({ genres: genresForRecipe(recipe) });
 
 export function ProposalsPanel() {
   const chapters = useSession((s) => s.chapters);
@@ -170,20 +176,31 @@ export function ProposalsPanel() {
         >
           <div className="grid grid-cols-2 gap-2">
             {proposals.map((p) => (
-              <button
+              <div
                 key={`${p.recipe.id}-${p.format}-${p.variant}`}
-                type="button"
-                onClick={() => apply(p, site, campaign)}
-                className="flex flex-col items-start gap-0.5 rounded-lg border bg-white/[0.03] p-2.5 text-left transition-colors hover:border-violet-400/60"
+                className="flex flex-col rounded-lg border bg-white/[0.03] transition-colors hover:border-violet-400/60"
               >
-                <span className="text-[13px] font-medium">
-                  {p.recipe.label}
-                  {p.variant > 0 ? ` #${p.variant + 1}` : ""}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {p.format} · {p.recipe.duration[0]}–{p.recipe.duration[1]} s
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => apply(p, site, campaign)}
+                  className="flex flex-col items-start gap-0.5 p-2.5 pb-1 text-left"
+                >
+                  <span className="text-[13px] font-medium">
+                    {p.recipe.label}
+                    {p.variant > 0 ? ` #${p.variant + 1}` : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.format} · {p.recipe.duration[0]}–{p.recipe.duration[1]} s
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => ideas(p.recipe.id)}
+                  className="px-2.5 pb-2 text-left text-[11px] text-violet-300 hover:underline"
+                >
+                  Direction ideas…
+                </button>
+              </div>
             ))}
           </div>
         </Section>

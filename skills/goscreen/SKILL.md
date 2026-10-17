@@ -53,6 +53,16 @@ open it.
    audience, journeys (buyer, seller...), length (30 to 90 s), format (9:16
    for phones and social, 16:9 for web), test accounts and values. Offer
    choices; do not decide alone what they care about.
+   **Pick a direction together.** The inspiration library holds ~700 shared
+   prompts of videos made as code (`inspiration_sync` once, then
+   `inspiration_search` by words, genre, technique or `recipe`). Offer the
+   person two or three that fit, read the chosen one with
+   `inspiration_brief` and follow it: its format, length, tempo, palette and
+   type, its scene structure adapted to the journeys, and its banned moves
+   (no crossfade means no crossfade). The brief says which goScreen tool does
+   each technique and which are not available: leave those out, never fake
+   them. `inspiration_apply` sets the film in its format, colours and font
+   and keeps the credit; name the creator when the film is shared.
 3. **Create**: `projects_create` (or reuse one), `vsl_create` with the start
    URL and device, then `vsl_save` the full flow: one scene per idea, a short
    caption (3 to 7 words, the benefit, in the site's language), 2 to 6 steps
@@ -106,6 +116,10 @@ open it.
   benefit per scene, end on the call to action (outro card).
 - Show real data moving: search results, a cart filling, a confirmation.
 - Keep scenes 4 to 10 s; cut waiting (off camera) rather than speeding it.
+- What the best shared prompts agree on: something happens on every beat
+  (no hold longer than about 1 s), one accent colour, one or two typefaces,
+  a cursor that drives the interface, the camera zoomed so each moment fills
+  the frame, and a list of banned effects to stay clear of templates.
 - Never show secrets: mask codes and test banners (`mask`), use test accounts.
 
 ## Etiquette

@@ -18,6 +18,7 @@
     "@goscreen/android-source": "workspace:*",
     "@goscreen/blocks": "workspace:*",
     "@goscreen/campaign": "workspace:*",
+    "@goscreen/inspiration": "workspace:*",
     "@goscreen/content-source": "workspace:*",
     "@goscreen/device-engine": "workspace:*",
     "@goscreen/device-registry": "workspace:*",

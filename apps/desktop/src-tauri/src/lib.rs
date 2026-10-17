@@ -2,7 +2,7 @@
 pub mod dev_privacy;
 pub mod modules;
 
-use modules::{android, control, export, local_ai, media, motion, projects, proxy, recording, scenario};
+use modules::{android, control, export, inspiration, local_ai, media, motion, projects, proxy, recording, scenario};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -22,6 +22,8 @@ pub fn run() {
         .manage(motion::MotionState::default())
         .invoke_handler(tauri::generate_handler![
             proxy::server::proxy_open,
+            inspiration::inspiration_sync,
+            inspiration::inspiration_library,
             local_ai::local_ai_status,
             local_ai::local_ai_install,
             local_ai::local_ai_cancel_install,

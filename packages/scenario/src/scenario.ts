@@ -164,6 +164,9 @@ export const filmSchema = z
     brand: z.string().default(""),
     intro: cardSchema.optional(),
     outro: cardSchema.optional(),
+    // The library entry whose direction the film follows (its slug), so the
+    // creator stays credited and the AI can read the same brief again.
+    inspiration: z.string().regex(/^[\w-]+$/).optional(),
   })
   .strict();
 

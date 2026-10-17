@@ -31,6 +31,8 @@ packages/
   campaign/           Brief de campagne (zod), catalogue de recettes, choix des 8 propositions (pur)
   motion/             Spec de motion design (zod, pur) : mesures d'une vidéo de référence, spec dérivée,
                       rendu HTML, comparaison, relecture par une IA, exemples d'apprentissage du modèle local
+  inspiration/        Bibliothèque de prompts partagés (pur, zod) : direction créative lue dans chaque prompt,
+                      recherche, réglages de film, brief pour l'IA
 ```
 
 ## Règles
@@ -294,6 +296,34 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   des légendes pour les blocs dont le texte est posé sur la vidéo) ; formulaire de réglages avec aperçu en
   direct ; ajout au curseur en une modification annulable.
 - IA : `blocks.list`, `edit.addBlock`, `edit.updateBlock`.
+
+### Inspirations : prompts partagés dans le processus créatif
+
+- Source : la liste communautaire `yihui-dev/awesome-opus5-5-videos` (MIT, ~700 vidéos faites en code, chacune avec
+  le prompt de son auteur). **Jamais embarquée** : téléchargée à la demande (Rust `modules/inspiration/`,
+  `inspiration_sync`, contrôle « une liste avec slug et prompt », écriture atomique) dans
+  `<data>/goScreen/inspiration/videos.json` ; ensuite tout marche hors ligne. Chaque entrée garde son auteur et
+  son post : le film qui suit une inspiration la mémorise (`film.inspiration`, son slug) pour le crédit.
+- `@goscreen/inspiration` (pur, testé) : `parseLibrary` (entrée par entrée), `directionOf(prompt)` lit sans IA
+  format, taille, durée (celle du film, pas d'un fondu de 0,8 s), i/s, BPM, palette (`#hex` et son rôle d'après
+  les mots qui le précèdent), polices, interdits (`Banned:`), techniques, genres et structure
+  (`<structure>`, storyboard). Ce qui n'est pas écrit reste vide : sur la vraie liste, 3 % des prompts écrivent une
+  palette en hexadécimal, et ces 3 % sont lus ; la durée en ressort pour 23 %, un genre pour 48 %. `filmPatch` -> format, fond, texte, accent (rôles nommés, sinon déduits : contraste
+  WCAG pour le texte, saturation pour l'accent), police la plus proche de celles que le canvas sait dessiner
+  (`FILM_FONTS`). `search` (mots, catégorie, genres, techniques, format), `genresForRecipe` (recettes de
+  campagne -> genres), `briefOf` (Markdown : crédit, direction, structure, interdits, **l'outil goScreen de
+  chaque technique** (`GOSCREEN_TOOLS`) et celles qui n'existent pas ici, à ne jamais simuler, puis le prompt).
+- Desktop (`modules/inspiration/`) : dialogue **Inspiration** (recherche, catégories, genres, palette, techniques
+  et leur outil, structure, interdits, prompt complet ; « Use as direction » = annulable, « Copy brief »).
+  Entrées : panneau Film (section Inspiration, « Start from an inspiration… » avant d'en faire un film) et
+  chaque proposition de campagne (« Direction ideas… », filtré par les genres de sa recette). Aucune image
+  distante (CSP) : la palette tient lieu d'aperçu.
+- IA : `inspiration.sync`, `inspiration.search` (`recipe` possible), `inspiration.brief`, `inspiration.apply`.
+  La skill fait choisir une direction avec la personne avant de créer, puis la suivre (interdits compris).
+- Relevé sur la liste (2026-10-17) : la technique structurante la plus fréquente est le **calage sur le tempo**
+  (« 120 BPM, something happens on every beat », 41 prompts) ; puis `seek(t)` pur et ressorts en forme close
+  (déjà la méthode de goScreen), flou de mouvement par sous-images (`tmix`, 28), curseur qui pilote l'interface,
+  zoom façon Screen Studio. Manquent ici : calage sur le tempo, flou de mouvement, grain (voir « À faire »).
 
 ### IA aux commandes (MCP, CLI, skill)
 
@@ -605,6 +635,9 @@ n'en sait rien.
     mots d'avant) ;
   - titres en fondu enchaîné : un mot peut manquer pendant la transition ;
   - le fond et les éléments appris par le modèle local ne servent pas encore au rendu.
+  - inspirations : détecter le tempo d'une musique (grille de temps) et caler coupes, cartons et entrées de blocs
+    dessus (« beat-sync », la technique la plus demandée) ; flou de mouvement à l'export (sous-images mélangées) ;
+    grain/vignette en option de film.
 
 ## Plan : vidéos produit automatiques, pilotées par la campagne
 

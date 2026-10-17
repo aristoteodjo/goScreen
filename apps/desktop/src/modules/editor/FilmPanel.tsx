@@ -5,7 +5,7 @@ import {
   filmSchema,
 } from "@goscreen/scenario";
 import { useMutation } from "@tanstack/react-query";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useInspirationDialog } from "@/modules/inspiration/InspirationDialog";
+import { useInspirations } from "@/modules/inspiration/library";
+import { FILM_FONTS } from "./filmFonts";
 import { exportVariants, type Resolution, type Variant } from "./exportCurrent";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { useEdit } from "./store";
@@ -21,15 +24,6 @@ import { useEdit } from "./store";
 // the montage follows at once (undoable). Only what the scenes made changes.
 
 const ASPECTS: Variant["aspect"][] = ["9:16", "16:9", "1:1", "4:5"];
-const FONTS = [
-  "Bricolage Grotesque Variable",
-  "Inter",
-  "Avenir Next",
-  "Futura",
-  "Helvetica Neue",
-  "Georgia",
-  "Menlo",
-];
 
 export function FilmPanel() {
   const stored = useEdit((s) => s.edit.film);
@@ -53,6 +47,7 @@ export function FilmPanel() {
 
   return (
     <>
+      <InspirationSection slug={film.inspiration} />
       <Section
         title="Look"
         hint="Showcase: the device framed under a numbered title, brand cards. Plain: one centered caption."
@@ -143,7 +138,7 @@ export function FilmPanel() {
       </Section>
       <Section title="Font">
         <div className="flex flex-wrap gap-1.5">
-          {FONTS.map((f) => (
+          {FILM_FONTS.map((f) => (
             <button
               key={f}
               type="button"
@@ -262,6 +257,49 @@ function MakeFilm() {
       </div>
       <Button size="sm" onClick={make}>
         Make it a film
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => useInspirationDialog.getState().show()}
+      >
+        Start from an inspiration…
+      </Button>
+    </Section>
+  );
+}
+
+/** The direction the film follows, credited, or a way to pick one. */
+function InspirationSection({ slug }: { slug: string | undefined }) {
+  const { data: all } = useInspirations();
+  const followed = slug ? all?.find((i) => i.slug === slug) : undefined;
+  return (
+    <Section
+      title="Inspiration"
+      hint="A shared prompt as the film's direction: its format, colours and type; its brief tells an AI the rest."
+    >
+      {slug ? (
+        <p className="text-[11px] text-muted-foreground">
+          Following{" "}
+          {followed?.post_url ? (
+            <button
+              type="button"
+              className="text-foreground underline"
+              onClick={() => void openUrl(followed.post_url)}
+            >
+              @{followed.author}
+            </button>
+          ) : (
+            <span className="text-foreground">{followed ? `@${followed.author}` : slug}</span>
+          )}
+        </p>
+      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => useInspirationDialog.getState().show()}
+      >
+        {slug ? "Change inspiration…" : "Browse inspirations…"}
       </Button>
     </Section>
   );

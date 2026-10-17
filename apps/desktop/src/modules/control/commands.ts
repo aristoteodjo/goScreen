@@ -63,6 +63,7 @@ import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand } from "./registry";
+import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerMotionCommands } from "@/modules/motion/commands";
 
 // The commands an AI can run. Each one is what a button of the studio does,
@@ -127,6 +128,7 @@ const pickPaths = (flow: Flow, picked?: number[]) => {
 
 export function registerCommands() {
   registerMotionCommands();
+  registerInspirationCommands({ currentEdit, applyEdit });
   defineCommand({
     name: "control.catalog",
     title: "List commands",

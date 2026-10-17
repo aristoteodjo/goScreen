@@ -1,3 +1,4 @@
+import { InspirationDialog } from "@/modules/inspiration/InspirationDialog";
 import { useTabTitle } from "@/modules/tabs/tabs";
 import {
   ASPECT_OPTIONS,
@@ -241,6 +242,7 @@ export function EditorPage({ video }: { video: string }) {
       )}
       <ExportDialog open={exporting} onOpenChange={setExporting} />
       <BlocksDialog />
+      <InspirationDialog />
       <EditorPalette openExport={openExport} />
     </div>
   );
