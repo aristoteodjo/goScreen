@@ -37,6 +37,8 @@ export function score(i: Inspiration, q: SearchQuery): number {
   if (q.category && i.category !== q.category) return 0;
   if (q.aspect && d.aspect && d.aspect !== q.aspect) return 0;
   let s = 1;
+  // A prompt that names the format beats one that does not say.
+  if (q.aspect && d.aspect === q.aspect) s += 2;
   for (const g of q.genres ?? []) if (d.genres.includes(g)) s += 3;
   for (const t of q.techniques ?? []) if (d.techniques.includes(t)) s += 2;
   if (q.genres?.length && !q.genres.some((g) => d.genres.includes(g))) return 0;

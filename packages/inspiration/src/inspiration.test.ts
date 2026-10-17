@@ -97,8 +97,12 @@ describe("filmPatch", () => {
       aspect: "16:9",
       background: "#f5f5f2",
       ink: "#0e0e10",
-      accent: "#cdf24f",
       font: "Inter",
+    });
+    expect(filmPatch(directionOf(TYPE), FONTS)).toMatchObject({
+      background: "#080d23",
+      ink: "#fff4dd",
+      accent: "#ff654f",
     });
   });
 
@@ -110,6 +114,26 @@ describe("filmPatch", () => {
         { hex: "#f5f5f5", role: null },
       ]),
     ).toEqual({ background: "#0a0a0a", ink: "#f5f5f5", accent: "#ff2bd6" });
+  });
+
+  it("never picks an accent that vanishes on the background", () => {
+    // Lime made for dark buttons, on a light canvas: the blue reads.
+    expect(
+      rolesOf([
+        { hex: "#f5f5f2", role: "background" },
+        { hex: "#0e0e10", role: "ink" },
+        { hex: "#cdf24f", role: "accent" },
+        { hex: "#ff6a2a", role: "accent" },
+        { hex: "#2f6bff", role: "accent" },
+      ]).accent,
+    ).toBe("#2f6bff");
+    // Nothing readable: the film keeps its own accent.
+    expect(
+      rolesOf([
+        { hex: "#f5f5f2", role: "background" },
+        { hex: "#cdf24f", role: "accent" },
+      ]).accent,
+    ).toBeUndefined();
   });
 
   it("only sets what the prompt gives", () => {

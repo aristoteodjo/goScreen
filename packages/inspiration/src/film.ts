@@ -39,7 +39,8 @@ function chroma(hex: string): number {
  * Background, text and accent from a prompt's palette. Colours the prompt
  * names for a role keep it; the others are deduced: the background is the
  * first colour given (prompts open on the canvas), the text the colour that
- * reads best on it, the accent the most saturated of what is left.
+ * reads best on it, the accent the most saturated of what is left that
+ * still reads on the background.
  */
 export function rolesOf(palette: Swatch[]): {
   background?: string;
@@ -56,11 +57,18 @@ export function rolesOf(palette: Swatch[]): {
     [...rest]
       .filter((h) => contrast(h, background) >= 4.5)
       .sort((a, b) => contrast(b, background) - contrast(a, background))[0];
-  const accent =
-    named("accent") ??
-    [...rest]
-      .filter((h) => h !== ink && chroma(h) > 0.25)
-      .sort((a, b) => chroma(b) - chroma(a))[0];
+  // The film writes *accent words* of its titles in this colour, so it must
+  // read on the background (3:1, large text). A prompt's lime made for dark
+  // buttons would vanish on its light canvas: the next accent is taken, or
+  // none, and the film keeps its own.
+  const readable = (h: string) => contrast(h, background) >= 3;
+  const accents = palette.filter((s) => s.role === "accent").map((s) => s.hex);
+  const saturated = [...rest]
+    .filter((h) => h !== ink && chroma(h) > 0.25)
+    .sort((a, b) => chroma(b) - chroma(a));
+  const accent = [...accents, ...saturated].find(
+    (h) => h !== ink && readable(h),
+  );
   return { background, ink, accent };
 }
 
