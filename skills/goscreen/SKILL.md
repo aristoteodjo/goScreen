@@ -66,6 +66,13 @@ open it.
    each technique and which are not available: leave those out, never fake
    them. `inspiration_apply` sets the film in its format, colours and font
    and keeps the credit; name the creator when the film is shared.
+   An inspiration also brings graphic elements: `inspiration_kit` lists the
+   blocks its prompt shows (wordmark, kinetic title, typed input, chat,
+   counter, charts, chips, notification, cards, call to action) with its copy
+   and numbers in the film's colours. That copy is about the creator's
+   product: rewrite every text and number for the person's product (never
+   keep "200 leads found" in an egg shop's film), agree on it with them, then
+   `inspiration_addElements` with `pick` and `props` by index.
 3. **Create**: `projects_create` (or reuse one), `vsl_create` with the start
    URL and device, then `vsl_save` the full flow: one scene per idea, a short
    caption (3 to 7 words, the benefit, in the site's language), 2 to 6 steps

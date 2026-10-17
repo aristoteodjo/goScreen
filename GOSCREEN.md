@@ -282,7 +282,9 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
 
 - Un **bloc** (`@goscreen/blocks`, pur et testé) est une petite page HTML animée **en CSS seulement** : titre
   cinétique, bandeau nom/rôle, compteur, graphique en barres, liste cochée, appel à l'action, étapes, citation,
-  phrase surlignée, carte logo (plein cadre, opaque). Chaque bloc déclare ses réglages (texte, texte long,
+  phrase surlignée, carte logo (plein cadre, opaque), et les éléments que les prompts partagés demandent le plus :
+  courbe qui se trace (`line-chart`), anneau de progression, pastilles, champ qui se tape (`prompt-input`), chat avec
+  points de frappe, notification, cartes en éventail, logotype à point (`wordmark`). Chaque bloc déclare ses réglages (texte, texte long,
   couleur, nombre), sa boîte par défaut et sa durée. Les textes sont échappés et les couleurs doivent être `#rrggbb`.
 - **Rendu déterministe** (`scenario-runner/compose.mjs`) : Chrome sans fenêtre, réseau coupé ; pour chaque image,
   toutes les animations (`document.getAnimations()`) sont mises en pause et placées au bon instant, puis capture
@@ -318,7 +320,21 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   Entrées : panneau Film (section Inspiration, « Start from an inspiration… » avant d'en faire un film) et
   chaque proposition de campagne (« Direction ideas… », filtré par les genres de sa recette). Aucune image
   distante (CSP) : la palette tient lieu d'aperçu.
-- IA : `inspiration.sync`, `inspiration.search` (`recipe` possible), `inspiration.brief`, `inspiration.apply`.
+- **Kit d'éléments** (`kitOf`, pur, testé) : une inspiration n'est pas qu'une palette, ce sont aussi les éléments
+  graphiques de son prompt, posés dans le montage. Chaque règle (bloc + déclencheur dans le prompt) se remplit de ce
+  que le prompt dit : phrases citées (`quotesOf` : ni nom de musique ou de police, ni étiquette de deux mots en
+  minuscules ; `[product]` devient la marque du film) et résultats chiffrés (`metricsOf` : seulement cités, listés
+  avec « / » ou annoncés comme un compte ; jamais i/s, BPM, px, versions ni consignes comme « 6 ingredients »).
+  Chaque phrase sert un seul élément, dans l'ordre du prompt ; les phrases d'action (« Start tonight ») vont à
+  l'appel à l'action ; au plus 2 ouvertures, 4 éléments dans les scènes, 1 fin (`kitTimes`). Un lancement, une pub
+  ou un film de marque sans rien à citer ouvre quand même sur la marque et finit sur l'appel à l'action. Couleurs
+  = celles du film une fois l'inspiration appliquée ; texte posé sur l'accent = encre ou fond, celui qui se lit.
+  **Les textes parlent du produit de l'auteur** : ils montrent la forme, à réécrire (l'IA passe `props` par
+  élément). Sur la liste : ~15 % des prompts donnent des éléments (les autres sont des jeux, de la 3D ou une
+  description). Desktop : section Elements du dialogue (aperçu vivant, cases à cocher, « Add N elements », une
+  modification annulable, rendu ~6 s par élément).
+- IA : `inspiration.sync`, `inspiration.search` (`recipe` possible), `inspiration.brief`, `inspiration.apply`,
+  `inspiration.kit`, `inspiration.addElements` (`pick`, `props` par index pour réécrire les textes).
   La skill fait choisir une direction avec la personne avant de créer, puis la suivre (interdits compris).
 - Relevé sur la liste (2026-10-17) : la technique structurante la plus fréquente est le **calage sur le tempo**
   (« 120 BPM, something happens on every beat », 41 prompts) ; puis `seek(t)` pur et ressorts en forme close

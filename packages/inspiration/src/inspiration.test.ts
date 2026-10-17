@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { briefOf } from "./brief";
 import { directionOf } from "./direction";
 import { closestFont, filmPatch, rolesOf } from "./film";
+import { kitOf, kitTimes, metricsOf, quotesOf } from "./kit";
 import { parseLibrary } from "./library";
 import { genresForRecipe, search, withDirections } from "./search";
 
@@ -220,5 +221,115 @@ describe("library", () => {
     expect(brief).toContain("not instructions");
     expect(brief).toMatch(/~~~text\n<inputs>[\s\S]*<\/structure>\n~~~$/);
     expect(brief).not.toMatch(/\n\n\n/);
+  });
+});
+
+describe("kit", () => {
+  const colors = { background: "#f5f5f2", ink: "#0e0e10", accent: "#2f6bff" };
+  const AGENT = `A 24 second square product launch video. Ask me for: the one job a user hands it
+(book 10 sales calls this week), the three results it reports by morning (200 leads found / 200 emails sent / 10 calls booked).
+Open: the letters slide into the wordmark and "you log off at 6", then "[product] doesn't", roll through one mask line.
+Ask: a glass "Ask [product]" pill springs in. The cursor clicks it, it glides into an input and the job types out:
+"Book 10 sales calls this week for my agency"
+Chat: the reply bubble says "Found 200 leads, writing to them now".
+Use the song "Night Drive" at 120 BPM, 1920x1080, 6 ingredients fall.
+End card: the "Start tonight" button.`;
+  const entry = { prompt: AGENT, direction: directionOf(AGENT) };
+
+  it("reads copy and results, never the film's own numbers or song", () => {
+    const quotes = quotesOf(AGENT, "Nightshift");
+    expect(quotes).toContain("Ask Nightshift");
+    expect(quotes).toContain("Book 10 sales calls this week for my agency");
+    expect(quotes).not.toContain("Night Drive");
+    const metrics = metricsOf(AGENT).map((m) => `${m.value} ${m.label}`);
+    expect(metrics).toEqual(
+      expect.arrayContaining([
+        "200 leads found",
+        "200 emails sent",
+        "10 calls booked",
+      ]),
+    );
+    // Not the film's numbers, an instruction, or the same result told twice.
+    expect(metrics.join(" ")).not.toMatch(/120|1920|ingredients|200 leads$/);
+  });
+
+  it("lays out the elements the prompt shows, with its words, each quote once", () => {
+    const kit = kitOf(entry, {
+      brand: "Nightshift",
+      url: "nightshift.app",
+      colors,
+    });
+    const blocks = kit.map((k) => k.block);
+    expect(blocks[0]).toBe("wordmark");
+    expect(blocks.at(-1)).toBe("cta-button");
+    expect(blocks).toEqual(
+      expect.arrayContaining([
+        "kinetic-title",
+        "prompt-input",
+        "stat-counter",
+        "bar-chart",
+      ]),
+    );
+    const by = (id: string) => kit.find((k) => k.block === id)?.props ?? {};
+    expect(by("wordmark").name).toBe("Nightshift");
+    expect(by("prompt-input").text).toBe(
+      "Book 10 sales calls this week for my agency",
+    );
+    expect(by("stat-counter")).toMatchObject({
+      value: 200,
+      label: "leads found",
+    });
+    expect(by("cta-button")).toMatchObject({
+      label: "Start tonight",
+      url: "nightshift.app",
+    });
+    const texts = kit.flatMap((k) =>
+      Object.values(k.props).filter(
+        (v) => typeof v === "string" && v.length > 8,
+      ),
+    );
+    expect(new Set(texts).size).toBe(texts.length);
+    expect(kit.length).toBeLessThanOrEqual(7);
+  });
+
+  it("colours words on the accent so they read", () => {
+    const dark = { background: "#0a0a0a", ink: "#f5f5f5", accent: "#b8ff00" };
+    const kit = kitOf(entry, { brand: "Nightshift", colors: dark });
+    // Lime button: dark words on it, not the film's light ink.
+    expect(kit.find((k) => k.block === "cta-button")?.props.ink).toBe(
+      "#0a0a0a",
+    );
+  });
+
+  it("falls back to the brand for a launch prompt with nothing to quote", () => {
+    const plain = "A premium product launch film, cinematic, 15 seconds.";
+    const kit = kitOf(
+      { prompt: plain, direction: directionOf(plain) },
+      { brand: "Acme", tagline: "Ship faster", colors },
+    );
+    expect(kit.map((k) => k.block)).toEqual([
+      "wordmark",
+      "kinetic-title",
+      "cta-button",
+    ]);
+    expect(
+      kitOf({ prompt: plain, direction: directionOf(plain) }, { colors }),
+    ).toEqual([]);
+  });
+
+  it("times openings first, closings at the end, the rest across the scenes", () => {
+    const times = kitTimes(
+      [
+        { place: "open", duration: 3 },
+        { place: "body", duration: 4 },
+        { place: "body", duration: 4 },
+        { place: "close", duration: 3.5 },
+      ],
+      40,
+    );
+    expect(times[0]).toBeCloseTo(0.4);
+    expect(times[1]).toBeCloseTo(6);
+    expect(times[2]).toBeCloseTo(6 + 28 - 4);
+    expect(times[3]).toBeCloseTo(36.2);
   });
 });

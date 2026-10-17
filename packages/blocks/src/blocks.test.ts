@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   BLOCKS,
   blockById,
+  chartPath,
   escapeHtml,
   renderHtml,
   resolveProps,
+  titleSize,
 } from "./index";
 
 describe("blocks", () => {
@@ -53,6 +55,44 @@ describe("blocks", () => {
     );
     expect(html).not.toContain("<script>");
     expect(html).toContain("#e9a100");
+  });
+
+  it("draws a line chart through its points, highest at the top", () => {
+    const { line, end } = chartPath("10, 30, 20", { width: 1000, height: 500 });
+    expect(line).toBe("M40 460 L470 150 L900 305");
+    expect(end).toEqual({ x: 900, y: 305 });
+    // Too few numbers: a plain rising line rather than nothing.
+    expect(chartPath("oops", { width: 100, height: 100 }).line).toMatch(
+      /^M\d+ \d+ L\d+ \d+$/,
+    );
+  });
+
+  it("types an input one character at a time, escaped", () => {
+    const b = blockById("prompt-input");
+    if (!b) throw new Error("missing");
+    const html = renderHtml(b, { text: "a<b" }, { width: 800, height: 160 });
+    expect(html.match(/class="k"/g)).toHaveLength(3);
+    expect(html).toContain("&lt;");
+    expect(html).not.toContain("a<b");
+  });
+
+  it("shows typing dots before each reply, never before your own messages", () => {
+    const b = blockById("chat-bubbles");
+    if (!b) throw new Error("missing");
+    const html = renderHtml(
+      b,
+      { messages: "hi\nhello\nok\nfine" },
+      { width: 600, height: 600 },
+    );
+    expect(html.match(/class="dots"/g)).toHaveLength(2);
+    expect(html.match(/class="row me"/g)).toHaveLength(2);
+  });
+
+  it("shrinks a long headline so it never runs off the sides", () => {
+    const box = { width: 972, height: 486 };
+    expect(titleSize("Ship it", box)).toBe(126);
+    // 32 letters: two lines of 16, about 96 px each.
+    expect(titleSize("Vous dormez, vos œufs se vendent", box)).toBe(96);
   });
 
   it("ids are unique", () => {

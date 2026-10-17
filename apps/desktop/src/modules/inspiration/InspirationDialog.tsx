@@ -1,3 +1,5 @@
+import { blockById } from "@goscreen/blocks";
+import type { KitElement } from "@goscreen/inspiration";
 import {
   briefOf,
   CATEGORIES,
@@ -9,11 +11,13 @@ import {
   LIBRARY_HOME,
   search,
 } from "@goscreen/inspiration";
+import { useMutation } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type ReactNode, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +28,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { Live } from "@/modules/editor/BlocksDialog";
+import { useSession } from "@/modules/editor/session";
 import { useEdit } from "@/modules/editor/store";
+import { kitForEdit, placeKit } from "./kit";
 import {
   useInspirations,
   useSyncInspirations,
@@ -259,6 +266,7 @@ function Detail({ inspiration: i }: { inspiration: Inspiration }) {
           <Swatches inspiration={i} big />
         </div>
       ) : null}
+      <KitSection key={i.slug} inspiration={i} />
       {d.techniques.length ? (
         <Block title="Techniques">
           <ul className="flex flex-col gap-0.5">
@@ -359,5 +367,111 @@ function Swatches({
         />
       ))}
     </span>
+  );
+}
+
+/** The inspiration's graphic elements, live, ready to lay along the film. */
+function KitSection({ inspiration: i }: { inspiration: Inspiration }) {
+  const edit = useEdit((s) => s.edit);
+  const videoPath = useSession((s) => s.videoPath);
+  const kit = useMemo(() => kitForEdit(edit, i), [edit, i]);
+  // Each block appears once in a kit: its id names the element.
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<string | null>(null);
+  const picked = kit.filter((k) => !off.has(k.block));
+  const add = useMutation({
+    mutationFn: async (elements: KitElement[]) => {
+      const before = useEdit.getState().edit;
+      return placeKit(videoPath, before, elements, (done, total) =>
+        setProgress(done < total ? `Rendering ${done + 1} of ${total}…` : null),
+      );
+    },
+    onSuccess: (result) => {
+      setProgress(null);
+      if (!result || !Array.isArray(result.overlays) || !result.edit) return;
+      useEdit.getState().change(() => result.edit, "inspiration-kit");
+      toast.success(
+        `${result.overlays.length} elements from @${i.author} added along the film (⌘Z to undo).`,
+      );
+    },
+    onError: (e) => {
+      setProgress(null);
+      toast.error(e instanceof Error ? e.message : String(e));
+    },
+  });
+  if (kit.length === 0)
+    return (
+      <Block title="Elements">
+        <p className="text-[11px] text-muted-foreground">
+          This prompt gives no copy or numbers to lay out. Its direction and
+          brief still apply.
+        </p>
+      </Block>
+    );
+  const toggle = (id: string) =>
+    setOff((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  return (
+    <Block title="Elements">
+      <p className="text-[11px] text-muted-foreground">
+        Graphic elements this prompt shows, with its words and numbers, in the
+        film's colours. Each becomes a block layer you can move and edit.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {kit.map((k) => {
+          const block = blockById(k.block);
+          if (!block) return null;
+          return (
+            <div
+              key={k.block}
+              className={cn(
+                "flex flex-col gap-1.5 rounded-lg border p-2 transition-colors",
+                off.has(k.block) ? "opacity-50" : "border-violet-400/60",
+              )}
+            >
+              <span className="flex items-center gap-2 text-[11px] font-medium">
+                <Checkbox
+                  id={`kit-${k.block}`}
+                  checked={!off.has(k.block)}
+                  onCheckedChange={() => toggle(k.block)}
+                />
+                <label htmlFor={`kit-${k.block}`} className="cursor-pointer">
+                  {block.label}
+                </label>
+                <span className="ml-auto font-normal text-muted-foreground">
+                  {k.place === "open"
+                    ? "opening"
+                    : k.place === "close"
+                      ? "ending"
+                      : "scenes"}
+                </span>
+              </span>
+              <Live block={block} props={k.props} width={220} />
+              <span className="text-[10px] text-muted-foreground">
+                {k.reason}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          onClick={() => add.mutate(picked)}
+          disabled={add.isPending || picked.length === 0 || !videoPath}
+        >
+          {add.isPending ? <Spinner /> : null}
+          Add {picked.length} element{picked.length === 1 ? "" : "s"} to the
+          film
+        </Button>
+        {progress ? (
+          <span className="text-[11px] text-muted-foreground">{progress}</span>
+        ) : null}
+      </div>
+    </Block>
   );
 }

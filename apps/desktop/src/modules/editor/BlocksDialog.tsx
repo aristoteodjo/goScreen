@@ -60,7 +60,7 @@ export const useBlocksDialog = create<DialogState>((set) => ({
 }));
 
 /** A block playing in a sandboxed frame, scaled into its card; it loops. */
-function Live({
+export function Live({
   block,
   props,
   width,
