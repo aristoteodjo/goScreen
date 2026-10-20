@@ -1,3 +1,4 @@
+import { pop } from "./look";
 import { recordingSpans } from "./sequence";
 import type { MainClip, RecordedPointer, TouchMark } from "./types";
 
@@ -56,6 +57,79 @@ export function touchesAt(
     }
   }
   return out;
+}
+
+/** Seconds a ripple ring takes to expand and fade. */
+export const RIPPLE = 0.5;
+/** Two frames at 30 fps between the rings, the course's stagger. */
+const RIPPLE_STAGGER = 2 / 30;
+const RIPPLE_RINGS = 2;
+
+/**
+ * The course's click: a blurred ring that grows out of the press and fades,
+ * then a second one two frames later. Marks carry `ring` (0 = the press
+ * disc, 1.. = the rings); the disc is drawn like a solid touch.
+ */
+export function ripplesAt(
+  list: Press[],
+  t: number,
+  map: (p: RecordedPointer) => { x: number; y: number } | null = (p) => ({
+    x: p.x,
+    y: p.y,
+  }),
+): TouchMark[] {
+  const out: TouchMark[] = [];
+  for (const p of list) {
+    if (t < p.down || t > p.down + RIPPLE + RIPPLE_STAGGER * RIPPLE_RINGS)
+      continue;
+    const at = map(p.pointer);
+    if (!at) continue;
+    if (t <= p.up) {
+      const k = Math.min(1, (t - p.down) / PRESS);
+      out.push({ ...at, scale: 0.5 + 0.3 * k, opacity: 0.8 * k, ring: 0 });
+    } else if (t <= p.up + 0.1) {
+      out.push({ ...at, scale: 0.8, opacity: 0.8 * (1 - (t - p.up) / 0.1), ring: 0 });
+    }
+    for (let r = 1; r <= RIPPLE_RINGS; r += 1) {
+      const local = t - p.down - RIPPLE_STAGGER * (r - 1);
+      if (local < 0 || local > RIPPLE) continue;
+      const k = local / RIPPLE;
+      // Grows fast then slows; fades in over the first fifth, out after.
+      const grow = 1 - (1 - k) ** 2.2;
+      const alpha = k < 0.2 ? k / 0.2 : 1 - (k - 0.2) / 0.8;
+      out.push({
+        ...at,
+        scale: 0.8 + 1.8 * grow,
+        opacity: alpha * (r === 1 ? 1 : 0.6),
+        ring: r,
+      });
+    }
+  }
+  return out;
+}
+
+/** Seconds a click's punch on the screen lasts. */
+export const PUNCH = 0.5;
+
+/**
+ * The screen reacts to a click: it dips a little and bounces back with the
+ * course's 50-amplitude button press, scaled down for a whole screen.
+ * A scale factor (1 = at rest) for this device at time t.
+ */
+export function pressPunch(
+  list: Press[],
+  t: number,
+  instanceId: string,
+  strength = 0.02,
+): number {
+  let factor = 1;
+  for (const p of list) {
+    if (p.pointer.instanceId !== instanceId) continue;
+    const local = t - p.down;
+    if (local < 0 || local > PUNCH) continue;
+    factor *= 1 - strength * (1 - pop(local, 50));
+  }
+  return factor;
 }
 
 /** Tap times in timeline seconds, for click sound effects. Muted clips stay silent. */

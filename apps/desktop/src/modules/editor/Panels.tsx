@@ -278,6 +278,7 @@ function BackgroundPanel() {
 }
 
 const TOUCH_STYLES: { id: TouchStyle; label: string }[] = [
+  { id: "ripple", label: "Ripple" },
   { id: "ring", label: "Ring" },
   { id: "solid", label: "Solid" },
   { id: "none", label: "Hidden" },

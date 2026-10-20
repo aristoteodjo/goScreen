@@ -508,7 +508,7 @@ const editSchema = z.object({
     .catch([]),
   touch: z
     .object({
-      style: z.enum(["ring", "solid", "none"]),
+      style: z.enum(["ring", "solid", "ripple", "none"]),
       color,
       size: z.number().min(12).max(160),
     })

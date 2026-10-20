@@ -23,8 +23,11 @@ export {
   autoFocus,
   cameraAt,
   easeInOut,
+  ZOOM_DRIFT,
+  ZOOM_IN,
   ZOOM_RAMP,
   zoomAmount,
+  zoomDrift,
 } from "./camera";
 export {
   composeFrame,
@@ -142,7 +145,17 @@ export {
   placeZoom,
   rulerStep,
 } from "./timeline";
-export { type Press, presses, RELEASE, tapTimes, touchesAt } from "./touches";
+export {
+  type Press,
+  pressPunch,
+  presses,
+  PUNCH,
+  RELEASE,
+  RIPPLE,
+  ripplesAt,
+  tapTimes,
+  touchesAt,
+} from "./touches";
 export {
   type ActiveTransition,
   DEFAULT_TRANSITION,

@@ -114,8 +114,10 @@ describe("camera", () => {
   it("never shows outside the frame", () => {
     const out = { width: 1000, height: 500 };
     const cam = cameraAt(zoom(0, 10), 5, out, { x: 0, y: 0 });
-    expect(cam.scale).toBe(2);
-    expect(cam.center).toEqual({ x: 250, y: 125 });
+    // Halfway through, the slow push-in has added half of ZOOM_DRIFT.
+    expect(cam.scale).toBeCloseTo(2.04, 6);
+    expect(cam.center.x).toBeCloseTo(out.width / (2 * cam.scale), 6);
+    expect(cam.center.y).toBeCloseTo(out.height / (2 * cam.scale), 6);
   });
 
   it("follows the latest tap and glides to the next", () => {

@@ -152,3 +152,49 @@ describe("scene time", () => {
     expect(d?.length).toBe(1);
   });
 });
+
+describe("camera momentum", () => {
+  it("pops into a zoom fast and keeps pushing in on the plateau", async () => {
+    const { cameraAt, zoomAmount, ZOOM_DRIFT } = await import("./camera");
+    const seg = { id: "z", start: 1, end: 5, scale: 2, focus: null };
+    // A quarter of the way into the ramp, most of the zoom is already there.
+    expect(zoomAmount(seg, 1.125)).toBeGreaterThan(0.7);
+    expect(zoomAmount(seg, 3)).toBe(1);
+    const out = { width: 1000, height: 1000 };
+    const early = cameraAt(seg, 2, out, null).scale;
+    const late = cameraAt(seg, 4, out, null).scale;
+    expect(late).toBeGreaterThan(early);
+    expect(late).toBeLessThanOrEqual(2 * (1 + ZOOM_DRIFT));
+    expect(cameraAt(seg, 6, out, null).scale).toBe(1);
+  });
+});
+
+describe("clicks", () => {
+  const press = (down: number, up: number) => ({
+    pointer: { t: down, kind: "down" as const, x: 0.5, y: 0.5, instanceId: "a", source: "web" as const },
+    down,
+    up,
+  });
+
+  it("ripples two rings, two frames apart, that grow and fade", async () => {
+    const { ripplesAt, RIPPLE } = await import("./touches");
+    const list = [press(1, 1.1)];
+    const atPress = ripplesAt(list, 1.03);
+    expect(atPress.some((m) => m.ring === 0)).toBe(true);
+    const rings = ripplesAt(list, 1.2).filter((m) => (m.ring ?? 0) > 0);
+    expect(rings).toHaveLength(2);
+    expect(rings[0].scale).toBeGreaterThan(rings[1].scale);
+    expect(ripplesAt(list, 1 + RIPPLE + 0.2)).toHaveLength(0);
+    expect(ripplesAt(list, 0.5)).toHaveLength(0);
+  });
+
+  it("punches the screen on a click and settles back", async () => {
+    const { pressPunch } = await import("./touches");
+    const list = [press(2, 2.1)];
+    expect(pressPunch(list, 1.9, "a")).toBe(1);
+    expect(pressPunch(list, 2.03, "a")).toBeLessThan(0.995);
+    expect(pressPunch(list, 2.03, "other")).toBe(1);
+    expect(pressPunch(list, 2.6, "a")).toBe(1);
+    expect(pressPunch(list, 2.45, "a")).toBeCloseTo(1, 2);
+  });
+});

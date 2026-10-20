@@ -74,7 +74,7 @@ export type ZoomSegment = {
   focus: Point | null;
 };
 
-export type TouchStyle = "ring" | "solid" | "none";
+export type TouchStyle = "ring" | "solid" | "ripple" | "none";
 
 // How one recorded device is presented. Position and scale are relative to
 // the stage area (output minus the camera column in split layout).
@@ -354,6 +354,8 @@ export type TouchMark = {
   y: number;
   scale: number;
   opacity: number;
+  // Ripple style: 0 = the press disc, 1.. = the expanding rings.
+  ring?: number;
 };
 
 /** Geometry of a device frame at its natural size (from the Device Engine). */

@@ -359,7 +359,16 @@ export function drawFrame(
     const r = base * m.scale;
     ctx.beginPath();
     ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
-    if (edit.touch.style === "solid") {
+    if (m.ring !== undefined && m.ring > 0) {
+      // A soft ring, blurred like the course's box-blurred stroke.
+      ctx.save();
+      ctx.lineWidth = 3 * k;
+      ctx.strokeStyle = hexAlpha(edit.touch.color, 0.85 * m.opacity);
+      ctx.shadowColor = hexAlpha(edit.touch.color, 0.9 * m.opacity);
+      ctx.shadowBlur = 18 * k * shadowScale;
+      ctx.stroke();
+      ctx.restore();
+    } else if (edit.touch.style === "solid" || m.ring === 0) {
       ctx.fillStyle = hexAlpha(edit.touch.color, 0.45 * m.opacity);
       ctx.fill();
     } else {
@@ -513,7 +522,8 @@ function drawCursor(
   c: { x: number; y: number; pressed: number },
   size: number,
 ) {
-  const s = (size / 1.27) * (1 - 0.12 * c.pressed);
+  // A press shrinks the arrow by a fifth (the course's 52 -> 41).
+  const s = (size / 1.27) * (1 - 0.2 * c.pressed);
   ctx.save();
   ctx.translate(c.x, c.y);
   ctx.scale(s, s);

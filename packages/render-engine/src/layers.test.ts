@@ -125,7 +125,9 @@ describe("layered compose", () => {
       width: 400,
       height: 800,
     });
-    expect(frame.layers[0].scale).toBeCloseTo(1);
+    // A tap is in progress: the screen is punched a little below 1.
+    expect(frame.layers[0].scale).toBeGreaterThan(0.97);
+    expect(frame.layers[0].scale).toBeLessThanOrEqual(1);
     // The tap sits at the screen center, which is the frame center here.
     expect(frame.touches[0].x).toBeCloseTo(500);
     expect(frame.touches[0].y).toBeCloseTo(500);

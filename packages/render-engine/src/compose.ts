@@ -18,7 +18,7 @@ import {
   type Pose,
   projectRect,
 } from "./look";
-import { type Press, presses, touchesAt } from "./touches";
+import { type Press, pressPunch, presses, ripplesAt, touchesAt } from "./touches";
 import type {
   EditState,
   Frame,
@@ -107,20 +107,26 @@ export function sceneTimeAt(clips: MainClip[], t: number): SceneTime | null {
 function presentLayer(
   layer: PlacedLayer,
   edit: EditState,
+  timeline: Timeline,
   output: Size,
+  t: number,
   scene: SceneTime | null,
 ): PlacedLayer {
   const look = edit.screen;
   const pose: Pose =
     look.entrance && scene?.opens ? entranceAt(scene.local) : AT_REST;
   const drift = scene ? driftAt(scene.local, scene.length, look.drift) : 0;
-  if (isFlat(look) && pose === AT_REST) return layer;
+  const punch =
+    edit.touch.style === "none"
+      ? 1
+      : pressPunch(timeline.presses, t, layer.instanceId);
+  if (isFlat(look) && pose === AT_REST && punch === 1) return layer;
   const tilt = { x: look.tilt.x + pose.tiltX, y: look.tilt.y + drift };
   const center = {
     x: layer.center.x,
     y: layer.center.y + pose.dy * output.height,
   };
-  const scale = layer.scale * pose.scale;
+  const scale = layer.scale * pose.scale * punch;
   const { quad, z } = projectRect(
     center,
     {
@@ -166,7 +172,16 @@ function placeLayers(
       width: r.width * timeline.source.width,
       height: r.height * timeline.source.height,
     };
-    out.push(presentLayer(placeLayer(le, geometry, area, crop), edit, output, scene));
+    out.push(
+      presentLayer(
+        placeLayer(le, geometry, area, crop),
+        edit,
+        timeline,
+        output,
+        t,
+        scene,
+      ),
+    );
   }
   return out;
 }
@@ -219,7 +234,11 @@ export function composeFrame(
   const camera = cameraAt(seg, t, output, focus);
 
   const touches =
-    edit.touch.style === "none" ? [] : touchesAt(timeline.presses, t, toOutput);
+    edit.touch.style === "none"
+      ? []
+      : edit.touch.style === "ripple"
+        ? ripplesAt(timeline.presses, t, toOutput)
+        : touchesAt(timeline.presses, t, toOutput);
 
   const cursor = edit.cursor.visible
     ? cursorAt(timeline.pointers, timeline.presses, t, toOutput)
