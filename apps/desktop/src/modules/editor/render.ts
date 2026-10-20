@@ -375,7 +375,13 @@ export function drawFrame(
     ctx.restore();
   }
 
-  if (!layered) {
+  if (!layered && frame.flat) {
+    // A video from anywhere, presented as one glass: the premium look.
+    drawFlatGlass(ctx, frame.flat, video, edit, radius, k, sweep, plateColor);
+  } else if (!layered) {
+    const m = Math.min(content.width, content.height) * edit.screen.plate;
+    if (framed && m > 0)
+      drawPlate(ctx, content, radius, m, plateColor, edit.shadow, shadowScale);
     ctx.save();
     roundRect(ctx, content, radius);
     ctx.clip();
@@ -387,6 +393,8 @@ export function drawFrame(
       ctx.fillRect(content.x, content.y, content.width, content.height);
     }
     ctx.restore();
+    if (framed && edit.screen.outline > 0)
+      drawOutline(ctx, content, radius, edit.screen.outline * k, sweep);
   }
 
   // Spotlight: everything but a soft disc around the click goes dark.
@@ -446,6 +454,193 @@ export function drawFrame(
   }
 }
 
+/** The frosted plate behind a frameless screen, with equal margins. */
+function drawPlate(
+  ctx: CanvasRenderingContext2D,
+  r: Rect,
+  radius: number,
+  m: number,
+  color: string,
+  shadow: number,
+  shadowScale: number,
+) {
+  const outer = {
+    x: r.x - m,
+    y: r.y - m,
+    width: r.width + 2 * m,
+    height: r.height + 2 * m,
+  };
+  ctx.save();
+  if (shadow > 0) {
+    ctx.shadowColor = `rgba(0, 0, 0, ${0.4 * shadow})`;
+    ctx.shadowBlur = 50 * shadow * shadowScale;
+    ctx.shadowOffsetY = 20 * shadow * shadowScale;
+  }
+  ctx.fillStyle = color;
+  roundRect(ctx, outer, radius + m);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+  roundRect(
+    ctx,
+    {
+      x: outer.x + 0.75,
+      y: outer.y + 0.75,
+      width: outer.width - 1.5,
+      height: outer.height - 1.5,
+    },
+    radius + m,
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A thin outline on a screen: flat grey at 50 %, or a turning two-tone gradient. */
+function drawOutline(
+  ctx: CanvasRenderingContext2D,
+  r: Rect,
+  radius: number,
+  width: number,
+  sweep: number | null,
+) {
+  ctx.save();
+  ctx.lineWidth = width;
+  if (sweep === null) {
+    ctx.strokeStyle = "rgba(200, 200, 205, 0.5)";
+  } else {
+    const a = (sweep * Math.PI) / 180;
+    const d = Math.hypot(r.width, r.height) / 2;
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    const g = ctx.createLinearGradient(
+      cx - Math.cos(a) * d,
+      cy + Math.sin(a) * d,
+      cx + Math.cos(a) * d,
+      cy - Math.sin(a) * d,
+    );
+    g.addColorStop(0, "rgba(255, 255, 255, 0.7)");
+    g.addColorStop(1, "rgba(160, 160, 170, 0.35)");
+    ctx.strokeStyle = g;
+  }
+  roundRect(
+    ctx,
+    {
+      x: r.x + width / 2,
+      y: r.y + width / 2,
+      width: r.width - width,
+      height: r.height - width,
+    },
+    Math.max(0, radius - width / 2),
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * A flat video as one leaning glass: plate, rounded video and outline are
+ * drawn into a bitmap at the content's size, then warped onto the glass's
+ * projected quad with depth of field.
+ */
+function drawFlatGlass(
+  ctx: CanvasRenderingContext2D,
+  glass: PlacedLayer,
+  video: CanvasImageSource | null,
+  edit: EditState,
+  radius: number,
+  k: number,
+  sweep: number | null,
+  plateColor: string,
+) {
+  const { frame } = glass.geometry;
+  const plate = Math.min(frame.width, frame.height) * edit.screen.plate;
+  const margin = Math.max(plate, 40 * k);
+  const outer = {
+    width: frame.width + margin * 2,
+    height: frame.height + margin * 2,
+  };
+  const m = ctx.getTransform();
+  const onScreen = Math.hypot(m.a, m.b) * glass.scale;
+  const res = Math.min(2, Math.max(0.25, onScreen));
+  const w = Math.min(4096, Math.ceil(outer.width * res));
+  const h = Math.min(4096, Math.ceil(outer.height * res));
+  layerBitmap ??= document.createElement("canvas");
+  const bitmap = layerBitmap;
+  if (bitmap.width !== w) bitmap.width = w;
+  if (bitmap.height !== h) bitmap.height = h;
+  const b = bitmap.getContext("2d");
+  if (!b) return;
+  b.setTransform(1, 0, 0, 1, 0, 0);
+  b.clearRect(0, 0, w, h);
+  b.scale(res, res);
+  b.translate(margin, margin);
+  const r = { x: 0, y: 0, width: frame.width, height: frame.height };
+  const glassy = plate > 0 || edit.screen.outline > 0;
+  const rad = Math.max(
+    radius,
+    glassy ? 0.035 * Math.min(frame.width, frame.height) : 0,
+  );
+  if (plate > 0) drawPlate(b, r, rad, plate, plateColor, edit.shadow, res);
+  else if (edit.shadow > 0) {
+    b.save();
+    b.shadowColor = `rgba(0, 0, 0, ${0.5 * edit.shadow})`;
+    b.shadowBlur = 60 * edit.shadow * res;
+    b.shadowOffsetY = 26 * edit.shadow * res;
+    b.fillStyle = "#000";
+    roundRect(b, r, rad);
+    b.fill();
+    b.restore();
+  }
+  b.save();
+  roundRect(b, r, rad);
+  b.clip();
+  b.fillStyle = "#111";
+  b.fillRect(0, 0, frame.width, frame.height);
+  if (video) {
+    b.imageSmoothingQuality = "high";
+    b.drawImage(video, 0, 0, frame.width, frame.height);
+  }
+  b.restore();
+  if (edit.screen.outline > 0)
+    drawOutline(b, r, rad, edit.screen.outline * k, sweep);
+
+  warpGrown(ctx, bitmap, glass, outer, frame, edit, res, Math.hypot(m.a, m.b));
+}
+
+/** Warps a bitmap drawn with margins around a layer's frame onto its quad. */
+function warpGrown(
+  ctx: CanvasRenderingContext2D,
+  bitmap: HTMLCanvasElement,
+  layer: PlacedLayer,
+  outer: Size,
+  frame: Size,
+  edit: EditState,
+  res: number,
+  pixelScale: number,
+) {
+  const sx = outer.width / frame.width;
+  const sy = outer.height / frame.height;
+  const q = layer.quad;
+  const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4;
+  const cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
+  const grow = (p: { x: number; y: number }) => ({
+    x: cx + (p.x - cx) * sx,
+    y: cy + (p.y - cy) * sy,
+  });
+  const quad = [grow(q[0]), grow(q[1]), grow(q[2]), grow(q[3])] as typeof q;
+  const short = Math.min(frame.width, frame.height) * layer.scale;
+  drawWarped(ctx, bitmap, {
+    quad,
+    depth: layer.depth,
+    // Fully blurred once a corner is a tenth of the screen's height away.
+    zref: 0.1 * frame.height * layer.scale,
+    blur: edit.screen.depth * 0.012 * short * res,
+    alpha: layer.opacity,
+    pixelScale,
+  });
+}
+
 /** Reused bitmap for the leaning path: the layer at its natural size, warped afterwards. */
 let layerBitmap: HTMLCanvasElement | null = null;
 
@@ -488,28 +683,7 @@ function drawLeaning(
   bctx.translate(margin, margin);
   drawDevice(bctx, layer, le, recorded, source, edit.shadow, res, look);
 
-  // The outer rectangle's corners: the frame's quad, extended by the margin
-  // along its own edges (a projective map keeps straight lines straight).
-  const sx = outer.width / frame.width;
-  const sy = outer.height / frame.height;
-  const q = layer.quad;
-  const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4;
-  const cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
-  const grow = (p: { x: number; y: number }) => ({
-    x: cx + (p.x - cx) * sx,
-    y: cy + (p.y - cy) * sy,
-  });
-  const quad = [grow(q[0]), grow(q[1]), grow(q[2]), grow(q[3])] as typeof q;
-  const short = Math.min(frame.width, frame.height) * layer.scale;
-  drawWarped(ctx, bitmap, {
-    quad,
-    depth: layer.depth,
-    // Fully blurred once a corner is a tenth of the screen's height away.
-    zref: 0.1 * frame.height * layer.scale,
-    blur: edit.screen.depth * 0.012 * short * res,
-    alpha: layer.opacity,
-    pixelScale: Math.hypot(m.a, m.b),
-  });
+  warpGrown(ctx, bitmap, layer, outer, frame, edit, res, Math.hypot(m.a, m.b));
 }
 
 function drawWebcam(

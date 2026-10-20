@@ -43,6 +43,7 @@ export {
 } from "./camera";
 export {
   composeFrame,
+  frameMotion,
   frameMoves,
   sceneTimeAt,
   type SceneTime,
@@ -159,6 +160,7 @@ export {
   rulerStep,
 } from "./timeline";
 export {
+  FLAT,
   type Press,
   pressPunch,
   presses,

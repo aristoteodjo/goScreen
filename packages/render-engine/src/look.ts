@@ -46,7 +46,7 @@ export const PREMIUM_LOOK: ScreenLook = {
   sweep: true,
   tilt: { x: 8, y: -10 },
   drift: 3,
-  depth: 0.4,
+  depth: 0.25,
   entrance: true,
 };
 

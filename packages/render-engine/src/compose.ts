@@ -19,6 +19,7 @@ import {
 } from "./look";
 import { placeClips, sourceTimeAt } from "./sequence";
 import {
+  FLAT,
   type Press,
   pressPunch,
   presses,
@@ -212,6 +213,7 @@ export function composeFrame(
 
   let content: Rect = area;
   let layers: PlacedLayer[] = [];
+  let flat: PlacedLayer | null = null;
   let toOutput: (p: RecordedPointer) => Point | null;
 
   if (layered) {
@@ -228,10 +230,19 @@ export function composeFrame(
       edit.background.kind === "none" ? 0 : edit.padding,
     );
     content = { ...inner, x: inner.x + area.x, y: inner.y + area.y };
-    toOutput = (p) => ({
-      x: content.x + p.x * content.width,
-      y: content.y + p.y * content.height,
-    });
+    // The video as one glass, when the screen look asks for it.
+    const glass = presentLayer(flatLayer(content), edit, timeline, output, t, scene);
+    flat = glass.tilt.x !== 0 || glass.tilt.y !== 0 || glass.scale !== 1 ||
+      glass.opacity !== 1 || glass.center.y !== content.y + content.height / 2
+      ? glass
+      : null;
+    const here = flat;
+    toOutput = here
+      ? (p) => layerPoint(here, p.x, p.y)
+      : (p) => ({
+          x: content.x + p.x * content.width,
+          y: content.y + p.y * content.height,
+        });
   }
 
   const seg = activeZoom(edit.zooms, t);
@@ -262,11 +273,42 @@ export function composeFrame(
     output,
     content,
     layers,
+    flat,
     camera,
     touches,
     spotlight,
     cursor,
     webcam,
+  };
+}
+
+/** A flat video's rectangle as a frameless layer at scale 1 (output px). */
+function flatLayer(content: Rect): PlacedLayer {
+  const geometry = {
+    frame: { width: content.width, height: content.height },
+    screen: { x: 0, y: 0, width: content.width, height: content.height },
+  };
+  const center = {
+    x: content.x + content.width / 2,
+    y: content.y + content.height / 2,
+  };
+  return {
+    instanceId: FLAT,
+    center,
+    scale: 1,
+    rotation: 0,
+    geometry,
+    crop: { x: 0, y: 0, width: 1, height: 1 },
+    frame: false,
+    quad: [
+      { x: content.x, y: content.y },
+      { x: content.x + content.width, y: content.y },
+      { x: content.x + content.width, y: content.y + content.height },
+      { x: content.x, y: content.y + content.height },
+    ],
+    depth: [0, 0, 0, 0],
+    tilt: { x: 0, y: 0 },
+    opacity: 1,
   };
 }
 
@@ -282,31 +324,53 @@ export function frameMoves(
   t: number,
   dt: number,
 ): boolean {
-  if (transitionAt(edit.clips, t)) return true;
+  return frameMotion(edit, timeline, output, t, dt) > 0;
+}
+
+/**
+ * How far the picture moves over `dt` seconds around t, in output px (the
+ * largest displacement of the camera or a screen corner); transitions and
+ * overlays in motion count as a full frame's worth. 0 = still.
+ */
+export function frameMotion(
+  edit: EditState,
+  timeline: Timeline,
+  output: Size,
+  t: number,
+  dt: number,
+): number {
+  const short = Math.min(output.width, output.height);
+  if (transitionAt(edit.clips, t)) return short * 0.02;
   for (const o of activeOverlays(edit.overlays, t)) {
     const local = t - o.start;
     const span = Math.min(o.motion, o.duration / 2);
     if (local < span || local > o.duration - span) {
       const a = overlayMotion(o, t - dt / 2);
       const b = overlayMotion(o, t + dt / 2);
-      if (a.dx !== b.dx || a.dy !== b.dy || a.scale !== b.scale) return true;
+      if (a.dx !== b.dx || a.dy !== b.dy || a.scale !== b.scale)
+        return short * 0.02;
     }
     if (o.keyframes && Object.values(o.keyframes).some((k) => k && k.length > 1))
-      return true;
+      return short * 0.02;
   }
   const a = sourceTimeAt(edit.clips, t - dt / 2);
   const b = sourceTimeAt(edit.clips, t + dt / 2);
-  if (a === null || b === null) return false;
+  if (a === null || b === null) return 0;
   const fa = composeFrame(edit, timeline, output, a, sceneTimeAt(edit.clips, t - dt / 2));
   const fb = composeFrame(edit, timeline, output, b, sceneTimeAt(edit.clips, t + dt / 2));
-  const moved = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) > 0.4;
-  if (Math.abs(fa.camera.scale - fb.camera.scale) > 0.0008) return true;
-  if (moved(fa.camera.center, fb.camera.center)) return true;
+  const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
+  // Where the camera's window corner lands: scale and centre together.
+  const corner = (f: Frame) => ({
+    x: (0 - f.camera.center.x) * f.camera.scale,
+    y: (0 - f.camera.center.y) * f.camera.scale,
+  });
+  let motion = dist(corner(fa), corner(fb));
   for (let i = 0; i < fa.layers.length; i += 1) {
     const la = fa.layers[i];
     const lb = fb.layers[i];
-    if (!lb) return true;
-    if (la.quad.some((p, k) => moved(p, lb.quad[k]))) return true;
+    if (!lb) return short * 0.02;
+    for (let k = 0; k < 4; k += 1)
+      motion = Math.max(motion, dist(la.quad[k], lb.quad[k]) * fa.camera.scale);
   }
-  return false;
+  return motion > 0.75 ? motion : 0;
 }

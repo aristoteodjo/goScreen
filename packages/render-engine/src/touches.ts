@@ -142,6 +142,9 @@ export function spotlightAt(
   return best;
 }
 
+/** The instance id of a flat video presented as one glass: every click counts. */
+export const FLAT = "flat";
+
 /** Seconds a click's punch on the screen lasts. */
 export const PUNCH = 0.5;
 
@@ -158,7 +161,7 @@ export function pressPunch(
 ): number {
   let factor = 1;
   for (const p of list) {
-    if (p.pointer.instanceId !== instanceId) continue;
+    if (instanceId !== FLAT && p.pointer.instanceId !== instanceId) continue;
     const local = t - p.down;
     if (local < 0 || local > PUNCH) continue;
     factor *= 1 - strength * (1 - pop(local, 50));

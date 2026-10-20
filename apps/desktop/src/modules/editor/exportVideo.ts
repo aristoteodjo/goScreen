@@ -1,7 +1,7 @@
 import {
   audioPieces,
   type EditState,
-  frameMoves,
+  frameMotion,
   outputSize,
   type Placed,
   placeClips,
@@ -144,9 +144,9 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
   const end = sequenceDuration(o.edit.clips);
   const frames = Math.max(1, Math.round(end * o.fps));
   const timeline = { ...o.timeline, source };
-  // Motion blur: frames where the picture moves are the average of a few
-  // instants over the frame (the video stays on its own frame).
-  const SAMPLES = 3;
+  // Motion blur: frames where the picture moves are the average of several
+  // instants over the frame (the video stays on its own frame); the faster
+  // the move, the more instants, so copies smear instead of doubling.
   const acc = document.createElement("canvas");
   acc.width = output.width;
   acc.height = output.height;
@@ -203,11 +203,14 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
           await seek(el, local);
       }
       const dt = 1 / o.fps;
-      if (actx && frameMoves(o.edit, timeline, output, t, dt)) {
+      const motion = frameMotion(o.edit, timeline, output, t, dt);
+      // About one sample per 3 px of travel, a 180° shutter (half the frame).
+      const SAMPLES = motion > 0 ? Math.max(2, Math.min(8, Math.ceil(motion / 3))) : 1;
+      if (actx && SAMPLES > 1) {
         actx.globalAlpha = 1;
         actx.clearRect(0, 0, output.width, output.height);
         for (let k = 0; k < SAMPLES; k += 1) {
-          const tk = Math.max(0, Math.min(end, t + ((k - (SAMPLES - 1) / 2) * dt) / SAMPLES));
+          const tk = Math.max(0, Math.min(end, t + ((k - (SAMPLES - 1) / 2) * dt) / (2 * (SAMPLES - 1))));
           drawAt(ctx, sources, o.edit, timeline, output, tk, 1);
           actx.globalAlpha = 1 / (k + 1);
           actx.drawImage(canvas, 0, 0);

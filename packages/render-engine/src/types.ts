@@ -405,6 +405,9 @@ export type Frame = {
   // Flat mode: where the video sits. Layered mode: the stage area.
   content: Rect;
   layers: PlacedLayer[];
+  // Flat mode with a screen look: the whole video presented as one glass
+  // (leaning, entering, punched), in place of `content`.
+  flat: PlacedLayer | null;
   camera: Camera;
   touches: TouchMark[];
   // The rest darkens around this point (output px) by `strength` × touch.spotlight.

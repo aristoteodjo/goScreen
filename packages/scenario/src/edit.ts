@@ -412,7 +412,8 @@ const framePadding = (film: Film) => (film.captions === "none" ? 0.08 : 0.14);
 function deviceLayout(film: Film) {
   // A frameless glass is scaled on its own height (no bezel), and leans
   // towards the texts: a little smaller keeps the same footprint.
-  const k = film.screen === "premium" ? 0.86 : 1;
+  const k =
+    film.screen !== "premium" ? 1 : film.aspect === "9:16" ? 0.96 : 0.86;
   const scaled = (p: { x: number; y: number; scale: number }) => ({
     ...p,
     scale: p.scale * k,
