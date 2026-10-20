@@ -349,7 +349,8 @@ export type EditState = {
   audio: AudioClip[];
   assets: Asset[];
   zooms: ZoomSegment[];
-  touch: { style: TouchStyle; color: string; size: number };
+  // `spotlight`: how much the rest darkens around a click (0 = never).
+  touch: { style: TouchStyle; color: string; size: number; spotlight?: number };
   // Synthetic mouse pointer drawn from the recorded moves (never burned in the capture).
   cursor: { visible: boolean; size: number };
   sound: { clicks: boolean; volume: number };
@@ -406,6 +407,8 @@ export type Frame = {
   layers: PlacedLayer[];
   camera: Camera;
   touches: TouchMark[];
+  // The rest darkens around this point (output px) by `strength` × touch.spotlight.
+  spotlight: (Point & { strength: number }) | null;
   cursor: (Point & { pressed: number }) | null;
   // Webcam overlay, in output px (drawn above the zoom).
   webcam: Rect | null;

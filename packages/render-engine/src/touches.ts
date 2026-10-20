@@ -108,6 +108,40 @@ export function ripplesAt(
   return out;
 }
 
+/** How long the spotlight of a click lasts, and its fades. */
+export const SPOTLIGHT = 1.3;
+const SPOT_IN = 0.12;
+const SPOT_OUT = 0.45;
+
+export type Spotlight = { x: number; y: number; strength: number };
+
+/**
+ * The course's "dim the rest": around a click, everything but a soft disc
+ * on the target darkens for a moment. Strength 0..1 at time t, at the
+ * latest click's spot (clicks in a burst keep the light on).
+ */
+export function spotlightAt(
+  list: Press[],
+  t: number,
+  map: (p: RecordedPointer) => { x: number; y: number } | null,
+): Spotlight | null {
+  let best: Spotlight | null = null;
+  for (const p of list) {
+    const local = t - p.down;
+    if (local < 0 || local > SPOTLIGHT) continue;
+    const at = map(p.pointer);
+    if (!at) continue;
+    const strength =
+      local < SPOT_IN
+        ? local / SPOT_IN
+        : local > SPOTLIGHT - SPOT_OUT
+          ? (SPOTLIGHT - local) / SPOT_OUT
+          : 1;
+    if (!best || p.down > t - local) best = { ...at, strength };
+  }
+  return best;
+}
+
 /** Seconds a click's punch on the screen lasts. */
 export const PUNCH = 0.5;
 

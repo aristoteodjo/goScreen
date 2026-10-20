@@ -219,7 +219,12 @@ export function buildScenarioEdit(
     clips,
     overlays: [...overlays, ...kickers(overlays, film)],
     zooms,
-    touch: { style: look.touch, color: film.accent, size: 44 },
+    touch: {
+      style: look.touch,
+      color: film.accent,
+      size: 44,
+      spotlight: film.screen === "premium" ? 0.5 : 0,
+    },
     cursor: { ...DEFAULT_EDIT.cursor, visible: false },
     layers: take.layers.map((l) => ({
       instanceId: l.instanceId,
@@ -478,7 +483,12 @@ export function applyFilm(
     zooms: edit.zooms.map((z) =>
       z.id.startsWith("scene-") ? { ...z, scale: Math.max(1, film.zoom) } : z,
     ),
-    touch: { ...edit.touch, color: film.accent, style: look.touch },
+    touch: {
+      ...edit.touch,
+      color: film.accent,
+      style: look.touch,
+      spotlight: film.screen === "premium" ? 0.5 : 0,
+    },
     layers:
       edit.layers?.map((l) => ({ ...l, x, y, scale, frame: look.frame })) ??
       null,

@@ -1,6 +1,7 @@
 import {
   audioPieces,
   type EditState,
+  frameMoves,
   outputSize,
   type Placed,
   placeClips,
@@ -126,6 +127,13 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
   const end = sequenceDuration(o.edit.clips);
   const frames = Math.max(1, Math.round(end * o.fps));
   const timeline = { ...o.timeline, source };
+  // Motion blur: frames where the picture moves are the average of a few
+  // instants over the frame (the video stays on its own frame).
+  const SAMPLES = 3;
+  const acc = document.createElement("canvas");
+  acc.width = output.width;
+  acc.height = output.height;
+  const actx = acc.getContext("2d");
   // Outgoing frames of transitions, rendered once before the frame loop.
   const stills = new Map<string, HTMLCanvasElement>();
   const placed = placeClips(o.edit.clips);
@@ -177,7 +185,24 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
         )
           await seek(el, local);
       }
-      drawAt(ctx, sources, o.edit, timeline, output, t, 1);
+      const dt = 1 / o.fps;
+      if (actx && frameMoves(o.edit, timeline, output, t, dt)) {
+        actx.globalAlpha = 1;
+        actx.clearRect(0, 0, output.width, output.height);
+        for (let k = 0; k < SAMPLES; k += 1) {
+          const tk = Math.max(0, Math.min(end, t + ((k - (SAMPLES - 1) / 2) * dt) / SAMPLES));
+          drawAt(ctx, sources, o.edit, timeline, output, tk, 1);
+          actx.globalAlpha = 1 / (k + 1);
+          actx.drawImage(canvas, 0, 0);
+        }
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(acc, 0, 0);
+        ctx.restore();
+      } else {
+        drawAt(ctx, sources, o.edit, timeline, output, t, 1);
+      }
       await ipc.exportFrame(await (await jpeg(canvas)).arrayBuffer());
       o.onProgress((i + 1) / frames);
     }

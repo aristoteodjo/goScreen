@@ -389,6 +389,26 @@ export function drawFrame(
     ctx.restore();
   }
 
+  // Spotlight: everything but a soft disc around the click goes dark.
+  if (frame.spotlight && (edit.touch.spotlight ?? 0) > 0) {
+    const sp = frame.spotlight;
+    const r = 0.24 * Math.min(output.width, output.height);
+    const g = ctx.createRadialGradient(sp.x, sp.y, r * 0.35, sp.x, sp.y, r);
+    const dark = 0.6 * (edit.touch.spotlight ?? 0) * sp.strength;
+    g.addColorStop(0, "rgba(0, 0, 0, 0)");
+    g.addColorStop(1, `rgba(0, 0, 0, ${dark.toFixed(3)})`);
+    ctx.save();
+    ctx.fillStyle = g;
+    // Cover the whole composition, whatever the camera shows of it.
+    ctx.fillRect(
+      -output.width,
+      -output.height,
+      output.width * 3,
+      output.height * 3,
+    );
+    ctx.restore();
+  }
+
   const base = (edit.touch.size / 2) * k;
   for (const m of frame.touches) {
     const r = base * m.scale;

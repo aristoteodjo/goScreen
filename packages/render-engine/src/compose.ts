@@ -8,7 +8,6 @@ import {
   webcamRect,
 } from "./layers";
 import { contentRect } from "./layout";
-import { placeClips } from "./sequence";
 import {
   AT_REST,
   driftAt,
@@ -18,7 +17,17 @@ import {
   type Pose,
   projectRect,
 } from "./look";
-import { type Press, pressPunch, presses, ripplesAt, touchesAt } from "./touches";
+import { placeClips, sourceTimeAt } from "./sequence";
+import {
+  type Press,
+  pressPunch,
+  presses,
+  ripplesAt,
+  spotlightAt,
+  touchesAt,
+} from "./touches";
+import { transitionAt } from "./transitions";
+import { activeOverlays, overlayMotion } from "./motion";
 import type {
   EditState,
   Frame,
@@ -244,5 +253,60 @@ export function composeFrame(
     ? cursorAt(timeline.pointers, timeline.presses, t, toOutput)
     : null;
 
-  return { output, content, layers, camera, touches, cursor, webcam };
+  const spotlight =
+    (edit.touch.spotlight ?? 0) > 0 && edit.touch.style !== "none"
+      ? spotlightAt(timeline.presses, t, toOutput)
+      : null;
+
+  return {
+    output,
+    content,
+    layers,
+    camera,
+    touches,
+    spotlight,
+    cursor,
+    webcam,
+  };
+}
+
+/**
+ * Whether the picture moves around timeline time t (over `dt` seconds):
+ * the camera, a leaning or entering screen, a transition, an overlay in
+ * motion. The export then accumulates sub-frames for motion blur.
+ */
+export function frameMoves(
+  edit: EditState,
+  timeline: Timeline,
+  output: Size,
+  t: number,
+  dt: number,
+): boolean {
+  if (transitionAt(edit.clips, t)) return true;
+  for (const o of activeOverlays(edit.overlays, t)) {
+    const local = t - o.start;
+    const span = Math.min(o.motion, o.duration / 2);
+    if (local < span || local > o.duration - span) {
+      const a = overlayMotion(o, t - dt / 2);
+      const b = overlayMotion(o, t + dt / 2);
+      if (a.dx !== b.dx || a.dy !== b.dy || a.scale !== b.scale) return true;
+    }
+    if (o.keyframes && Object.values(o.keyframes).some((k) => k && k.length > 1))
+      return true;
+  }
+  const a = sourceTimeAt(edit.clips, t - dt / 2);
+  const b = sourceTimeAt(edit.clips, t + dt / 2);
+  if (a === null || b === null) return false;
+  const fa = composeFrame(edit, timeline, output, a, sceneTimeAt(edit.clips, t - dt / 2));
+  const fb = composeFrame(edit, timeline, output, b, sceneTimeAt(edit.clips, t + dt / 2));
+  const moved = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) > 0.4;
+  if (Math.abs(fa.camera.scale - fb.camera.scale) > 0.0008) return true;
+  if (moved(fa.camera.center, fb.camera.center)) return true;
+  for (let i = 0; i < fa.layers.length; i += 1) {
+    const la = fa.layers[i];
+    const lb = fb.layers[i];
+    if (!lb) return true;
+    if (la.quad.some((p, k) => moved(p, lb.quad[k]))) return true;
+  }
+  return false;
 }

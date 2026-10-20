@@ -198,3 +198,37 @@ describe("clicks", () => {
     expect(pressPunch(list, 2.45, "a")).toBeCloseTo(1, 2);
   });
 });
+
+describe("spotlight and motion", () => {
+  const press = (down: number, up: number) => ({
+    pointer: { t: down, kind: "down" as const, x: 0.3, y: 0.6, instanceId: "a", source: "web" as const },
+    down,
+    up,
+  });
+
+  it("lights the latest click, fading in and out", async () => {
+    const { spotlightAt, SPOTLIGHT } = await import("./touches");
+    const id = (p: { x: number; y: number }) => ({ x: p.x, y: p.y });
+    const list = [press(1, 1.1)];
+    expect(spotlightAt(list, 0.9, id)).toBeNull();
+    expect(spotlightAt(list, 1.06, id)?.strength).toBeCloseTo(0.5, 1);
+    expect(spotlightAt(list, 1.5, id)).toEqual({ x: 0.3, y: 0.6, strength: 1 });
+    expect(spotlightAt(list, 1 + SPOTLIGHT + 0.1, id)).toBeNull();
+  });
+
+  it("sees the camera move during a zoom and rest on a plateau without drift", async () => {
+    const { frameMoves, timelineOf } = await import("./compose");
+    const { DEFAULT_EDIT, fullClip } = await import("./schema");
+    const timeline = timelineOf({ width: 1000, height: 1000 }, []);
+    const out = { width: 1000, height: 1000 };
+    const edit = {
+      ...DEFAULT_EDIT,
+      clips: [fullClip("a", 0, 10)],
+      zooms: [{ id: "z", start: 2, end: 6, scale: 2, focus: { x: 0.5, y: 0.5 } }],
+    };
+    expect(frameMoves(edit, timeline, out, 1, 1 / 30)).toBe(false);
+    expect(frameMoves(edit, timeline, out, 2.1, 1 / 30)).toBe(true);
+    // The slow push-in on the plateau is below the threshold.
+    expect(frameMoves(edit, timeline, out, 4, 1 / 30)).toBe(false);
+  });
+});

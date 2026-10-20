@@ -477,6 +477,19 @@ function TouchPanel() {
           onReset={() => set({ size: 44 })}
         />
       </Section>
+      <Section
+        title="Spotlight on clicks"
+        hint="Around each click the rest of the picture darkens for a moment, so the eye lands on the target."
+      >
+        <SliderRow
+          value={touch.spotlight ?? 0}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(v) => `${Math.round(v * 100)}%`}
+          onChange={(spotlight) => set({ spotlight }, "touch-spotlight")}
+        />
+      </Section>
     </>
   );
 }

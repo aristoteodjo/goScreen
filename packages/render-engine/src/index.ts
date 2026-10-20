@@ -43,6 +43,7 @@ export {
 } from "./camera";
 export {
   composeFrame,
+  frameMoves,
   sceneTimeAt,
   type SceneTime,
   type GeometryOf,
@@ -165,6 +166,9 @@ export {
   RELEASE,
   RIPPLE,
   ripplesAt,
+  SPOTLIGHT,
+  type Spotlight,
+  spotlightAt,
   tapTimes,
   touchesAt,
 } from "./touches";

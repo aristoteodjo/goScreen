@@ -536,6 +536,7 @@ const editSchema = z.object({
       style: z.enum(["ring", "solid", "ripple", "none"]),
       color,
       size: z.number().min(12).max(160),
+      spotlight: z.number().min(0).max(1).optional().catch(undefined),
     })
     .catch(DEFAULT_EDIT.touch),
   cursor: z
