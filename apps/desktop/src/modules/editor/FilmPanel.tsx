@@ -78,6 +78,45 @@ export function FilmPanel() {
           onCommit={(brand) => set({ brand }, "brand")}
         />
       </Section>
+      <Section
+        title="Screen"
+        hint="Premium: the SaaS enhanced screen recording (frameless glass, outline, lean, pan-in, ripple clicks)."
+      >
+        <ToggleGroup
+          type="single"
+          value={film.screen}
+          onValueChange={(v) =>
+            v && set({ screen: v as Film["screen"] }, "screen")
+          }
+          className="w-full"
+        >
+          <ToggleGroupItem value="framed" className="flex-1 text-[11px]">
+            Framed device
+          </ToggleGroupItem>
+          <ToggleGroupItem value="premium" className="flex-1 text-[11px]">
+            Premium
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </Section>
+      <Section
+        title="Backdrop"
+        hint="Moving cinematic background built from the accent colour, or the flat film colour."
+      >
+        <ToggleGroup
+          type="single"
+          value={film.backdrop}
+          onValueChange={(v) =>
+            v && set({ backdrop: v as Film["backdrop"] }, "backdrop")
+          }
+          className="w-full"
+        >
+          {(["flat", "circles", "blob", "waves"] as const).map((b) => (
+            <ToggleGroupItem key={b} value={b} className="flex-1 text-[11px]">
+              {b[0].toUpperCase() + b.slice(1)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Section>
       <Section title="Format">
         <ToggleGroup
           type="single"

@@ -238,6 +238,8 @@ const TRANSITIONS: { kind: NonNullable<Transition>["kind"]; label: string }[] =
     { kind: "slide-up", label: "Push up" },
     { kind: "zoom", label: "Zoom through" },
     { kind: "wipe", label: "Wipe" },
+    { kind: "blur", label: "Cut blur" },
+    { kind: "push", label: "Push in" },
   ];
 
 function EffectsBin() {

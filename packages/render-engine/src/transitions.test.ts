@@ -60,6 +60,8 @@ describe("transitions", () => {
       "slide-up",
       "zoom",
       "wipe",
+      "blur",
+      "push",
     ] as const) {
       const m = transitionMix(kind, 1);
       expect(m.to.alpha).toBe(1);
@@ -73,5 +75,17 @@ describe("transitions", () => {
 
   it("dips through black at mid point", () => {
     expect(transitionMix("dip", 0.5).dip).toBeCloseTo(1);
+  });
+
+  it("goes soft at the cut and sharp again, and smears the slides", () => {
+    expect(transitionMix("blur", 0).blur).toBe(0);
+    expect(transitionMix("blur", 0.5).blur).toBeCloseTo(30 / 1080, 6);
+    expect(transitionMix("blur", 1).blur).toBe(0);
+    expect(transitionMix("slide-left", 0.5).samples).toBeGreaterThan(1);
+    expect(transitionMix("fade", 0.5).samples).toBe(1);
+    const push = transitionMix("push", 0.3);
+    expect(push.from.scale).toBeGreaterThan(1);
+    expect(push.to.scale).toBeGreaterThan(1);
+    expect(push.fromOnTop).toBe(false);
   });
 });

@@ -14,6 +14,8 @@ import {
   type TextOverlay,
   typedText,
   wordOpacities,
+  type MeshBackground,
+  meshAt,
 } from "@goscreen/render-engine";
 
 /** The decoded pixels of an image or video overlay, when ready. */
@@ -24,28 +26,33 @@ export function fillBackground(
   bg: EditBackground,
   w: number,
   h: number,
+  t = 0,
 ) {
-  if (bg.kind === "none") {
-    ctx.fillStyle = "#000";
-  } else if (bg.kind === "color") {
-    ctx.fillStyle = bg.value;
+  if (bg.kind === "mesh") {
+    drawMesh(ctx, bg, w, h, t);
   } else {
-    // CSS angles: 0deg points up, clockwise.
-    const a = ((bg.angle - 90) * Math.PI) / 180;
-    const half = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
-    const cx = w / 2;
-    const cy = h / 2;
-    const g = ctx.createLinearGradient(
-      cx - Math.cos(a) * half,
-      cy - Math.sin(a) * half,
-      cx + Math.cos(a) * half,
-      cy + Math.sin(a) * half,
-    );
-    g.addColorStop(0, bg.from);
-    g.addColorStop(1, bg.to);
-    ctx.fillStyle = g;
+    if (bg.kind === "none") {
+      ctx.fillStyle = "#000";
+    } else if (bg.kind === "color") {
+      ctx.fillStyle = bg.value;
+    } else {
+      // CSS angles: 0deg points up, clockwise.
+      const a = ((bg.angle - 90) * Math.PI) / 180;
+      const half = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
+      const cx = w / 2;
+      const cy = h / 2;
+      const g = ctx.createLinearGradient(
+        cx - Math.cos(a) * half,
+        cy - Math.sin(a) * half,
+        cx + Math.cos(a) * half,
+        cy + Math.sin(a) * half,
+      );
+      g.addColorStop(0, bg.from);
+      g.addColorStop(1, bg.to);
+      ctx.fillStyle = g;
+    }
+    ctx.fillRect(0, 0, w, h);
   }
-  ctx.fillRect(0, 0, w, h);
   if (bg.kind === "none" || !bg.decor) return;
   for (const d of bg.decor) {
     ctx.save();
@@ -56,6 +63,100 @@ export function fillBackground(
     ctx.fill();
     ctx.restore();
   }
+}
+
+// The mesh is painted small (the blur is huge anyway) and scaled up; the
+// grain is one fixed tile so it never shimmers between frames.
+let meshCanvas: HTMLCanvasElement | null = null;
+let grainTile: HTMLCanvasElement | null = null;
+const MESH_SCALE = 1 / 6;
+
+function grain(): HTMLCanvasElement {
+  if (grainTile) return grainTile;
+  const size = 192;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const g = c.getContext("2d");
+  if (g) {
+    const img = g.createImageData(size, size);
+    // Deterministic noise: the same tile in the preview and the export.
+    let seed = 1234567;
+    for (let i = 0; i < img.data.length; i += 4) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const v = seed % 256;
+      img.data[i] = v;
+      img.data[i + 1] = v;
+      img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }
+  grainTile = c;
+  return c;
+}
+
+/** A cinematic background at time t: blurred shapes, static grain, vignette. */
+function drawMesh(
+  ctx: CanvasRenderingContext2D,
+  bg: MeshBackground,
+  w: number,
+  h: number,
+  t: number,
+) {
+  const mw = Math.max(8, Math.round(w * MESH_SCALE));
+  const mh = Math.max(8, Math.round(h * MESH_SCALE));
+  meshCanvas ??= document.createElement("canvas");
+  const m = meshCanvas;
+  if (m.width !== mw) m.width = mw;
+  if (m.height !== mh) m.height = mh;
+  const g = m.getContext("2d");
+  if (!g) return;
+  const frame = meshAt(bg, t);
+  const short = Math.min(mw, mh);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.filter = "none";
+  g.fillStyle = bg.base;
+  g.fillRect(0, 0, mw, mh);
+  g.save();
+  g.translate(mw / 2, mh / 2);
+  g.rotate(frame.rotation);
+  g.translate(-mw / 2, -mh / 2);
+  for (const sh of frame.shapes) {
+    const blur = bg.blur * short * (1 + sh.soft);
+    g.filter = blur >= 0.5 ? `blur(${blur.toFixed(2)}px)` : "none";
+    g.fillStyle = sh.color;
+    g.beginPath();
+    g.ellipse(sh.x * mw, sh.y * mh, sh.rx * mw, sh.ry * mh, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+  g.filter = "none";
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(m, 0, 0, w, h);
+  if (bg.grain > 0) {
+    const pattern = ctx.createPattern(grain(), "repeat");
+    if (pattern) {
+      ctx.globalAlpha = bg.grain;
+      ctx.globalCompositeOperation = "overlay";
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (bg.vignette > 0) {
+    const r = Math.hypot(w, h) / 2;
+    const v = ctx.createRadialGradient(w / 2, h / 2, r * 0.45, w / 2, h / 2, r);
+    v.addColorStop(0, "rgba(0, 0, 0, 0)");
+    v.addColorStop(1, `rgba(0, 0, 0, ${0.7 * bg.vignette})`);
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, w, h);
+  }
+  ctx.restore();
 }
 
 /** Relative luminance of a #rrggbb colour (0 = black, 1 = white). */
@@ -70,7 +171,13 @@ function luminanceOf(hex: string): number {
 /** The frosted plate's veil: light on a dark background, dark on a light one. */
 export function plateInk(bg: EditBackground): string {
   const base =
-    bg.kind === "color" ? bg.value : bg.kind === "gradient" ? bg.from : null;
+    bg.kind === "color"
+      ? bg.value
+      : bg.kind === "gradient"
+        ? bg.from
+        : bg.kind === "mesh"
+          ? bg.base
+          : null;
   const light = base ? luminanceOf(base) > 0.5 : false;
   return light ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.08)";
 }
@@ -244,7 +351,7 @@ export function drawSlide(
   local: number,
   out: Size,
 ) {
-  fillBackground(ctx, slide.background, out.width, out.height);
+  fillBackground(ctx, slide.background, out.width, out.height, local);
   const m = slideMotion(slide.animation, slide.duration, local);
   if (slide.layout === "left") {
     drawBrandCard(ctx, slide, m, out);

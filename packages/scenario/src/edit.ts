@@ -3,8 +3,12 @@ import {
   type Chapter,
   clipDuration,
   DEFAULT_EDIT,
+  DEFAULT_LOOK,
   type EditBackground,
   type EditState,
+  hexToHsl,
+  meshPreset,
+  PREMIUM_LOOK,
   type Overlay,
   type TextOverlay,
   type RecordedLayer,
@@ -97,9 +101,19 @@ const cardDisc = (film: Film) => ({
 });
 
 function sceneBackground(film: Film): EditBackground {
-  return film.look === "showcase"
-    ? { kind: "color", value: film.background, decor: [sceneDisc(film)] }
-    : { kind: "color", value: film.background };
+  const decor = film.look === "showcase" ? { decor: [sceneDisc(film)] } : {};
+  if (film.backdrop !== "flat") {
+    const mode = hexToHsl(film.background)[2] > 0.5 ? "light" : "dark";
+    return { ...meshPreset(film.backdrop, film.accent, mode), ...decor };
+  }
+  return { kind: "color", value: film.background, ...decor };
+}
+
+/** The screen look and device frame a film asks for. */
+function screenOf(film: Film) {
+  return film.screen === "premium"
+    ? { screen: PREMIUM_LOOK, frame: false, touch: "ripple" as const }
+    : { screen: DEFAULT_LOOK, frame: true, touch: "ring" as const };
 }
 
 /** The scenes of a take: chapters with a caption (a cut leaves a gap). */
@@ -196,6 +210,7 @@ export function buildScenarioEdit(
   if (film.outro) clips.push(card("outro", film, film.outro, locale));
 
   const { x, y, scale } = deviceLayout(film);
+  const look = screenOf(film);
   return {
     ...DEFAULT_EDIT,
     aspect: film.aspect,
@@ -204,13 +219,13 @@ export function buildScenarioEdit(
     clips,
     overlays: [...overlays, ...kickers(overlays, film)],
     zooms,
-    touch: { style: "ring", color: film.accent, size: 44 },
+    touch: { style: look.touch, color: film.accent, size: 44 },
     cursor: { ...DEFAULT_EDIT.cursor, visible: false },
     layers: take.layers.map((l) => ({
       instanceId: l.instanceId,
       deviceId: l.deviceId,
       colorId: l.colorId,
-      frame: true,
+      frame: look.frame,
       x,
       y,
       scale,
@@ -218,6 +233,7 @@ export function buildScenarioEdit(
       hidden: false,
     })),
     camera: { ...DEFAULT_EDIT.camera, visible: false },
+    screen: look.screen,
     film: { settings: film, locale },
   };
 }
@@ -400,6 +416,7 @@ export function applyFilm(
   locale: string,
 ): EditState {
   const { x, y, scale } = deviceLayout(film);
+  const look = screenOf(film);
   const cardFor = (id: "intro" | "outro") => {
     const c = film[id];
     return c ? card(id, film, c, locale) : null;
@@ -436,8 +453,11 @@ export function applyFilm(
     zooms: edit.zooms.map((z) =>
       z.id.startsWith("scene-") ? { ...z, scale: Math.max(1, film.zoom) } : z,
     ),
-    touch: { ...edit.touch, color: film.accent },
-    layers: edit.layers?.map((l) => ({ ...l, x, y, scale })) ?? null,
+    touch: { ...edit.touch, color: film.accent, style: look.touch },
+    layers:
+      edit.layers?.map((l) => ({ ...l, x, y, scale, frame: look.frame })) ??
+      null,
+    screen: look.screen,
     film: { settings: film, locale },
   };
 }

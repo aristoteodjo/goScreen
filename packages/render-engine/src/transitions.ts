@@ -1,4 +1,5 @@
 import { easeInOut } from "./camera";
+import { sharp, sharpOut } from "./look";
 import { clipDuration, type Placed, placeClips } from "./sequence";
 import type { MainClip, Transition, TransitionKind } from "./types";
 
@@ -9,6 +10,8 @@ export const TRANSITION_KINDS: { id: TransitionKind; label: string }[] = [
   { id: "slide-up", label: "Push up" },
   { id: "zoom", label: "Zoom through" },
   { id: "wipe", label: "Wipe" },
+  { id: "blur", label: "Cut blur" },
+  { id: "push", label: "Push in" },
 ];
 
 export const DEFAULT_TRANSITION: Transition = { kind: "fade", duration: 0.6 };
@@ -66,6 +69,10 @@ export type TransitionMix = {
   reveal: number;
   // Which side is drawn on top.
   fromOnTop: boolean;
+  // Blur over both sides, as a fraction of the output's short side.
+  blur: number;
+  // Sub-frames to accumulate for motion blur (1 = none).
+  samples: number;
 };
 
 const SIDE = { alpha: 1, dx: 0, dy: 0, scale: 1 };
@@ -74,15 +81,41 @@ export function transitionMix(
   kind: TransitionKind,
   progress: number,
 ): TransitionMix {
-  const p = easeInOut(Math.max(0, Math.min(1, progress)));
+  const raw = Math.max(0, Math.min(1, progress));
+  const p = easeInOut(raw);
   const base: TransitionMix = {
     from: { ...SIDE },
     to: { ...SIDE },
     dip: 0,
     reveal: 1,
     fromOnTop: true,
+    blur: 0,
+    samples: 1,
   };
   switch (kind) {
+    case "blur": {
+      // Soft at the cut (30 px at 1080p), sharp a few frames either side.
+      const peak = 1 - Math.abs(raw * 2 - 1) ** 1.5;
+      return {
+        ...base,
+        from: { ...SIDE, alpha: 1 - p },
+        blur: (30 / 1080) * peak,
+        samples: 1,
+      };
+    }
+    case "push": {
+      // The outgoing side accelerates in; the incoming lands sharp.
+      const out = sharpOut(raw);
+      const land = sharp(raw);
+      return {
+        ...base,
+        fromOnTop: false,
+        from: { ...SIDE, alpha: 1 - out, scale: 1 + 0.12 * out },
+        to: { ...SIDE, alpha: Math.min(1, raw * 2), scale: 1.15 - 0.15 * land },
+        blur: (12 / 1080) * (1 - Math.abs(raw * 2 - 1)),
+        samples: 3,
+      };
+    }
     case "fade":
       return { ...base, from: { ...SIDE, alpha: 1 - p } };
     case "dip":
@@ -90,10 +123,25 @@ export function transitionMix(
       return p < 0.5
         ? { ...base, from: { ...SIDE }, to: { ...SIDE, alpha: 0 }, dip: p * 2 }
         : { ...base, from: { ...SIDE, alpha: 0 }, dip: (1 - p) * 2 };
-    case "slide-left":
-      return { ...base, from: { ...SIDE, dx: -p }, to: { ...SIDE, dx: 1 - p } };
-    case "slide-up":
-      return { ...base, from: { ...SIDE, dy: -p }, to: { ...SIDE, dy: 1 - p } };
+    case "slide-left": {
+      // Slides come in with the sharp curve and carry motion blur.
+      const k = sharp(raw);
+      return {
+        ...base,
+        from: { ...SIDE, dx: -k },
+        to: { ...SIDE, dx: 1 - k },
+        samples: 3,
+      };
+    }
+    case "slide-up": {
+      const k = sharp(raw);
+      return {
+        ...base,
+        from: { ...SIDE, dy: -k },
+        to: { ...SIDE, dy: 1 - k },
+        samples: 3,
+      };
+    }
     case "zoom":
       return {
         ...base,

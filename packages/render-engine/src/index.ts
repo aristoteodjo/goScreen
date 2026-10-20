@@ -18,6 +18,18 @@ export {
 } from "./animation";
 export { AUTO_SCALE, buildAutoZooms } from "./autoZoom";
 export {
+  hexToHsl,
+  hslToHex,
+  type MeshBackground,
+  type MeshFrame,
+  type MeshShape,
+  type MeshStyle,
+  meshAt,
+  meshPalette,
+  meshPreset,
+  meshShapes,
+} from "./background";
+export {
   activeZoom,
   applyCamera,
   autoFocus,

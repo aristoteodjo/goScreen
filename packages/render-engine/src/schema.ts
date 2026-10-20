@@ -261,6 +261,17 @@ const backgroundSchema = z.discriminatedUnion("kind", [
     angle: z.number(),
     decor: decorSchema,
   }),
+  z.object({
+    kind: z.literal("mesh"),
+    style: z.enum(["circles", "blob", "waves"]),
+    base: color,
+    colors: z.array(color).min(1).max(12),
+    speed: z.number().min(0).max(5).catch(1),
+    blur: z.number().min(0).max(0.4).catch(0.1),
+    grain: z.number().min(0).max(0.3).catch(0.06),
+    vignette: z.number().min(0).max(1).catch(0.25),
+    decor: decorSchema,
+  }),
 ]);
 
 const animation = z
@@ -281,7 +292,16 @@ const unit = z.number().min(0).max(1);
 
 const transitionSchema = z
   .object({
-    kind: z.enum(["fade", "dip", "slide-left", "slide-up", "zoom", "wipe"]),
+    kind: z.enum([
+      "fade",
+      "dip",
+      "slide-left",
+      "slide-up",
+      "zoom",
+      "wipe",
+      "blur",
+      "push",
+    ]),
     duration: z.number().min(0.1).max(5),
   })
   .nullable()

@@ -1,3 +1,4 @@
+import type { MeshBackground } from "./background";
 import type { Quad } from "./homography";
 import type { ScreenLook } from "./look";
 
@@ -62,7 +63,9 @@ export type EditBackground =
       to: string;
       angle: number;
       decor?: Decor[];
-    };
+    }
+  // Animated, cinematic (see background.ts).
+  | (MeshBackground & { decor?: Decor[] });
 
 // focus null follows the touches inside the segment; otherwise it is a
 // point of the output frame (0..1).
@@ -112,7 +115,12 @@ export type TransitionKind =
   | "slide-left"
   | "slide-up"
   | "zoom"
-  | "wipe";
+  | "wipe"
+  // A cross fade that goes soft at the cut, like an eye refocusing.
+  | "blur"
+  // Momentum: the outgoing scene keeps pushing in, the next one lands from
+  // further out with the sharp curve.
+  | "push";
 
 // How a clip comes in over the end of the one before it. It overlaps the
 // start of the clip (the sequence keeps its length); the outgoing side is

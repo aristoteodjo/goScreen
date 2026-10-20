@@ -15,6 +15,7 @@ import {
   type Timeline,
   type TransitionMix,
   transitionAt,
+  transitionLength,
   transitionMix,
 } from "@goscreen/render-engine";
 import { type DeviceLook, drawDevice, plateMargin } from "./devices";
@@ -84,7 +85,30 @@ export function drawAt(
     } else {
       from = sources.stillOf?.(tr.prev as Placed<RecordingClip>) ?? null;
     }
-    mixTransition(ctx, transitionMix(tr.kind, tr.progress), from, to);
+    const mix = transitionMix(tr.kind, tr.progress);
+    if (mix.samples <= 1) {
+      mixTransition(ctx, mix, from, to);
+    } else {
+      // Motion blur: the transition at a few instants around t, averaged.
+      // The clips themselves stay on this frame; only the move is smeared.
+      // Half a frame apart in progress units.
+      const step = 1 / 60 / Math.max(1e-3, transitionSeconds(tr));
+      const acc = scratch(2, width, height);
+      const actx = acc.getContext("2d") as CanvasRenderingContext2D;
+      actx.setTransform(1, 0, 0, 1, 0, 0);
+      actx.clearRect(0, 0, width, height);
+      for (let i = 0; i < mix.samples; i += 1) {
+        const p = tr.progress + (i - (mix.samples - 1) / 2) * step;
+        mixTransition(ctx, transitionMix(tr.kind, p), from, to);
+        actx.globalAlpha = 1 / (i + 1);
+        actx.drawImage(ctx.canvas, 0, 0);
+      }
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(acc, 0, 0);
+      ctx.restore();
+    }
   }
 
   const hidden = edit.tracks.hidden;
@@ -134,6 +158,7 @@ function drawClip(
     pixelScale,
     timeline,
     scene,
+    t,
   );
 }
 
@@ -170,6 +195,7 @@ export function drawStill(
     pixelScale,
     timeline,
     scene,
+    p.end - 1e-3,
   );
 }
 
@@ -187,6 +213,11 @@ function scratch(i: number, width: number, height: number): HTMLCanvasElement {
   return c;
 }
 
+/** Seconds the transition between these two clips lasts. */
+function transitionSeconds(tr: { prev: Placed; next: Placed }): number {
+  return transitionLength(tr.prev.clip, tr.next.clip);
+}
+
 function mixTransition(
   ctx: CanvasRenderingContext2D,
   mix: TransitionMix,
@@ -194,6 +225,7 @@ function mixTransition(
   to: CanvasImageSource,
 ) {
   const { width: w, height: h } = ctx.canvas;
+  const blurPx = mix.blur * Math.min(w, h);
   const layer = (
     img: CanvasImageSource | null,
     side: TransitionMix["from"],
@@ -206,6 +238,7 @@ function mixTransition(
       ctx.rect(0, 0, w * reveal, h);
       ctx.clip();
     }
+    if (blurPx >= 0.5) ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
     ctx.globalAlpha = side.alpha;
     ctx.translate(w / 2 + side.dx * w, h / 2 + side.dy * h);
     ctx.scale(side.scale, side.scale);
@@ -261,6 +294,8 @@ export function drawFrame(
   pixelScale: number,
   timeline: Timeline,
   scene: SceneTime | null = null,
+  // Timeline time, for animated backgrounds.
+  t = 0,
 ) {
   const { video } = sources;
   const { output, content, camera } = frame;
@@ -285,7 +320,7 @@ export function drawFrame(
   ctx.scale(camera.scale, camera.scale);
   ctx.translate(-camera.center.x, -camera.center.y);
 
-  fillBackground(ctx, edit.background, output.width, output.height);
+  fillBackground(ctx, edit.background, output.width, output.height, t);
 
   const radius = framed ? edit.radius * k : 0;
   const layered = frame.layers.length > 0;

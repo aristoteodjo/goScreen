@@ -158,6 +158,12 @@ export const filmSchema = z
     // "showcase": the VSL look (chapter kicker and title above a framed
     // device, accent disc behind it, brand cards); "plain": centered.
     look: z.enum(["showcase", "plain"]).default("showcase"),
+    // The scenes' background: flat colour, or one of the course's moving
+    // cinematic backdrops built from the accent colour.
+    backdrop: z.enum(["flat", "circles", "blob", "waves"]).default("flat"),
+    // "framed": the device hardware around the screen; "premium": the SaaS
+    // enhanced screen recording (frameless glass, outline, lean, pan-in).
+    screen: z.enum(["framed", "premium"]).default("framed"),
     // Chapter kicker: "BUYER · 2/11". Empty: no kicker.
     label: z.string().default(""),
     // On the cards, with the accent dot.

@@ -2,6 +2,8 @@ import {
   buildAutoZooms,
   type EditBackground,
   type EditState,
+  type MeshStyle,
+  meshPreset,
   MIC_ASSET,
   type TouchStyle,
 } from "@goscreen/render-engine";
@@ -168,7 +170,74 @@ export const bgCss = (bg: EditBackground) =>
     ? `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})`
     : bg.kind === "color"
       ? bg.value
-      : "transparent";
+      : bg.kind === "mesh"
+        ? `radial-gradient(circle at 35% 40%, ${bg.colors[3] ?? bg.colors[0]}, ${bg.colors[0]} 45%, ${bg.base} 100%)`
+        : "transparent";
+
+// The course's cinematic backgrounds: one hue family, desaturated, moving.
+const MESHES: { style: MeshStyle; accent: string; mode: "dark" | "light" }[] = [
+  { style: "circles", accent: "#3b5bdb", mode: "dark" },
+  { style: "blob", accent: "#2f9e44", mode: "dark" },
+  { style: "waves", accent: "#e8590c", mode: "dark" },
+  { style: "circles", accent: "#7048e8", mode: "light" },
+];
+const MESH_STYLES: { id: MeshStyle; label: string }[] = [
+  { id: "circles", label: "Circles" },
+  { id: "blob", label: "Blob" },
+  { id: "waves", label: "Waves" },
+];
+
+/** Style, pace, grain and vignette of an animated background. */
+function MeshControls({
+  bg,
+  onChange,
+}: {
+  bg: Extract<EditBackground, { kind: "mesh" }>;
+  onChange: (bg: EditBackground, key?: string) => void;
+}) {
+  const row = (
+    label: string,
+    value: number,
+    max: number,
+    step: number,
+    key: "speed" | "grain" | "vignette" | "blur",
+    format: (v: number) => string,
+  ) => (
+    <div className="grid grid-cols-[64px_1fr] items-center gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <SliderRow
+        value={value}
+        min={0}
+        max={max}
+        step={step}
+        format={format}
+        onChange={(v) => onChange({ ...bg, [key]: v }, `mesh.${key}`)}
+      />
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      <ToggleGroup
+        type="single"
+        value={bg.style}
+        onValueChange={(v) =>
+          v && onChange({ ...meshPreset(v as MeshStyle, bg.colors[3] ?? bg.colors[0]), base: bg.base, colors: bg.colors })
+        }
+        className="w-full"
+      >
+        {MESH_STYLES.map((s) => (
+          <ToggleGroupItem key={s.id} value={s.id} className="flex-1 text-[11px]">
+            {s.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      {row("Motion", bg.speed, 3, 0.1, "speed", (v) => `${v.toFixed(1)}×`)}
+      {row("Softness", bg.blur, 0.3, 0.01, "blur", (v) => `${Math.round(v * 100)}`)}
+      {row("Grain", bg.grain, 0.2, 0.01, "grain", (v) => `${Math.round(v * 100)}%`)}
+      {row("Vignette", bg.vignette, 1, 0.05, "vignette", (v) => `${Math.round(v * 100)}%`)}
+    </div>
+  );
+}
 
 function BackgroundPanel() {
   const edit = useEdit((s) => s.edit);
@@ -214,7 +283,35 @@ function BackgroundPanel() {
               style={{ background: bgCss(bg) }}
             />
           ))}
+          {MESHES.map((m) => {
+            const bg = meshPreset(m.style, m.accent, m.mode);
+            return (
+              <button
+                key={`${m.style}-${m.accent}`}
+                type="button"
+                aria-label={`Animated ${m.style} background`}
+                title={`Animated: ${m.style}`}
+                onClick={() => set({ background: bg })}
+                className={cn(
+                  "relative aspect-square rounded-md border border-white/10",
+                  JSON.stringify(bg) === current &&
+                    "ring-2 ring-violet-400 ring-offset-2 ring-offset-card",
+                )}
+                style={{ background: bgCss(bg) }}
+              >
+                <span className="absolute right-0.5 bottom-0.5 rounded bg-black/50 px-1 text-[9px] text-white/80">
+                  ▶
+                </span>
+              </button>
+            );
+          })}
         </div>
+        {edit.background.kind === "mesh" ? (
+          <MeshControls
+            bg={edit.background}
+            onChange={(background, key) => set({ background }, key)}
+          />
+        ) : null}
         {framed ? (
           <label className="flex items-center justify-between text-xs text-muted-foreground">
             Custom color
