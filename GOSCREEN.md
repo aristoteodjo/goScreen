@@ -538,6 +538,15 @@ fonctions pures du temps ; les notes détaillées (chiffres, timecodes) sont ran
   export sont chargés avec une limite de 10 s (un `.mov` qui ne se décode pas est ignoré au lieu de geler
   l'export) ; WebKit ne charge que quelques éléments vidéo à la fois, d'où des chargements lents quand la
   preview et les stills sont actifs.
+- **Comparaison avec claude-code-video-toolkit (2026-10-20, site OEUF D'OR)** : le toolkit (Remotion) compose
+  des cartes narratives (titre, problème, solution, démo, chiffres, CTA) autour d'une capture Playwright jouée à
+  plat, et chaîne voix de synthèse, musique et sous-titres si des services sont configurés ; goScreen tient la
+  capture (appareil, perspective, zooms, clics, légendes de scène, fond animé) et peut reprendre une vidéo faite
+  ailleurs comme un seul verre. Ce qui manque à goScreen pour un spot complet sans prompt : la **structure
+  narrative automatique** (problème → solution → chiffres → CTA tirés du site, en cartes et blocs), la **voix
+  de synthèse** et une **musique** calées sur le montage, des **sous-titres** mot à mot, des scènes qui se
+  **ressemblent moins** (alterner fond sombre / clair, zoom serré sur un élément, carte flottante), et un
+  ciblage de défilement plus sûr (un libellé présent dans la navigation et dans une section).
 - **À faire (relevé par le cours, pas encore fait)** : calage sur le tempo de la musique ; shatter / shine
   avancés ; recadrage « éléments flottants » (un élément d'UI découpé qui pop hors de la capture) ; objets
   3D (pièces, logos extrudés) ; voix de synthèse (le cours utilise ElevenLabs : voix « Advertisement »,
