@@ -701,6 +701,66 @@ function TextSection({
           </span>
         </div>
       </Section>
+      <Section
+        title="Emphasis"
+        hint="*Words between stars* take the accent: heavier, a little bigger, flashed and swept as they come in. Glow peaks after the entrance."
+      >
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          Accent words
+          <span className="flex items-center gap-2">
+            {overlay.style.accent ? (
+              <input
+                type="color"
+                value={overlay.style.accent}
+                onChange={(e) => style({ accent: e.target.value }, "text-accent")}
+                className="h-7 w-12 cursor-pointer rounded border border-white/10 bg-transparent"
+              />
+            ) : null}
+            <Switch
+              checked={Boolean(overlay.style.accent)}
+              onCheckedChange={(on) =>
+                style({ accent: on ? "#f2b544" : null, flash: on, sweep: on })
+              }
+            />
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          Colour flash on entry
+          <Switch
+            checked={Boolean(overlay.style.flash)}
+            onCheckedChange={(flash) => style({ flash })}
+          />
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          Light sweep on entry
+          <Switch
+            checked={Boolean(overlay.style.sweep)}
+            onCheckedChange={(sweep) => style({ sweep })}
+          />
+        </div>
+        <div className="grid grid-cols-[64px_1fr] items-center gap-2">
+          <span className="text-xs text-muted-foreground">Glow</span>
+          <SliderRow
+            value={overlay.style.glow ?? 0}
+            min={0}
+            max={0.4}
+            step={0.01}
+            format={(v) => v.toFixed(2)}
+            onChange={(glow) => style({ glow }, "text-glow")}
+          />
+        </div>
+        <div className="grid grid-cols-[64px_1fr] items-center gap-2">
+          <span className="text-xs text-muted-foreground">Shadow</span>
+          <SliderRow
+            value={overlay.style.shadow ?? 0}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(shadow) => style({ shadow }, "text-shadow")}
+          />
+        </div>
+      </Section>
     </>
   );
 }

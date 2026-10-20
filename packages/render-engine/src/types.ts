@@ -254,6 +254,17 @@ export type TextStyle = {
   bullet?: string | null;
   // Extra space between letters, in em (kickers in capitals).
   tracking?: number;
+  // *Words between stars* take this colour (a light gradient, heavier,
+  // a little bigger): the one word a phrase insists on.
+  accent?: string | null;
+  // Accent words flash two colours then settle as they come in (3 frames a step).
+  flash?: boolean;
+  // Glow exposure (0..0.4): peaks after the entrance, decays slowly.
+  glow?: number;
+  // Hard drop shadow, bottom-right, 0..1 (text over a moving picture).
+  shadow?: number;
+  // A band of light crosses accent words as they come in.
+  sweep?: boolean;
 };
 
 export type TextOverlay = OverlayBase & {

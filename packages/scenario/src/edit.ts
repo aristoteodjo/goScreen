@@ -198,7 +198,7 @@ export function buildScenarioEdit(
             enter: "spring",
             exit: "fade",
             motion: 0.45,
-            text: typeset(scene.caption, locale),
+            text: typeset(starNumbers(scene.caption), locale),
             style: captionStyle(film),
           },
           film,
@@ -308,6 +308,7 @@ function textLayout(film: Film) {
 
 function captionStyle(film: Film): TextOverlay["style"] {
   const t = textLayout(film).title;
+  const plain = film.look === "plain";
   return {
     font: film.font,
     size: t.size,
@@ -316,8 +317,32 @@ function captionStyle(film: Film): TextOverlay["style"] {
     align: t.align,
     // Plain captions sit on the page, which zooms slide under: a plate
     // keeps them legible. Showcase texts are off the device.
-    background: film.look === "plain" && film.zoom > 1 ? film.background : null,
+    background: plain && film.zoom > 1 ? film.background : null,
+    // The course's text: one accent word per phrase (flash, sweep), a glow
+    // that peaks after the entrance, a hard shadow when over the picture.
+    accent: film.accent,
+    flash: true,
+    sweep: true,
+    glow: 0.12,
+    shadow: plain ? 0.6 : 0,
   };
+}
+
+/**
+ * Marks the figures of a caption as accent words ("*2 493* plateaux"):
+ * numbers are the proof a SaaS ad insists on. Words already starred stay.
+ */
+export function starNumbers(text: string): string {
+  if (text.includes("*")) return text;
+  // A number with its spaces, separators, unit sign or currency.
+  return text.replace(
+    /(?<![\w*])[+\-]?\d[\d\u00a0\u202f ,.]*\d?\s?(?:%|€|\$|£|k|M|x|×)?(?![\w*])/g,
+    (m) => {
+      const core = m.replace(/\s+$/, "");
+      const tail = m.slice(core.length);
+      return core.trim() ? `*${core}*${tail}` : m;
+    },
+  );
 }
 
 /** A scene title placed and styled by the film; its words and timing kept. */

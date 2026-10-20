@@ -14,8 +14,11 @@ import {
   type TextOverlay,
   typedText,
   wordOpacities,
+  hexToHsl,
+  hslToHex,
   type MeshBackground,
   meshAt,
+  sharp,
 } from "@goscreen/render-engine";
 
 /** The decoded pixels of an image or video overlay, when ready. */
@@ -220,7 +223,200 @@ type TextBlock = {
   x: number;
   y: number;
   width: number;
+  // Emphasis (see TextStyle): accent words, flash, glow, shadow, sweep.
+  accent?: string | null;
+  flash?: boolean;
+  glow?: number;
+  shadow?: number;
+  sweep?: boolean;
+  // Seconds since the text appeared, for the flash, glow and sweep.
+  local?: number;
 };
+
+const hasEmphasis = (b: TextBlock) =>
+  Boolean(b.accent || b.flash || b.glow || b.shadow || b.sweep);
+
+/** #rrggbb lightened towards white by k (0..1), with an optional hue turn. */
+function lighten(hex: string, k: number, hueTurn = 0): string {
+  const [h, s, l] = hexToHsl(hex);
+  return hslToHex(h + hueTurn, s * (1 - k * 0.4), l + (1 - l) * k);
+}
+
+/** The glow envelope: up during the entrance, peak after it, long decay. */
+function glowEnvelope(local: number): number {
+  if (local <= 0) return 0;
+  if (local < 0.45) return local / 0.45;
+  return 0.25 + 0.75 * Math.exp(-(local - 0.45) / 0.9);
+}
+
+type EmphWord = { word: string; accent: boolean; x: number; w: number };
+
+/**
+ * Text with the course's emphasis: words laid out by hand so that accent
+ * words can be heavier and a little bigger; hard shadow, light gradient on
+ * accent words, colour flash and light sweep on entry, glow that peaks after.
+ */
+function drawEmphasisText(
+  ctx: CanvasRenderingContext2D,
+  b: TextBlock,
+  m: Motion,
+  mode: "typewriter" | "words" | "wipe" | null,
+) {
+  const px = b.size * 0.8;
+  const fontOf = (accent: boolean) =>
+    `${accent ? Math.max(b.weight, 900) : b.weight} ${accent ? px * 1.12 : px}px ${b.font}, -apple-system, system-ui, sans-serif`;
+  const words = titleWords(b.text);
+  // Wrap by measured widths, accent words measured at their own size.
+  const rows: EmphWord[][] = [[]];
+  let x = 0;
+  for (const w of words) {
+    ctx.font = fontOf(w.accent);
+    const wide = ctx.measureText(w.word).width;
+    const space = ctx.measureText(" ").width;
+    const row = rows[rows.length - 1];
+    if (row.length > 0 && x + wide > b.width) {
+      rows.push([{ ...w, x: 0, w: wide }]);
+      x = wide + space;
+    } else {
+      row.push({ ...w, x, w: wide });
+      x += wide + space;
+    }
+  }
+  const rowWidth = (row: EmphWord[]) =>
+    row.length ? row[row.length - 1].x + row[row.length - 1].w : 0;
+  const widest = Math.max(1, ...rows.map(rowWidth));
+  const height = rows.length * b.size;
+  const top = b.y - height / 2;
+  const leftOf = (row: EmphWord[]) =>
+    b.align === "left"
+      ? b.x - b.width / 2
+      : b.align === "right"
+        ? b.x + b.width / 2 - rowWidth(row)
+        : b.x - rowWidth(row) / 2;
+
+  if (b.background) {
+    const pad = b.size * 0.35;
+    const left = b.align === "left" ? b.x - b.width / 2 : b.align === "right" ? b.x + b.width / 2 - widest : b.x - widest / 2;
+    ctx.fillStyle = b.background;
+    ctx.beginPath();
+    ctx.roundRect(left - pad, top - pad * 0.6, widest + pad * 2, height + pad * 1.2, b.size * 0.3);
+    ctx.fill();
+  }
+  if (mode === "wipe") {
+    ctx.beginPath();
+    ctx.rect(b.x - widest / 2 - b.size, top - b.size, (widest + b.size * 2) * m.reveal, height + b.size * 2);
+    ctx.clip();
+  }
+
+  const local = b.local ?? 10;
+  const all = rows.flat();
+  const alpha =
+    mode === "words" ? wordOpacities(all.length, m.reveal) : all.map(() => 1);
+  let typed =
+    mode === "typewriter"
+      ? Array.from(typedText(all.map((w) => w.word).join(" "), m.reveal)).length
+      : Number.POSITIVE_INFINITY;
+  const accent = b.accent ?? b.color;
+  // Flash: two colours, three frames each, then the effect fades in three.
+  const flashColor = (() => {
+    if (!b.flash || local >= 0.3) return null;
+    const step = Math.floor(local / 0.1);
+    if (step === 0) return { color: lighten(accent, 0.05, 0.08), alpha: 1 };
+    if (step === 1) return { color: lighten(accent, 0.45, -0.1), alpha: 1 };
+    return { color: lighten(accent, 0.45, -0.1), alpha: 1 - (local - 0.2) / 0.1 };
+  })();
+  const glow = (b.glow ?? 0) * glowEnvelope(local);
+  // Sweep: a band crosses the accent words in 0.9 s, fast then slow.
+  const sweepK = b.sweep && local < 0.9 ? sharp(local / 0.9) : null;
+
+  let i = 0;
+  rows.forEach((row, r) => {
+    const left = leftOf(row);
+    const cy = top + b.size * (r + 0.5);
+    for (const w of row) {
+      const a = alpha[i] ?? 1;
+      i += 1;
+      let text = w.word;
+      if (typed !== Number.POSITIVE_INFINITY) {
+        if (typed <= 0) return;
+        text = Array.from(w.word).slice(0, typed).join("");
+        typed -= Array.from(w.word).length + 1;
+      }
+      const wx = left + w.x;
+      const wy = cy + (1 - a) * b.size * 0.35;
+      ctx.save();
+      ctx.globalAlpha *= a;
+      ctx.font = fontOf(w.accent);
+      ctx.textBaseline = "middle";
+      if (b.tracking && "letterSpacing" in ctx)
+        ctx.letterSpacing = `${b.tracking * px}px`;
+      // Shadow first (under everything), hard and bottom-right.
+      if (b.shadow) {
+        ctx.save();
+        ctx.shadowColor = `rgba(0, 0, 0, ${0.6 * b.shadow})`;
+        ctx.shadowBlur = px * 0.06;
+        ctx.shadowOffsetX = px * 0.03;
+        ctx.shadowOffsetY = px * 0.045;
+        ctx.fillStyle = "rgba(0, 0, 0, 1)";
+        ctx.fillText(text, wx, wy);
+        ctx.restore();
+      }
+      // Glow: a blurred copy added under the ink.
+      if (glow > 0 && (w.accent || !b.accent)) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha *= Math.min(1, glow * 2.2);
+        ctx.shadowColor = w.accent ? lighten(accent, 0.3) : "#ffffff";
+        ctx.shadowBlur = px * 0.6;
+        ctx.fillStyle = "rgba(0, 0, 0, 0)";
+        ctx.strokeStyle = "rgba(0, 0, 0, 0)";
+        // Only the shadow is wanted: draw the glyph transparent, offset far
+        // away, with the shadow offset back onto the word.
+        ctx.shadowOffsetX = 4000;
+        ctx.fillStyle = "#000";
+        ctx.fillText(text, wx - 4000, wy);
+        ctx.restore();
+      }
+      // Ink: a soft vertical gradient on base words, a light horizontal
+      // gradient on accent words (never a saturated flat colour).
+      if (w.accent) {
+        const g = ctx.createLinearGradient(wx, 0, wx + w.w, 0);
+        g.addColorStop(0, lighten(accent, 0.3, -0.03));
+        g.addColorStop(1, lighten(accent, 0.45, 0.05));
+        ctx.fillStyle = g;
+      } else {
+        // White -> slightly darker at the bottom of the block (a faked lighting).
+        const [h, sat, l] = hexToHsl(b.color);
+        const g = ctx.createLinearGradient(0, top, 0, top + height);
+        g.addColorStop(0, b.color);
+        g.addColorStop(1, hslToHex(h, sat, l * 0.86));
+        ctx.fillStyle = g;
+      }
+      ctx.fillText(text, wx, wy);
+      if (w.accent && flashColor) {
+        ctx.save();
+        ctx.globalAlpha *= Math.max(0, flashColor.alpha);
+        ctx.fillStyle = flashColor.color;
+        ctx.fillText(text, wx, wy);
+        ctx.restore();
+      }
+      if (w.accent && sweepK !== null) {
+        const band = w.w * 0.35;
+        const bx = wx - band + (w.w + band * 2) * sweepK;
+        const g = ctx.createLinearGradient(bx - band / 2, 0, bx + band / 2, 0);
+        g.addColorStop(0, "rgba(255, 255, 255, 0)");
+        g.addColorStop(0.5, "rgba(255, 255, 255, 0.55)");
+        g.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = g;
+        ctx.fillText(text, wx, wy);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  });
+}
 
 /** Draws a text block with its reveal (typewriter, words or wipe). */
 function drawText(
@@ -230,6 +426,10 @@ function drawText(
   mode: "typewriter" | "words" | "wipe" | null,
 ) {
   let b = block;
+  if (hasEmphasis(b)) {
+    drawEmphasisText(ctx, b, m, mode);
+    return;
+  }
   ctx.font = `${b.weight} ${b.size * 0.8}px ${b.font}, -apple-system, system-ui, sans-serif`;
   ctx.textBaseline = "middle";
   // WebKit draws letter spacing from Safari 18; older ones ignore it.
@@ -729,7 +929,7 @@ export function drawOverlays(
     if (o.kind === "blur") drawBlur(ctx, o, r, out);
     else if (o.kind === "text" && o.animator)
       drawAnimatedText(ctx, o, o.animator, t - o.start, r, out);
-    else if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out);
+    else if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out, t - o.start);
     else if (o.kind === "shape") drawShape(ctx, o, m, r, out);
     else drawMedia(ctx, mediaOf(o), r, o.radius * short);
     ctx.restore();
@@ -742,6 +942,7 @@ function drawTextOverlay(
   m: Motion,
   r: DOMRectLike,
   out: Size,
+  local: number,
 ) {
   const mode = m.reveal < 1 ? (reveals(o.enter) ?? reveals(o.exit)) : null;
   drawText(
@@ -756,9 +957,15 @@ function drawTextOverlay(
       background: o.style.background,
       bullet: o.style.bullet,
       tracking: o.style.tracking,
+      accent: o.style.accent,
+      flash: o.style.flash,
+      glow: o.style.glow,
+      shadow: o.style.shadow,
+      sweep: o.style.sweep,
       x: r.x + r.width / 2,
       y: r.y + r.height / 2,
       width: r.width,
+      local,
     },
     m,
     mode,
