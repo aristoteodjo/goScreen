@@ -58,6 +58,23 @@ export function fillBackground(
   }
 }
 
+/** Relative luminance of a #rrggbb colour (0 = black, 1 = white). */
+function luminanceOf(hex: string): number {
+  const c = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = c.map((v) =>
+    v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+/** The frosted plate's veil: light on a dark background, dark on a light one. */
+export function plateInk(bg: EditBackground): string {
+  const base =
+    bg.kind === "color" ? bg.value : bg.kind === "gradient" ? bg.from : null;
+  const light = base ? luminanceOf(base) > 0.5 : false;
+  return light ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.08)";
+}
+
 /** Greedy word wrap; explicit line breaks are kept. */
 export function wrapLines(
   ctx: CanvasRenderingContext2D,

@@ -3,23 +3,29 @@ import {
   composeFrame,
   type EditState,
   type Frame,
+  type PlacedLayer,
   type Placed,
   type RecordingClip,
   type Rect,
+  type SceneTime,
+  sceneTimeAt,
   type Size,
   sourceTimeAt,
+  sweepAngle,
   type Timeline,
   type TransitionMix,
   transitionAt,
   transitionMix,
 } from "@goscreen/render-engine";
-import { drawDevice } from "./devices";
+import { type DeviceLook, drawDevice, plateMargin } from "./devices";
 import {
   drawOverlays,
   drawSlide,
   fillBackground,
   type MediaOf,
+  plateInk,
 } from "./drawOverlays";
+import { drawWarped } from "./warp";
 
 export type Sources = {
   video: CanvasImageSource | null;
@@ -119,13 +125,15 @@ function drawClip(
     ? { ...edit, camera: { ...edit.camera, visible: false } }
     : edit;
   const s = sourceTimeAt(edit.clips, t) ?? 0;
+  const scene = sceneTimeAt(edit.clips, t);
   drawFrame(
     ctx,
     sources,
-    composeFrame(e, timeline, output, s),
+    composeFrame(e, timeline, output, s, scene),
     e,
     pixelScale,
     timeline,
+    scene,
   );
 }
 
@@ -152,13 +160,16 @@ export function drawStill(
   const e = p.clip.cameraHidden
     ? { ...edit, camera: { ...edit.camera, visible: false } }
     : edit;
+  // The last frame of the clip: its scene at its very end.
+  const scene = sceneTimeAt(edit.clips, p.end - 1e-3);
   drawFrame(
     ctx,
     sources,
-    composeFrame(e, timeline, output, stillTime(p)),
+    composeFrame(e, timeline, output, stillTime(p), scene),
     e,
     pixelScale,
     timeline,
+    scene,
   );
 }
 
@@ -249,6 +260,7 @@ export function drawFrame(
   edit: EditState,
   pixelScale: number,
   timeline: Timeline,
+  scene: SceneTime | null = null,
 ) {
   const { video } = sources;
   const { output, content, camera } = frame;
@@ -256,6 +268,10 @@ export function drawFrame(
   const framed = edit.background.kind !== "none";
   // Canvas shadows ignore the transform, so they are scaled by hand.
   const shadowScale = pixelScale * camera.scale;
+  const plateColor = plateInk(edit.background);
+  const sweep = edit.screen.sweep
+    ? sweepAngle(scene?.local ?? 0, scene?.length ?? 0)
+    : null;
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -278,25 +294,40 @@ export function drawFrame(
     const recorded = timeline.layers.find(
       (l) => l.instanceId === layer.instanceId,
     );
-    if (!le || !recorded) continue;
-    ctx.save();
-    ctx.translate(layer.center.x, layer.center.y);
-    ctx.rotate(layer.rotation);
-    ctx.scale(layer.scale, layer.scale);
-    ctx.translate(
-      -layer.geometry.frame.width / 2,
-      -layer.geometry.frame.height / 2,
-    );
-    drawDevice(
-      ctx,
-      layer,
-      le,
-      recorded,
-      video ? { image: video, crop: layer.crop } : null,
-      edit.shadow,
-      shadowScale * layer.scale,
-    );
-    ctx.restore();
+    if (!le || !recorded || layer.opacity <= 0) continue;
+    // Plate margin and outline width in frame units, from their 1080p sizes.
+    const look: DeviceLook = {
+      plate: le.frame ? 0 : plateMargin(edit.screen, layer),
+      outline: le.frame ? 0 : (edit.screen.outline * k) / layer.scale,
+      sweep,
+      plateColor,
+    };
+    const source = video ? { image: video, crop: layer.crop } : null;
+    const leaning = layer.tilt.x !== 0 || layer.tilt.y !== 0;
+    if (!leaning) {
+      ctx.save();
+      ctx.globalAlpha *= layer.opacity;
+      ctx.translate(layer.center.x, layer.center.y);
+      ctx.rotate(layer.rotation);
+      ctx.scale(layer.scale, layer.scale);
+      ctx.translate(
+        -layer.geometry.frame.width / 2,
+        -layer.geometry.frame.height / 2,
+      );
+      drawDevice(
+        ctx,
+        layer,
+        le,
+        recorded,
+        source,
+        edit.shadow,
+        shadowScale * layer.scale,
+        look,
+      );
+      ctx.restore();
+      continue;
+    }
+    drawLeaning(ctx, layer, le, recorded, source, edit, look);
   }
   if (!layered && framed && edit.shadow > 0) {
     ctx.save();
@@ -349,6 +380,72 @@ export function drawFrame(
     drawWebcam(ctx, sources.camera, frame.webcam, edit, k, pixelScale);
     ctx.restore();
   }
+}
+
+/** Reused bitmap for the leaning path: the layer at its natural size, warped afterwards. */
+let layerBitmap: HTMLCanvasElement | null = null;
+
+/**
+ * A leaning screen: the device (with plate, outline and shadow) is drawn
+ * flat into a bitmap, then warped onto its projected quad with depth of
+ * field. The webcam, touches and cursor are drawn by the caller as usual.
+ */
+function drawLeaning(
+  ctx: CanvasRenderingContext2D,
+  layer: PlacedLayer,
+  le: NonNullable<EditState["layers"]>[number],
+  recorded: Timeline["layers"][number],
+  source: Parameters<typeof drawDevice>[4],
+  edit: EditState,
+  look: DeviceLook,
+) {
+  const { frame } = layer.geometry;
+  // Room around the frame for the plate and the shadow (frame units).
+  const margin = Math.max(look.plate, 40);
+  const outer = {
+    width: frame.width + margin * 2,
+    height: frame.height + margin * 2,
+  };
+  // Bitmap resolution: what the warped result needs, capped.
+  const m = ctx.getTransform();
+  const onScreen = Math.hypot(m.a, m.b) * layer.scale;
+  const res = Math.min(2, Math.max(0.25, onScreen));
+  const w = Math.min(4096, Math.ceil(outer.width * res));
+  const h = Math.min(4096, Math.ceil(outer.height * res));
+  layerBitmap ??= document.createElement("canvas");
+  const bitmap = layerBitmap;
+  if (bitmap.width !== w) bitmap.width = w;
+  if (bitmap.height !== h) bitmap.height = h;
+  const bctx = bitmap.getContext("2d");
+  if (!bctx) return;
+  bctx.setTransform(1, 0, 0, 1, 0, 0);
+  bctx.clearRect(0, 0, w, h);
+  bctx.scale(res, res);
+  bctx.translate(margin, margin);
+  drawDevice(bctx, layer, le, recorded, source, edit.shadow, res, look);
+
+  // The outer rectangle's corners: the frame's quad, extended by the margin
+  // along its own edges (a projective map keeps straight lines straight).
+  const sx = outer.width / frame.width;
+  const sy = outer.height / frame.height;
+  const q = layer.quad;
+  const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4;
+  const cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
+  const grow = (p: { x: number; y: number }) => ({
+    x: cx + (p.x - cx) * sx,
+    y: cy + (p.y - cy) * sy,
+  });
+  const quad = [grow(q[0]), grow(q[1]), grow(q[2]), grow(q[3])] as typeof q;
+  const short = Math.min(frame.width, frame.height) * layer.scale;
+  drawWarped(ctx, bitmap, {
+    quad,
+    depth: layer.depth,
+    // Fully blurred once a corner is a tenth of the screen's height away.
+    zref: 0.1 * frame.height * layer.scale,
+    blur: edit.screen.depth * 0.012 * short * res,
+    alpha: layer.opacity,
+    pixelScale: Math.hypot(m.a, m.b),
+  });
 }
 
 function drawWebcam(

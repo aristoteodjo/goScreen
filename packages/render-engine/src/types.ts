@@ -1,3 +1,6 @@
+import type { Quad } from "./homography";
+import type { ScreenLook } from "./look";
+
 export type Point = { x: number; y: number };
 export type Size = { width: number; height: number };
 export type Rect = Point & Size;
@@ -337,6 +340,8 @@ export type EditState = {
   mic: { volume: number };
   // Track switches, as in an NLE: hidden overlay lanes, muted music lanes, muted mic.
   tracks: { hidden: number[]; muted: number[]; micMuted: boolean };
+  // How recorded screens are presented (plate, outline, perspective, entrance).
+  screen: ScreenLook;
   // A scenario take's film settings (format, colours, cards...), kept so they
   // can be changed after the montage was built. Read by @goscreen/scenario.
   film?: { settings: Record<string, unknown>; locale: string };
@@ -364,6 +369,13 @@ export type PlacedLayer = {
   // Source pixels of this screen in the captured video.
   crop: Rect;
   frame: boolean;
+  // The frame's four corners on the output (perspective included) and the
+  // depth of each (px, positive = far): where touches land, what to warp.
+  quad: Quad;
+  depth: [number, number, number, number];
+  // Lean in degrees (look tilt, drift and entrance folded in); 0,0 = flat.
+  tilt: { x: number; y: number };
+  opacity: number;
 };
 
 export type Frame = {

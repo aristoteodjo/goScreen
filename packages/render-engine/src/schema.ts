@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_LOOK } from "./look";
 import { SOURCE_END } from "./sequence";
 import { MIC_ASSET } from "./soundtrack";
 import type {
@@ -220,6 +221,7 @@ export const DEFAULT_EDIT: EditState = {
   },
   mic: { volume: 1 },
   tracks: { hidden: [], muted: [], micMuted: false },
+  screen: DEFAULT_LOOK,
 };
 
 /** An array where each bad item is dropped alone instead of failing the whole list. */
@@ -542,6 +544,22 @@ const editSchema = z.object({
       micMuted: z.boolean().catch(false),
     })
     .catch(DEFAULT_EDIT.tracks),
+  screen: z
+    .object({
+      plate: z.number().min(0).max(0.2).catch(0),
+      outline: z.number().min(0).max(12).catch(0),
+      sweep: z.boolean().catch(false),
+      tilt: z
+        .object({
+          x: z.number().min(-45).max(45),
+          y: z.number().min(-45).max(45),
+        })
+        .catch({ x: 0, y: 0 }),
+      drift: z.number().min(-20).max(20).catch(0),
+      depth: z.number().min(0).max(1).catch(0),
+      entrance: z.boolean().catch(false),
+    })
+    .catch(DEFAULT_LOOK),
 });
 
 /** Saved edits, field by field: one bad field falls back alone. v1 files are upgraded. */

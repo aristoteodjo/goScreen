@@ -8,12 +8,23 @@ import {
   webcamRect,
 } from "./layers";
 import { contentRect } from "./layout";
+import { placeClips } from "./sequence";
+import {
+  AT_REST,
+  driftAt,
+  entranceAt,
+  focalLength,
+  isFlat,
+  type Pose,
+  projectRect,
+} from "./look";
 import { type Press, presses, touchesAt } from "./touches";
 import type {
   EditState,
   Frame,
   FrameGeometry,
   LayerEdit,
+  MainClip,
   PlacedLayer,
   Point,
   RecordedLayer,
@@ -52,11 +63,92 @@ export function timelineOf(
   };
 }
 
+/**
+ * Where source time t sits in its scene: seconds since the scene opened and
+ * the scene's length. A scene is a clip that opens a new view (first clip,
+ * after a card or a transition); plain cuts inside a take are not scenes.
+ */
+export type SceneTime = { local: number; length: number; opens: boolean };
+
+/** The scene around timeline time t, or null on a card. */
+export function sceneTimeAt(clips: MainClip[], t: number): SceneTime | null {
+  const placed = placeClips(clips);
+  if (placed.length === 0) return null;
+  const i = Math.max(
+    0,
+    placed.findIndex((p) => t < p.end) === -1
+      ? placed.length - 1
+      : placed.findIndex((p) => t < p.end),
+  );
+  const here = placed[i];
+  if (here.clip.kind !== "recording") return null;
+  // A scene starts at this clip when it opens a new view: the first clip,
+  // one after a card, or one that comes in with a transition.
+  let first = i;
+  while (first > 0) {
+    const prev = placed[first - 1].clip;
+    if (prev.kind !== "recording" || placed[first].clip.transition) break;
+    first -= 1;
+  }
+  let last = i;
+  while (last + 1 < placed.length) {
+    const next = placed[last + 1].clip;
+    if (next.kind !== "recording" || next.transition) break;
+    last += 1;
+  }
+  return {
+    local: t - placed[first].start,
+    length: placed[last].end - placed[first].start,
+    opens: true,
+  };
+}
+
+/** Lean, pose and depth of a placed layer at this moment of the scene. */
+function presentLayer(
+  layer: PlacedLayer,
+  edit: EditState,
+  output: Size,
+  scene: SceneTime | null,
+): PlacedLayer {
+  const look = edit.screen;
+  const pose: Pose =
+    look.entrance && scene?.opens ? entranceAt(scene.local) : AT_REST;
+  const drift = scene ? driftAt(scene.local, scene.length, look.drift) : 0;
+  if (isFlat(look) && pose === AT_REST) return layer;
+  const tilt = { x: look.tilt.x + pose.tiltX, y: look.tilt.y + drift };
+  const center = {
+    x: layer.center.x,
+    y: layer.center.y + pose.dy * output.height,
+  };
+  const scale = layer.scale * pose.scale;
+  const { quad, z } = projectRect(
+    center,
+    {
+      width: layer.geometry.frame.width * scale,
+      height: layer.geometry.frame.height * scale,
+    },
+    layer.rotation,
+    tilt,
+    focalLength(output),
+  );
+  return {
+    ...layer,
+    center,
+    scale,
+    quad,
+    depth: z,
+    tilt,
+    opacity: pose.opacity,
+  };
+}
+
 function placeLayers(
   edit: EditState,
   timeline: Timeline,
   area: Rect,
   t: number,
+  output: Size,
+  scene: SceneTime | null,
 ): PlacedLayer[] {
   const out: PlacedLayer[] = [];
   for (const le of edit.layers ?? []) {
@@ -74,7 +166,7 @@ function placeLayers(
       width: r.width * timeline.source.width,
       height: r.height * timeline.source.height,
     };
-    out.push(placeLayer(le, geometry, area, crop));
+    out.push(presentLayer(placeLayer(le, geometry, area, crop), edit, output, scene));
   }
   return out;
 }
@@ -88,6 +180,7 @@ export function composeFrame(
   timeline: Timeline,
   output: Size,
   t: number,
+  scene: SceneTime | null = null,
 ): Frame {
   const area = stageArea(output, edit.camera, timeline.hasCamera);
   const webcam = webcamRect(output, edit.camera, timeline.hasCamera);
@@ -98,7 +191,7 @@ export function composeFrame(
   let toOutput: (p: RecordedPointer) => Point | null;
 
   if (layered) {
-    layers = placeLayers(edit, timeline, area, t);
+    layers = placeLayers(edit, timeline, area, t, output, scene);
     toOutput = (p) => {
       const layer = layers.find((l) => l.instanceId === p.instanceId);
       if (!layer || p.u === undefined || p.v === undefined) return null;

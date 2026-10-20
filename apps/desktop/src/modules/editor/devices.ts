@@ -7,6 +7,7 @@ import {
   type LayerEdit,
   type PlacedLayer,
   type RecordedLayer,
+  type ScreenLook,
   type Size,
 } from "@goscreen/render-engine";
 import { registry } from "@/lib/registry";
@@ -84,6 +85,30 @@ type Source = {
   crop: { x: number; y: number; width: number; height: number };
 } | null;
 
+/** The screen look resolved for one layer, in frame units. */
+export type DeviceLook = {
+  // Frosted plate margin around a frameless screen (0 = none).
+  plate: number;
+  // Outline width (0 = none) and the angle of its turning gradient (null = flat grey).
+  outline: number;
+  sweep: number | null;
+  // Plate fill: a light or dark veil, by the background it sits on.
+  plateColor: string;
+};
+
+export const NO_LOOK: DeviceLook = {
+  plate: 0,
+  outline: 0,
+  sweep: null,
+  plateColor: "rgba(255, 255, 255, 0.08)",
+};
+
+/** Plate margin in frame units: a fraction of the screen's short side. */
+export function plateMargin(look: ScreenLook, layer: PlacedLayer): number {
+  const { screen } = layer.geometry;
+  return look.plate * Math.min(screen.width, screen.height);
+}
+
 function rounded(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -108,6 +133,7 @@ export function drawDevice(
   source: Source,
   shadow: number,
   shadowScale: number,
+  look: DeviceLook = NO_LOOK,
 ) {
   const device = deviceOf(edit);
   const { frame, screen } = layer.geometry;
@@ -119,7 +145,50 @@ export function drawDevice(
     device?.category === "phone" || device?.category === "tablet";
   const screenRadius = edit.frame
     ? (device?.frame.screenRadius ?? 0)
-    : (device?.frame.screenRadius ?? 0) * 0.6;
+    : Math.max(
+        (device?.frame.screenRadius ?? 0) * 0.6,
+        look.plate > 0 || look.outline > 0
+          ? Math.min(screen.width, screen.height) * 0.035
+          : 0,
+      );
+
+  // The frosted plate behind a frameless screen: a veil with equal margins,
+  // soft shadow and a hairline, like the course's blurred "glass" frame.
+  if (!edit.frame && look.plate > 0) {
+    const m = look.plate;
+    ctx.save();
+    if (shadow > 0) {
+      ctx.shadowColor = `rgba(0, 0, 0, ${0.4 * shadow})`;
+      ctx.shadowBlur = 50 * shadow * shadowScale;
+      ctx.shadowOffsetY = 20 * shadow * shadowScale;
+    }
+    ctx.fillStyle = look.plateColor;
+    rounded(
+      ctx,
+      -m,
+      -m,
+      frame.width + m * 2,
+      frame.height + m * 2,
+      screenRadius + m,
+    );
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+    rounded(
+      ctx,
+      -m + 0.75,
+      -m + 0.75,
+      frame.width + m * 2 - 1.5,
+      frame.height + m * 2 - 1.5,
+      screenRadius + m,
+    );
+    ctx.stroke();
+    ctx.restore();
+    // The plate carries the shadow; the screen itself stays flat on it.
+    shadow = 0;
+  }
 
   // Body (and its shadow).
   ctx.save();
@@ -229,6 +298,41 @@ export function drawDevice(
     ctx.fill();
   }
   ctx.restore();
+
+  // Outline on a frameless screen: a thin grey line at 50 %, or a two-tone
+  // gradient whose angle turns over the scene.
+  if (!edit.frame && look.outline > 0) {
+    ctx.save();
+    ctx.lineWidth = look.outline;
+    if (look.sweep === null) {
+      ctx.strokeStyle = "rgba(200, 200, 205, 0.5)";
+    } else {
+      const a = (look.sweep * Math.PI) / 180;
+      const r = Math.hypot(frame.width, frame.height) / 2;
+      const cx = frame.width / 2;
+      const cy = frame.height / 2;
+      const g = ctx.createLinearGradient(
+        cx - Math.cos(a) * r,
+        cy + Math.sin(a) * r,
+        cx + Math.cos(a) * r,
+        cy - Math.sin(a) * r,
+      );
+      g.addColorStop(0, "rgba(255, 255, 255, 0.7)");
+      g.addColorStop(1, "rgba(160, 160, 170, 0.35)");
+      ctx.strokeStyle = g;
+    }
+    const inset = look.outline / 2;
+    rounded(
+      ctx,
+      screen.x + inset,
+      screen.y + inset,
+      screen.width - look.outline,
+      screen.height - look.outline,
+      Math.max(0, screenRadius - inset),
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function drawLaptopBase(

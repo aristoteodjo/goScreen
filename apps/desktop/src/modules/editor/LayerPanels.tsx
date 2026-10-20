@@ -2,11 +2,14 @@ import type { DeviceDefinition } from "@goscreen/device-registry";
 import {
   type CameraEdit,
   type LayerEdit,
+  LOOK_PRESETS,
   outputSize,
+  type ScreenLook,
   stageArea,
 } from "@goscreen/render-engine";
 import { ArrowLeft01Icon, SmartPhone01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Combobox,
@@ -68,6 +71,7 @@ export function DevicesPanel() {
   if (!layer) {
     return (
       <>
+        <ScreenLookSection />
         <Section
           title="Devices"
           hint="Each device is its own layer: change the model, color or frame without re-recording."
@@ -107,6 +111,144 @@ export function DevicesPanel() {
   }
 
   return <LayerEditor layer={layer} onBack={() => selectLayer(null)} />;
+}
+
+/**
+ * How every recorded screen is presented: the "enhanced screen recording"
+ * of SaaS ads (frosted plate, outline, three-quarter lean with a slow
+ * drift, depth of field, pan-in at each scene). Plate and outline only
+ * show on screens drawn without their device frame.
+ */
+function ScreenLookSection() {
+  const look = useEdit((s) => s.edit.screen);
+  const change = useChange();
+  const set = (patch: Partial<ScreenLook>, key?: string) =>
+    change((ed) => ({ ...ed, screen: { ...ed.screen, ...patch } }), key);
+  const current =
+    LOOK_PRESETS.find((p) => JSON.stringify(p.look) === JSON.stringify(look))
+      ?.id ?? "custom";
+  return (
+    <Section
+      title="Screen look"
+      hint="Plate, outline and lean of the recorded screens. Plate and outline show on frameless screens."
+    >
+      <ToggleGroup
+        type="single"
+        value={current}
+        onValueChange={(id) => {
+          const preset = LOOK_PRESETS.find((p) => p.id === id);
+          if (preset) set(preset.look);
+        }}
+        className="flex flex-wrap gap-1"
+      >
+        {LOOK_PRESETS.map((p) => (
+          <ToggleGroupItem
+            key={p.id}
+            value={p.id}
+            size="sm"
+            className="h-7 px-2.5 text-[12px]"
+          >
+            {p.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <div className="flex flex-col gap-2 pt-1">
+        <LookRow label="Plate">
+          <SliderRow
+            value={look.plate}
+            min={0}
+            max={0.12}
+            step={0.005}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(plate) => set({ plate }, "screen.plate")}
+          />
+        </LookRow>
+        <LookRow label="Outline">
+          <SliderRow
+            value={look.outline}
+            min={0}
+            max={8}
+            step={0.5}
+            format={(v) => `${v}px`}
+            onChange={(outline) => set({ outline }, "screen.outline")}
+          />
+        </LookRow>
+        <LookRow label="Lean up">
+          <SliderRow
+            value={look.tilt.x}
+            min={-30}
+            max={30}
+            step={1}
+            format={(v) => `${v}°`}
+            onChange={(x) => set({ tilt: { ...look.tilt, x } }, "screen.tilt")}
+          />
+        </LookRow>
+        <LookRow label="Turn">
+          <SliderRow
+            value={look.tilt.y}
+            min={-30}
+            max={30}
+            step={1}
+            format={(v) => `${v}°`}
+            onChange={(y) => set({ tilt: { ...look.tilt, y } }, "screen.tilt")}
+          />
+        </LookRow>
+        <LookRow label="Drift">
+          <SliderRow
+            value={look.drift}
+            min={0}
+            max={10}
+            step={0.5}
+            format={(v) => `${v}°`}
+            onChange={(drift) => set({ drift }, "screen.drift")}
+          />
+        </LookRow>
+        <LookRow label="Depth">
+          <SliderRow
+            value={look.depth}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)}%`}
+            onChange={(depth) => set({ depth }, "screen.depth")}
+          />
+        </LookRow>
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs text-muted-foreground">
+            Turning outline
+          </span>
+          <Switch
+            checked={look.sweep}
+            onCheckedChange={(sweep) => set({ sweep })}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            Pan in at each scene
+          </span>
+          <Switch
+            checked={look.entrance}
+            onCheckedChange={(entrance) => set({ entrance })}
+          />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+function LookRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[64px_1fr] items-center gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  );
 }
 
 function LayerEditor({

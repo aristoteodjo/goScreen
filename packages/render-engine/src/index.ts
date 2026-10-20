@@ -28,6 +28,8 @@ export {
 } from "./camera";
 export {
   composeFrame,
+  sceneTimeAt,
+  type SceneTime,
   type GeometryOf,
   type Timeline,
   timelineOf,
@@ -60,6 +62,30 @@ export {
   clearAnimation,
 } from "./presets";
 export { ASPECT_OPTIONS, contentRect, fitInto, outputSize } from "./layout";
+export {
+  AT_REST,
+  DEFAULT_LOOK,
+  driftAt,
+  ENTRANCE,
+  entranceAt,
+  focalLength,
+  insideQuad,
+  isFlat,
+  LOOK_PRESETS,
+  needsWarp,
+  pop,
+  popSpring,
+  type Pose,
+  PREMIUM_LOOK,
+  projectRect,
+  quadBounds,
+  type ScreenLook,
+  SHARP,
+  sharp,
+  SHARP_OUT,
+  sharpOut,
+  sweepAngle,
+} from "./look";
 export {
   activeOverlays,
   animate,

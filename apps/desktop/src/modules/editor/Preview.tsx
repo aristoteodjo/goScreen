@@ -8,6 +8,7 @@ import {
   type Overlay,
   outputSize,
   type Point,
+  sceneTimeAt,
   type Size,
   sourceTimeAt,
 } from "@goscreen/render-engine";
@@ -279,9 +280,13 @@ export function Preview() {
   const frameNow = () => {
     const timeline = currentTimeline();
     const { edit } = useEdit.getState();
-    const s = sourceTimeAt(edit.clips, usePlayback.getState().time);
+    const t = usePlayback.getState().time;
+    const s = sourceTimeAt(edit.clips, t);
     if (!output || !timeline || s === null) return null;
-    return { frame: composeFrame(edit, timeline, output, s), timeline };
+    return {
+      frame: composeFrame(edit, timeline, output, s, sceneTimeAt(edit.clips, t)),
+      timeline,
+    };
   };
 
   /** Pointer -> output pixel, undoing the zoom camera. */

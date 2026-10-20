@@ -1,3 +1,5 @@
+import { quadMapper } from "./homography";
+import { insideQuad } from "./look";
 import type {
   CameraEdit,
   FrameGeometry,
@@ -137,54 +139,70 @@ export function arrangeLayers(
   });
 }
 
+/** The frame's corners of a flat layer (no perspective), in output px. */
+export function flatQuad(
+  center: Point,
+  size: Size,
+  rotation: number,
+): PlacedLayer["quad"] {
+  const c = Math.cos(rotation);
+  const s = Math.sin(rotation);
+  const at = (x: number, y: number) => ({
+    x: center.x + x * c - y * s,
+    y: center.y + x * s + y * c,
+  });
+  const w = size.width / 2;
+  const h = size.height / 2;
+  return [at(-w, -h), at(w, -h), at(w, h), at(-w, h)];
+}
+
 export function placeLayer(
   edit: LayerEdit,
   geometry: FrameGeometry,
   area: Rect,
   crop: Rect,
 ): PlacedLayer {
+  const center = {
+    x: area.x + edit.x * area.width,
+    y: area.y + edit.y * area.height,
+  };
+  const scale = (edit.scale * area.height) / Math.max(1, geometry.frame.height);
+  const rotation = (edit.rotation * Math.PI) / 180;
   return {
     instanceId: edit.instanceId,
-    center: {
-      x: area.x + edit.x * area.width,
-      y: area.y + edit.y * area.height,
-    },
-    scale: (edit.scale * area.height) / Math.max(1, geometry.frame.height),
-    rotation: (edit.rotation * Math.PI) / 180,
+    center,
+    scale,
+    rotation,
     geometry,
     crop,
     frame: edit.frame,
+    quad: flatQuad(
+      center,
+      {
+        width: geometry.frame.width * scale,
+        height: geometry.frame.height * scale,
+      },
+      rotation,
+    ),
+    depth: [0, 0, 0, 0],
+    tilt: { x: 0, y: 0 },
+    opacity: 1,
   };
 }
 
-/** A point of the layer's screen (u, v in 0..1) in output px. */
+/** A point of the layer's screen (u, v in 0..1) in output px, perspective included. */
 export function layerPoint(layer: PlacedLayer, u: number, v: number): Point {
   const { frame, screen } = layer.geometry;
-  const lx = (screen.x + u * screen.width - frame.width / 2) * layer.scale;
-  const ly = (screen.y + v * screen.height - frame.height / 2) * layer.scale;
-  const c = Math.cos(layer.rotation);
-  const s = Math.sin(layer.rotation);
-  return {
-    x: layer.center.x + lx * c - ly * s,
-    y: layer.center.y + lx * s + ly * c,
-  };
+  return quadMapper(layer.quad)(
+    (screen.x + u * screen.width) / Math.max(1, frame.width),
+    (screen.y + v * screen.height) / Math.max(1, frame.height),
+  );
 }
 
 /** Topmost layer under an output point. */
 export function hitLayer(layers: PlacedLayer[], p: Point): string | null {
   for (let i = layers.length - 1; i >= 0; i -= 1) {
-    const l = layers[i];
-    const dx = p.x - l.center.x;
-    const dy = p.y - l.center.y;
-    const c = Math.cos(-l.rotation);
-    const s = Math.sin(-l.rotation);
-    const x = (dx * c - dy * s) / l.scale;
-    const y = (dx * s + dy * c) / l.scale;
-    if (
-      Math.abs(x) <= l.geometry.frame.width / 2 &&
-      Math.abs(y) <= l.geometry.frame.height / 2
-    )
-      return l.instanceId;
+    if (insideQuad(layers[i].quad, p)) return layers[i].instanceId;
   }
   return null;
 }
