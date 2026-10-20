@@ -29,7 +29,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { AnimatePanel } from "./AnimatePanel";
-import { cleanSilences, editActions, type SilenceMode } from "./actions";
+import {
+  alignToVoice,
+  cleanSilences,
+  editActions,
+  type SilenceMode,
+} from "./actions";
 import { useBlocksDialog } from "./BlocksDialog";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
@@ -795,6 +800,22 @@ export function MusicPanel() {
         title={name ?? "Music"}
         hint={`Starts at ${secs(clip.start)}, plays ${secs(clip.duration)}.`}
       />
+      <Section
+        title="Voice leads the cut"
+        hint="Each scene lasts until the next phrase of this voice starts, so scene changes land on the attack of a sentence."
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() =>
+            alignToVoice(clip.id)
+              .then((n) => toast.success(`${n} scene${n > 1 ? "s" : ""} aligned to the voice`))
+              .catch((e: Error) => toast.error(e.message))
+          }
+        >
+          Align scenes to this voice
+        </Button>
+      </Section>
       <Section title="Volume">
         <SliderRow
           value={clip.volume}

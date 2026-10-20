@@ -25,12 +25,14 @@ import {
 } from "@goscreen/render-engine";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { alignScenesToVoice, phrasesOf } from "@goscreen/scenario";
 import { ipc } from "@/lib/ipc";
 import { probeDuration } from "./media";
 import { player, useSession } from "./session";
 import {
   SILENCE_DEFAULTS,
   type SilenceOptions,
+  soundRanges,
   stripSilences,
   trimSilentEnds,
 } from "./silences";
@@ -663,6 +665,46 @@ export async function cleanSilences(
   }));
   usePlayback.getState().select({ kind: "audio", id: pieces[0].id });
   return pieces.length;
+}
+
+/**
+ * The voice leads the cut: each recording scene is given the length of its
+ * phrase in this voice clip, so scene changes land on the attack of a
+ * sentence (the course's rule). Returns how many scenes were aligned.
+ */
+export async function alignToVoice(clipId: string): Promise<number> {
+  const { videoPath, video } = useSession.getState();
+  const duration =
+    video && Number.isFinite(video.duration) ? video.duration : undefined;
+  const edit = useEdit.getState().edit;
+  const clip = edit.audio.find((a) => a.id === clipId);
+  if (!videoPath || !clip)
+    throw new Error("This sound is no longer in the edit.");
+  const file =
+    clip.asset === MIC_ASSET
+      ? ":mic"
+      : edit.assets.find((a) => a.id === clip.asset)?.file;
+  if (!file) throw new Error("This sound's file is missing.");
+  const o = SILENCE_DEFAULTS;
+  const silences = await ipc.audioSilences(
+    videoPath,
+    file,
+    o.thresholdDb,
+    o.minSilence,
+  );
+  const ranges = soundRanges(
+    [clip.in, clip.in + clip.duration],
+    silences,
+    { pad: 0.05, minSound: 0.25 },
+  );
+  const phrases = phrasesOf(ranges, clip);
+  if (phrases.length === 0)
+    throw new Error("No phrase was heard in this sound.");
+  const before = useEdit.getState().edit;
+  const after = alignScenesToVoice(before, phrases, duration);
+  const scenes = before.clips.filter((c) => c.kind === "recording").length;
+  change(() => after, undefined);
+  return Math.min(scenes, phrases.length);
 }
 
 async function addAsset(

@@ -12,6 +12,7 @@ import {
 } from "@goscreen/render-engine";
 import {
   adoptFilm,
+  alignScenesToVoice,
   applyFilm,
   buildScenarioEdit,
   compileFlow,
@@ -25,6 +26,7 @@ import {
   parseFlow,
   pathLabel,
   pathTo,
+  phrasesOf,
   resolveVars,
   scenarioSchema,
   stepSchema,
@@ -47,6 +49,7 @@ import { probeDuration } from "@/modules/editor/media";
 import { useSession } from "@/modules/editor/session";
 import {
   SILENCE_DEFAULTS,
+  soundRanges,
   stripSilences,
   trimSilentEnds,
 } from "@/modules/editor/silences";
@@ -727,6 +730,51 @@ export function registerCommands() {
       }
       await applyEdit(i.video, edit);
       return { clips: made, item: Object.values(made)[0]?.[0] };
+    },
+  });
+  defineCommand({
+    name: "edit.alignToVoice",
+    title: "Let the voice lead the cut",
+    description:
+      "Gives each recording scene the length of its phrase in a voice clip (a voice-over, the mic): scene i runs from phrase i's attack to phrase i+1's attack, so every scene change lands on the start of a sentence and no scene opens on silence. A scene with less source than its phrase slows down (never below 0.6×); scene captions follow. Without clip: the first voice-over or mic clip. Returns how many scenes were aligned.",
+    input: z.object({ video, clip: z.string().optional() }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const clip = edit.audio.find((a) =>
+        i.clip
+          ? a.id === i.clip
+          : a.asset === MIC_ASSET ||
+            edit.assets
+              .find((x) => x.id === a.asset)
+              ?.name.startsWith("Voice-over"),
+      );
+      if (!clip)
+        throw new Error(
+          i.clip ? `No audio clip ${i.clip}.` : "No voice-over or mic clip.",
+        );
+      const file =
+        clip.asset === MIC_ASSET
+          ? ":mic"
+          : edit.assets.find((x) => x.id === clip.asset)?.file;
+      if (!file) throw new Error("This sound's file is missing.");
+      const silences = await ipc.audioSilences(
+        i.video,
+        file,
+        SILENCE_DEFAULTS.thresholdDb,
+        SILENCE_DEFAULTS.minSilence,
+      );
+      const phrases = phrasesOf(
+        soundRanges([clip.in, clip.in + clip.duration], silences, {
+          pad: 0.05,
+          minSound: 0.25,
+        }),
+        clip,
+      );
+      if (phrases.length === 0)
+        throw new Error("No phrase was heard in this sound.");
+      const scenes = edit.clips.filter((c) => c.kind === "recording").length;
+      await applyEdit(i.video, alignScenesToVoice(edit, phrases));
+      return { scenes: Math.min(scenes, phrases.length), phrases: phrases.length };
     },
   });
   defineCommand({
