@@ -410,16 +410,29 @@ const framePadding = (film: Film) => (film.captions === "none" ? 0.08 : 0.14);
  * above or below, smaller in wide frames.
  */
 function deviceLayout(film: Film) {
+  // A frameless glass is scaled on its own height (no bezel), and leans
+  // towards the texts: a little smaller keeps the same footprint.
+  const k = film.screen === "premium" ? 0.86 : 1;
+  const scaled = (p: { x: number; y: number; scale: number }) => ({
+    ...p,
+    scale: p.scale * k,
+  });
   if (film.look === "showcase") {
-    if (film.captions === "none") return { x: 0.5, y: 0.5, scale: 0.86 };
+    if (film.captions === "none") return scaled({ x: 0.5, y: 0.5, scale: 0.86 });
     if (film.captions === "bottom")
-      return { x: 0.5, y: 0.42, scale: film.aspect === "9:16" ? 0.72 : 0.68 };
-    return {
-      "9:16": { x: 0.5, y: 0.589, scale: 0.75 },
-      "4:5": { x: 0.5, y: 0.62, scale: 0.66 },
-      "1:1": { x: 0.5, y: 0.63, scale: 0.62 },
-      "16:9": { x: 0.72, y: 0.52, scale: 0.86 },
-    }[film.aspect];
+      return scaled({
+        x: 0.5,
+        y: 0.42,
+        scale: film.aspect === "9:16" ? 0.72 : 0.68,
+      });
+    return scaled(
+      {
+        "9:16": { x: 0.5, y: 0.589, scale: 0.75 },
+        "4:5": { x: 0.5, y: 0.62, scale: 0.66 },
+        "1:1": { x: 0.5, y: 0.63, scale: 0.62 },
+        "16:9": { x: 0.72, y: 0.52, scale: 0.86 },
+      }[film.aspect],
+    );
   }
   const wide = film.aspect !== "9:16";
   const y =
@@ -432,7 +445,11 @@ function deviceLayout(film: Film) {
           ? 0.42
           : 0.44
         : 0.5;
-  return { x: 0.5, y, scale: film.captions !== "none" && wide ? 0.8 : 1 };
+  return scaled({
+    x: 0.5,
+    y,
+    scale: film.captions !== "none" && wide ? 0.8 : 1,
+  });
 }
 
 /**

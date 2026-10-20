@@ -482,6 +482,68 @@ partir de données (scénario + `film`), comme une composition Remotion à parti
   Qwen3-VL, ce qu'il a appris (exemples, accord global et sur les 20 derniers), export du jeu d'entraînement.
   IA : `app.show` avec `view: "reproduce"`.
 
+### Montage façon pub SaaS (cours Ultimate Editors 2.0)
+
+Relevé le 2026-10-20 sur les 25 h du cours (modules SaaS : théorie, fonds, textes, clics, UI, 3D,
+transitions, tests ; masterclass Devin Jatho : hooks, textes, UI). Les techniques AE sont réécrites en
+fonctions pures du temps ; les notes détaillées (chiffres, timecodes) sont rangées à côté du cours
+(`_notes-goScreen/`). Rien de ce qui suit ne touche la capture : tout s'applique au montage.
+
+- **Règles retenues** : structure hook → intro produit (chiffre de preuve) → solution à l'écran → 2-3
+  fonctionnalités chiffrées → CTA très court ; script de 60-80 mots ≈ 30 s, une phrase par scène, la coupe
+  tombe sur l'attaque de la phrase suivante ; ≤ 5-6 mots à l'écran, un mot accentué par phrase ; jamais de
+  courbe linéaire (« sharp » : vitesse max au départ, longue décélération ; rebond 4 images + 25-30 %) ; un
+  mouvement ne s'arrête jamais net (dérive, zoom qui continue) ; stagger de 1-2 images ; gris foncés plutôt
+  que noirs, une famille de teintes désaturée, glow minuscule ; « plus c'est loin du sujet, plus c'est flou ».
+- **Vocabulaire du moteur** (`render-engine/look.ts`) : `sharp`, `sharpOut`, `pop(t, amplitude)` (ressort
+  réglé sur 4 images à 30 i/s), `entranceAt`, `driftAt`, `projectRect` (perspective pinhole, focale 1,3 × le
+  grand côté), `insideQuad`. Les `PlacedLayer` portent leur quad projeté : touches, curseur et clic droit
+  passent par l'homographie.
+- **Écran « premium »** (`EditState.screen`, `PREMIUM_LOOK`, panneau Devices → Screen look) : plaque givrée
+  et contour (fixe à 50 % ou dégradé qui tourne de 90° à 19° sur la scène) autour d'un verre sans cadre,
+  inclinaison trois-quarts (x 8°, y −10°) avec dérive de 3° sur la scène, profondeur de champ (bord lointain
+  flou), entrée de scène en « pan in » depuis le bas (0,6 s, courbe sharp). Une scène = un clip qui ouvre une
+  nouvelle vue (`sceneTimeAt`). Le dessin passe par un petit programme WebGL (`editor/warp.ts`) : le device est
+  peint à plat dans un bitmap puis plaqué sur son quad avec un flou par profondeur ; repli 2D sans WebGL.
+- **Caméra à élan** (`camera.ts`) : entrée de zoom sharp (0,5 s), sortie douce (0,7 s), plateau qui pousse
+  encore de 4 % (`ZOOM_DRIFT`), glissement d'un clic au suivant en sharp.
+- **Clics** (`touches.ts`) : style `ripple` (disque d'appui + deux anneaux flous à 2 images d'écart qui
+  grandissent et s'effacent en 0,5 s), **punch** de l'écran à chaque clic (creux de 2 % et rebond amplitude
+  50, `pressPunch`), curseur réduit d'un cinquième à l'appui, **spotlight** (`touch.spotlight`) : le reste
+  s'assombrit 1,3 s autour du clic.
+- **Fonds cinématiques** (`background.ts`, `EditBackground.kind = "mesh"`) : `circles` (neuf disques d'une
+  famille de teintes sur un cadre 2× plus grand, rotation 20°/s × vitesse, flou 0,14 × petit côté), `blob`
+  (tache asymétrique qui respire à 0,5 Hz), `waves` (trois bandes, la plus lointaine la plus floue, dérive
+  0,1 Hz) ; grain **fixe** (une tuile, jamais régénérée) 6 %, vignette. `meshPalette(accent)` : base très
+  sombre de la même teinte, cinq tons désaturés. Peint en 1/6 de résolution puis agrandi.
+- **Transitions** : `blur` (fondu qui devient flou à la coupe, 30 px à 1080p, net quelques images avant et
+  après) et `push` (le plan sortant accélère vers l'avant, l'entrant atterrit de plus loin en sharp) ;
+  les glissements utilisent la courbe sharp et accumulent trois sous-images (flou de mouvement).
+- **Textes** (`TextStyle.accent/flash/sweep/glow/shadow`, panneau Text → Emphasis) : `*mots*` accentués
+  (dégradé clair de l'accent, graisse 900, +12 %), flash de deux couleurs à l'entrée (3 images par palier),
+  balayage lumineux en 0,9 s, glow qui culmine à 0,45 s puis décroît, dégradé vertical léger sur les mots
+  de base, ombre portée dure en bas à droite. Les légendes de scénario l'utilisent, et `starNumbers`
+  accentue leurs chiffres.
+- **Flou de mouvement à l'export** : `frameMoves` (caméra, écran incliné ou entrant, transition, calque
+  animé) ; les images qui bougent sont la moyenne de trois instants, les autres restent nettes.
+- **La voix mène la coupe** (`@goscreen/scenario` `voice.ts`, `alignScenesToVoice`, bouton du panneau d'un
+  son, IA `edit.alignToVoice`) : la scène i dure de l'attaque de la phrase i à celle de la phrase i+1 ; une
+  scène trop courte ralentit (plancher 0,6×) ; légendes et kickers suivent. Les phrases viennent de la
+  détection de silences (`soundRanges`, phrases séparées de plus de 0,35 s).
+- **Film** : `screen: "framed" | "premium"` et `backdrop: "flat" | "circles" | "blob" | "waves"` dans
+  `filmSchema` ; `applyFilm` pose le look, le cadre, le style de clic et le spotlight ensemble (panneau Film :
+  Screen, Backdrop). IA : `edit.setFilm` les accepte ; la skill propose le look premium pour un spot produit.
+- **Regarder sans exporter** : `edit.frame` (IA, CLI) dessine une image du montage à un instant avec le
+  moteur d'export et la rend en JPEG ; c'est ainsi que ces tranches ont été vérifiées. Les médias d'un
+  export sont chargés avec une limite de 10 s (un `.mov` qui ne se décode pas est ignoré au lieu de geler
+  l'export) ; WebKit ne charge que quelques éléments vidéo à la fois, d'où des chargements lents quand la
+  preview et les stills sont actifs.
+- **À faire (relevé par le cours, pas encore fait)** : calage sur le tempo de la musique ; shatter / shine
+  avancés ; recadrage « éléments flottants » (un élément d'UI découpé qui pop hors de la capture) ; objets
+  3D (pièces, logos extrudés) ; voix de synthèse (le cours utilise ElevenLabs : voix « Advertisement »,
+  stability 40) ; mots-clés de la voix (ASR) pour déclencher les entrées de texte sur le mot, pas seulement
+  la scène ; vérification visuelle du look premium sur une prise longue (l'export exige la fenêtre visible).
+
 ### Capture native
 
 Les iframes cross-origin ne se dessinent pas dans un `<canvas>`, donc la capture est native :

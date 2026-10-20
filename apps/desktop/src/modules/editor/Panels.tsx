@@ -232,7 +232,7 @@ function MeshControls({
         ))}
       </ToggleGroup>
       {row("Motion", bg.speed, 3, 0.1, "speed", (v) => `${v.toFixed(1)}×`)}
-      {row("Softness", bg.blur, 0.3, 0.01, "blur", (v) => `${Math.round(v * 100)}`)}
+      {row("Softness", bg.blur, 0.6, 0.01, "blur", (v) => `${Math.round(v * 100)}`)}
       {row("Grain", bg.grain, 0.2, 0.01, "grain", (v) => `${Math.round(v * 100)}%`)}
       {row("Vignette", bg.vignette, 1, 0.05, "vignette", (v) => `${Math.round(v * 100)}%`)}
     </div>

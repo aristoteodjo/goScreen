@@ -71,6 +71,7 @@ export function fillBackground(
 // The mesh is painted small (the blur is huge anyway) and scaled up; the
 // grain is one fixed tile so it never shimmers between frames.
 let meshCanvas: HTMLCanvasElement | null = null;
+let meshSmall: HTMLCanvasElement | null = null;
 let grainTile: HTMLCanvasElement | null = null;
 const MESH_SCALE = 1 / 6;
 
@@ -118,23 +119,53 @@ function drawMesh(
   const frame = meshAt(bg, t);
   const short = Math.min(mw, mh);
   g.setTransform(1, 0, 0, 1, 0, 0);
-  g.filter = "none";
+  g.globalAlpha = 1;
   g.fillStyle = bg.base;
   g.fillRect(0, 0, mw, mh);
   g.save();
   g.translate(mw / 2, mh / 2);
   g.rotate(frame.rotation);
   g.translate(-mw / 2, -mh / 2);
+  // Each shape is a radial gradient whose edge fades over the blur
+  // distance: soft without relying on the context's filter (not every
+  // WebKit applies it), then the whole mesh is smoothed by resampling.
   for (const sh of frame.shapes) {
-    const blur = bg.blur * short * (1 + sh.soft);
-    g.filter = blur >= 0.5 ? `blur(${blur.toFixed(2)}px)` : "none";
-    g.fillStyle = sh.color;
+    const rx = sh.rx * mw;
+    const ry = sh.ry * mh;
+    const r = Math.max(rx, ry);
+    const soft = Math.min(1, (bg.blur * short * (1 + sh.soft)) / Math.max(1, r));
+    g.save();
+    g.translate(sh.x * mw, sh.y * mh);
+    g.scale(rx / r, ry / r);
+    const rg = g.createRadialGradient(0, 0, 0, 0, 0, r * (1 + soft));
+    rg.addColorStop(0, sh.color);
+    rg.addColorStop(Math.max(0, 1 - soft) / (1 + soft), sh.color);
+    rg.addColorStop(1, `${sh.color}00`);
+    g.fillStyle = rg;
     g.beginPath();
-    g.ellipse(sh.x * mw, sh.y * mh, sh.rx * mw, sh.ry * mh, 0, 0, Math.PI * 2);
+    g.arc(0, 0, r * (1 + soft), 0, Math.PI * 2);
     g.fill();
+    g.restore();
   }
   g.restore();
-  g.filter = "none";
+  // Two passes of down- and up-sampling: a cheap, wide blur.
+  meshSmall ??= document.createElement("canvas");
+  const sw = Math.max(2, Math.round(mw / 6));
+  const shh = Math.max(2, Math.round(mh / 6));
+  if (meshSmall.width !== sw) meshSmall.width = sw;
+  if (meshSmall.height !== shh) meshSmall.height = shh;
+  const sg = meshSmall.getContext("2d");
+  if (sg) {
+    for (let pass = 0; pass < 2; pass += 1) {
+      sg.imageSmoothingEnabled = true;
+      sg.imageSmoothingQuality = "high";
+      sg.clearRect(0, 0, sw, shh);
+      sg.drawImage(m, 0, 0, sw, shh);
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = "high";
+      g.drawImage(meshSmall, 0, 0, mw, mh);
+    }
+  }
 
   ctx.save();
   ctx.imageSmoothingEnabled = true;

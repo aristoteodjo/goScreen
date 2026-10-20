@@ -267,7 +267,7 @@ const backgroundSchema = z.discriminatedUnion("kind", [
     base: color,
     colors: z.array(color).min(1).max(12),
     speed: z.number().min(0).max(5).catch(1),
-    blur: z.number().min(0).max(0.4).catch(0.1),
+    blur: z.number().min(0).max(0.6).catch(0.2),
     grain: z.number().min(0).max(0.3).catch(0.06),
     vignette: z.number().min(0).max(1).catch(0.25),
     decor: decorSchema,

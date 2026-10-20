@@ -46,7 +46,7 @@ function once(target: HTMLVideoElement, event: string): Promise<void> {
   });
 }
 
-async function seek(video: HTMLVideoElement, t: number) {
+export async function seek(video: HTMLVideoElement, t: number) {
   if (Math.abs(video.currentTime - t) < 1e-4 && video.readyState >= 2) return;
   const done = once(video, "seeked");
   video.currentTime = t;
@@ -63,7 +63,10 @@ function jpeg(canvas: HTMLCanvasElement): Promise<Blob> {
   );
 }
 
-async function load(url: string): Promise<HTMLVideoElement> {
+/** A media that has not decoded its first frame by then is treated as missing. */
+const LOAD_TIMEOUT_MS = 10_000;
+
+export async function load(url: string): Promise<HTMLVideoElement> {
   const video = document.createElement("video");
   video.crossOrigin = "anonymous";
   video.muted = true;
@@ -71,11 +74,25 @@ async function load(url: string): Promise<HTMLVideoElement> {
   video.playsInline = true;
   const loaded = once(video, "loadeddata");
   video.src = url;
-  await loaded;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`The media did not load: ${url}`)),
+      LOAD_TIMEOUT_MS,
+    );
+  });
+  try {
+    await Promise.race([loaded, late]);
+  } catch (e) {
+    release(video);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   return video;
 }
 
-function release(video: HTMLVideoElement | null) {
+export function release(video: HTMLVideoElement | null) {
   if (!video) return;
   video.removeAttribute("src");
   video.load();

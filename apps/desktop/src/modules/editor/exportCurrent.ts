@@ -5,7 +5,10 @@ import { toast } from "sonner";
 import { ipc } from "@/lib/ipc";
 import { router } from "@/lib/router";
 import { openPlace } from "@/modules/tabs/tabs";
-import { exportVideo } from "./exportVideo";
+import { exportVideo, load, release, seek } from "./exportVideo";
+import { loadImage } from "./media";
+import { drawAt } from "./render";
+import { outputSize, sourceTimeAt } from "@goscreen/render-engine";
 import { assetUrl, currentTimeline, player, useSession } from "./session";
 import { useEdit } from "./store";
 
@@ -109,6 +112,89 @@ export async function exportCurrent(
   } finally {
     clearInterval(watchdog);
     running = null;
+  }
+}
+
+/**
+ * One frame of the open montage at timeline time t, drawn by the export
+ * renderer, as a JPEG data URL: what the AI (or a test) looks at without
+ * exporting. Reports how long the draw took and any error it threw.
+ */
+export async function renderFrameAt(
+  t: number,
+  longSide = 960,
+): Promise<{ ms: number; width: number; height: number; jpeg: string }> {
+  const s = useSession.getState();
+  const timeline = currentTimeline();
+  if (!s.videoUrl || !timeline) throw new Error("The video is not loaded.");
+  const edit = useEdit.getState().edit;
+  const video = await load(s.videoUrl);
+  const camera =
+    s.cameraUrl && edit.camera.visible
+      ? await load(s.cameraUrl).catch(() => null)
+      : null;
+  const media = new Map<string, HTMLImageElement | HTMLVideoElement>();
+  for (const o of edit.overlays) {
+    if (o.kind !== "image" && o.kind !== "video") continue;
+    // Only what shows at t: WebKit queues media elements beyond a few.
+    if (t < o.start || t > o.start + o.duration) continue;
+    const url = assetUrl(edit, o.asset);
+    if (!url) continue;
+    const el =
+      o.kind === "image"
+        ? await loadImage(url).catch(() => null)
+        : await load(url).catch(() => null);
+    if (el) media.set(o.id, el);
+  }
+  try {
+    const source = { width: video.videoWidth, height: video.videoHeight };
+    const output = outputSize(edit.aspect, source, longSide);
+    const canvas = document.createElement("canvas");
+    canvas.width = output.width;
+    canvas.height = output.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas is unavailable.");
+    const st = sourceTimeAt(edit.clips, t);
+    if (st !== null) {
+      await seek(video, st);
+      if (camera) {
+        const local = st - s.mediaOffset;
+        if (local >= 0 && local <= camera.duration) await seek(camera, local);
+      }
+    }
+    for (const o of edit.overlays) {
+      const el = media.get(o.id);
+      if (o.kind !== "video" || !(el instanceof HTMLVideoElement)) continue;
+      const local = t - o.start + o.in;
+      if (t >= o.start && t <= o.start + o.duration && local <= el.duration)
+        await seek(el, local);
+    }
+    const began = performance.now();
+    drawAt(
+      ctx,
+      {
+        video,
+        camera,
+        mediaOf: (o) => media.get(o.id) ?? null,
+      },
+      edit,
+      { ...timeline, source },
+      output,
+      t,
+      1,
+    );
+    const ms = Math.round(performance.now() - began);
+    return {
+      ms,
+      width: output.width,
+      height: output.height,
+      jpeg: canvas.toDataURL("image/jpeg", 0.85),
+    };
+  } finally {
+    release(video);
+    release(camera);
+    for (const el of media.values())
+      if (el instanceof HTMLVideoElement) release(el);
   }
 }
 

@@ -43,6 +43,7 @@ import {
   exportRunning,
   exportVariants,
   openForExport,
+  renderFrameAt,
   stopExport,
 } from "@/modules/editor/exportCurrent";
 import { probeDuration } from "@/modules/editor/media";
@@ -1071,6 +1072,27 @@ export function registerCommands() {
         label: "The AI is exporting",
       });
       return { file };
+    },
+  });
+  defineCommand({
+    name: "edit.frame",
+    title: "Look at one frame",
+    description:
+      "Draws one frame of a montage at timeline time t with the export renderer and returns it as a JPEG (base64 `screenshot`), with the time the draw took: a way to look at the result without exporting.",
+    input: z.object({
+      video,
+      t: z.number().min(0).default(0),
+      width: z.number().int().min(240).max(1920).default(960),
+    }),
+    run: async (i) => {
+      await openForExport(i.video);
+      const r = await renderFrameAt(i.t, i.width);
+      return {
+        ms: r.ms,
+        width: r.width,
+        height: r.height,
+        screenshot: r.jpeg.replace(/^data:image\/jpeg;base64,/, ""),
+      };
     },
   });
   defineCommand({

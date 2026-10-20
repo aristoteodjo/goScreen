@@ -195,7 +195,9 @@ export function meshPreset(
     base,
     colors,
     speed: 1,
-    blur: style === "circles" ? 0.14 : style === "blob" ? 0.05 : 0.09,
+    // Fractions of the short side: the course's 150 px box blur at 1080p
+    // for the discs is ~0.14, but discs must never show an edge, so more.
+    blur: style === "circles" ? 0.32 : style === "blob" ? 0.12 : 0.2,
     grain: 0.06,
     vignette: style === "waves" ? 0.35 : 0.25,
   };

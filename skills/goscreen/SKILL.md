@@ -101,7 +101,24 @@ open it.
    good VSL opens on a kinetic title or logo card, uses a counter or chart for
    proof, and ends on a call to action.
    Change the film as a whole with `edit_setFilm` (format, colours, font,
-   captions, zoom, cards): the person's own edits stay. The default look,
+   captions, zoom, cards, `screen`, `backdrop`): the person's own edits stay.
+   The SaaS-ad look, the one to propose for a product spot: `screen:
+   "premium"` (the recorded screen as frameless glass with a plate and an
+   outline, leaning in perspective with a slow drift, far edge softened,
+   popping in from below at each scene, ripple clicks that punch the screen
+   and spotlight their target) and `backdrop: "circles"` (or `"blob"`,
+   `"waves"`: a moving background in the accent's hue family, desaturated,
+   with static grain and a vignette). `"framed"` and `"flat"` are the
+   classic device-and-colour look. Zooms pop in fast and keep pushing in a
+   little; transitions `blur` (soft at the cut) and `push` (momentum) join
+   the fades and slides.
+   Scene titles follow the course's rules: at most five or six words, one
+   accent word per phrase (`*stars*`: lighter gradient, heavier, a touch
+   bigger, flashed and swept as it comes in; figures are starred for you),
+   a glow that peaks after the entrance. Keep the structure of a SaaS ad:
+   hook or problem, product intro with a figure of proof, the solution on
+   screen, two or three features with figures, a very short call to action;
+   a script of 60 to 80 words lasts about 30 s, one phrase per scene. The default look,
    `showcase`, is the VSL layout: the device framed at 75 % of the height
    under a numbered kicker (`label`: "Buyer" gives "BUYER · 2/11") and the
    scene title, an accent disc behind it, brand cards (`brand`, card
@@ -114,6 +131,12 @@ open it.
    audio track): suggest it, do not wait for it. Once a voice is there,
    `edit_cleanSilences` cuts its pauses (mode "strip") or only the wait at
    both ends ("trim"); pieces keep their time, so the voice stays in sync.
+   Then let the voice lead the cut: `edit_alignToVoice` gives each scene the
+   length of its phrase, so every scene change lands on the attack of a
+   sentence and nothing opens on silence (a short scene slows down to fit).
+   To check a result without exporting, `edit_frame` draws one frame at a
+   timeline time and returns it as an image: look at a scene's opening
+   (t just after its start) and its middle before asking for an export.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees, or `export_variants` for several formats at once (9:16 for
    stories, 16:9 for web, 1:1 and 4:5 for feeds). The goScreen window must
