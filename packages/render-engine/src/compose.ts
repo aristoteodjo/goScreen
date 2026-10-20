@@ -78,7 +78,13 @@ export function timelineOf(
  * the scene's length. A scene is a clip that opens a new view (first clip,
  * after a card or a transition); plain cuts inside a take are not scenes.
  */
-export type SceneTime = { local: number; length: number; opens: boolean };
+export type SceneTime = {
+  local: number;
+  length: number;
+  opens: boolean;
+  // Position of the scene among the recording scenes (0 = first).
+  index: number;
+};
 
 /** The scene around timeline time t, or null on a card. */
 export function sceneTimeAt(clips: MainClip[], t: number): SceneTime | null {
@@ -106,10 +112,19 @@ export function sceneTimeAt(clips: MainClip[], t: number): SceneTime | null {
     if (next.kind !== "recording" || next.transition) break;
     last += 1;
   }
+  // Count the scenes before this one: every run of recording clips.
+  let index = 0;
+  for (let k = 0; k < first; k += 1) {
+    const c = placed[k].clip;
+    const prev = k > 0 ? placed[k - 1].clip : null;
+    if (c.kind !== "recording") continue;
+    if (prev?.kind !== "recording" || c.transition) index += 1;
+  }
   return {
     local: t - placed[first].start,
     length: placed[last].end - placed[first].start,
     opens: true,
+    index,
   };
 }
 
@@ -126,12 +141,14 @@ function presentLayer(
   const pose: Pose =
     look.entrance && scene?.opens ? entranceAt(scene.local) : AT_REST;
   const drift = scene ? driftAt(scene.local, scene.length, look.drift) : 0;
+  // Scenes alternate the side they turn to, so two in a row never match.
+  const side = scene && scene.index % 2 === 1 ? -1 : 1;
   const punch =
     edit.touch.style === "none"
       ? 1
       : pressPunch(timeline.presses, t, layer.instanceId);
   if (isFlat(look) && pose === AT_REST && punch === 1) return layer;
-  const tilt = { x: look.tilt.x + pose.tiltX, y: look.tilt.y + drift };
+  const tilt = { x: look.tilt.x + pose.tiltX, y: (look.tilt.y + drift) * side };
   const center = {
     x: layer.center.x,
     y: layer.center.y + pose.dy * output.height,

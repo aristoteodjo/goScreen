@@ -35,22 +35,19 @@ void main() {
   if (r < 0.5) {
     c = texture2D(u_tex, v_uv);
   } else {
-    // 12-tap Poisson disc.
+    // Two rings of taps, rotated per pixel by a hash: ghost copies turn
+    // into fine grain instead of showing as doubled text.
+    float h = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    float a0 = h * 6.2831853;
     vec2 k = u_texel * r;
     c = texture2D(u_tex, v_uv) * 2.0;
-    c += texture2D(u_tex, v_uv + k * vec2(-0.326, -0.406));
-    c += texture2D(u_tex, v_uv + k * vec2(-0.840, -0.074));
-    c += texture2D(u_tex, v_uv + k * vec2(-0.696, 0.457));
-    c += texture2D(u_tex, v_uv + k * vec2(-0.203, 0.621));
-    c += texture2D(u_tex, v_uv + k * vec2(0.962, -0.195));
-    c += texture2D(u_tex, v_uv + k * vec2(0.473, -0.480));
-    c += texture2D(u_tex, v_uv + k * vec2(0.519, 0.767));
-    c += texture2D(u_tex, v_uv + k * vec2(0.185, -0.893));
-    c += texture2D(u_tex, v_uv + k * vec2(0.507, 0.064));
-    c += texture2D(u_tex, v_uv + k * vec2(0.896, 0.412));
-    c += texture2D(u_tex, v_uv + k * vec2(-0.322, -0.933));
-    c += texture2D(u_tex, v_uv + k * vec2(-0.792, -0.598));
-    c /= 14.0;
+    for (int i = 0; i < 8; i++) {
+      float a = a0 + float(i) * 0.7853982;
+      vec2 d = vec2(cos(a), sin(a));
+      c += texture2D(u_tex, v_uv + k * d * 0.5);
+      c += texture2D(u_tex, v_uv + k * d * (1.0 + 0.3 * h));
+    }
+    c /= 18.0;
   }
   gl_FragColor = c * u_alpha;
 }`;

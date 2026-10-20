@@ -547,6 +547,12 @@ fonctions pures du temps ; les notes détaillées (chiffres, timecodes) sont ran
   de synthèse** et une **musique** calées sur le montage, des **sous-titres** mot à mot, des scènes qui se
   **ressemblent moins** (alterner fond sombre / clair, zoom serré sur un élément, carte flottante), et un
   ciblage de défilement plus sûr (un libellé présent dans la navigation et dans une section).
+- **Sans prompt, depuis le site** : `edit.propose` (IA, CLI) lit la marque et les sections du site derrière la
+  prise ouverte, construit les huit propositions du catalogue de recettes et en applique une (cartes hook,
+  nom, parcours, CTA ; plans légendés) ; les montages de campagne portent maintenant le look premium, un fond
+  animé aux couleurs de la marque (selon le ton : `circles`, `blob`, `waves`), les clics en anneaux et les
+  légendes accentuées. Les scènes alternent le côté vers lequel l'écran se tourne (`SceneTime.index`). Le
+  runner fait défiler vers une section plutôt que vers le lien de navigation du même nom.
 - **À faire (relevé par le cours, pas encore fait)** : calage sur le tempo de la musique ; shatter / shine
   avancés ; recadrage « éléments flottants » (un élément d'UI découpé qui pop hors de la capture) ; objets
   3D (pièces, logos extrudés) ; voix de synthèse (le cours utilise ElevenLabs : voix « Advertisement »,

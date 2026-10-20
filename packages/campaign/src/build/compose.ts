@@ -1,9 +1,13 @@
 import {
   type Animation,
   DEFAULT_EDIT,
+  DEFAULT_LOOK,
   type EditBackground,
   type EditState,
   type MainClip,
+  type MeshStyle,
+  meshPreset,
+  PREMIUM_LOOK,
   type TextOverlay,
   type TransitionKind,
   type ZoomSegment,
@@ -53,38 +57,52 @@ interface Look {
   text: Animation;
   /** Multiplies card lengths: calm tones breathe, energetic ones cut fast. */
   pace: number;
+  /** The SaaS-ad screen: frameless glass leaning in perspective (else the device frame). */
+  premium: boolean;
+  /** Moving cinematic backdrop built from the brand colour, or the flat gradient. */
+  backdrop: MeshStyle | null;
 }
 
 const LOOKS: Record<Tone, Look> = {
   energetic: {
-    transition: "slide-left",
+    transition: "push",
     transitionSeconds: 0.35,
     text: "words",
     pace: 0.85,
+    premium: true,
+    backdrop: "circles",
   },
   playful: {
     transition: "zoom",
     transitionSeconds: 0.4,
     text: "pop",
     pace: 0.9,
+    premium: true,
+    backdrop: "blob",
   },
   calm: {
-    transition: "fade",
+    transition: "blur",
     transitionSeconds: 0.6,
     text: "fade",
     pace: 1.15,
+    premium: true,
+    backdrop: "waves",
   },
   premium: {
-    transition: "fade",
+    transition: "blur",
     transitionSeconds: 0.7,
     text: "fade",
     pace: 1.2,
+    premium: true,
+    backdrop: "circles",
   },
   corporate: {
     transition: "dip",
     transitionSeconds: 0.5,
     text: "slide-up",
     pace: 1,
+    premium: false,
+    backdrop: null,
   },
 };
 
@@ -106,6 +124,9 @@ function palette(site: Site, campaign: Campaign) {
   const ink = toHex(site.brand.colors.ink) ?? "#111111";
   const deep = shade(primary, -0.45);
   return {
+    primary,
+    // A lighter tone of the brand for accent words on dark plates.
+    accent: shade(primary, 0.25),
     background: {
       kind: "gradient",
       from: primary,
@@ -246,6 +267,11 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
             color: colors.onPill,
             align: "center",
             background: colors.pill,
+            // One accent word per caption, flashed and swept as it comes in.
+            accent: colors.accent,
+            flash: true,
+            sweep: true,
+            glow: 0.1,
           },
         });
       }
@@ -256,14 +282,19 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
   return {
     ...DEFAULT_EDIT,
     aspect: format,
-    background: colors.background,
-    padding: vertical ? 0.04 : 0.06,
+    background: look.backdrop
+      ? meshPreset(look.backdrop, colors.primary, "dark")
+      : colors.background,
+    padding: vertical ? 0.06 : 0.08,
     clips,
     overlays,
     zooms,
     // The shell lays the recorded devices out (`initialLayers`) once it knows the source size.
     layers: null,
     camera: { ...DEFAULT_EDIT.camera, visible: false },
-    touch: { ...DEFAULT_EDIT.touch, style: "none" },
+    touch: look.premium
+      ? { style: "ripple", color: colors.accent, size: 44, spotlight: 0.5 }
+      : { ...DEFAULT_EDIT.touch, style: "none" },
+    screen: look.premium ? PREMIUM_LOOK : DEFAULT_LOOK,
   };
 }

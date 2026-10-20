@@ -341,7 +341,7 @@ export function starNumbers(text: string): string {
   if (text.includes("*")) return text;
   // A number with its spaces, separators, unit sign or currency.
   return text.replace(
-    /(?<![\w*])[+\-]?\d[\d\u00a0\u202f ,.]*\d?\s?(?:%|€|\$|£|k|M|x|×)?(?![\w*])/g,
+    /(?<![\w*])[+-]?\d[\d\u00a0\u202f ,.]*\d?\s?(?:%|€|\$|£|k|M|x|×)?(?![\w*])/g,
     (m) => {
       const core = m.replace(/\s+$/, "");
       const tail = m.slice(core.length);

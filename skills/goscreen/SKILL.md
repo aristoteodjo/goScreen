@@ -134,6 +134,11 @@ open it.
    Then let the voice lead the cut: `edit_alignToVoice` gives each scene the
    length of its phrase, so every scene change lands on the attack of a
    sentence and nothing opens on silence (a short scene slows down to fit).
+   With no brief at all, `edit_propose` reads the site behind the take and
+   builds a complete montage from a generic recipe (`list: true` shows the
+   eight proposals with their reasons; `pick` applies one; objective,
+   channels, tone, offer and cta refine it). Start there for a product
+   spot, then polish.
    To check a result without exporting, `edit_frame` draws one frame at a
    timeline time and returns it as an image: look at a scene's opening
    (t just after its start) and its middle before asking for an export.

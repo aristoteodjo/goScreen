@@ -11,7 +11,14 @@ import {
   type Site,
 } from "@goscreen/campaign";
 import { genresForRecipe } from "@goscreen/inspiration";
-import { outputSize, stageArea } from "@goscreen/render-engine";
+import {
+  type EditState,
+  isFlat,
+  outputSize,
+  type RecordedLayer,
+  type Size,
+  stageArea,
+} from "@goscreen/render-engine";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -42,6 +49,18 @@ function apply(proposal: Proposal, site: Site, campaign: Campaign) {
   const { chapters, layers, source, cameraUrl } = useSession.getState();
   const duration = usePlayback.getState().duration;
   const edit = buildEdit(proposal, { site, campaign, duration, chapters });
+  useEdit.getState().change(() => placeProposal(edit, layers, source, cameraUrl));
+  player.seek(0);
+}
+
+/** The devices of a proposal laid out: frameless glass when its screen look is premium. */
+export function placeProposal(
+  edit: EditState,
+  layers: RecordedLayer[],
+  source: Size | null,
+  cameraUrl: string | null,
+): EditState {
+  const premium = isFlat(edit.screen) === false;
   const placed =
     layers.length > 0 && source
       ? initialLayers(
@@ -51,10 +70,9 @@ function apply(proposal: Proposal, site: Site, campaign: Campaign) {
             edit.camera,
             cameraUrl !== null,
           ),
-        )
+        ).map((l) => ({ ...l, frame: !premium }))
       : null;
-  useEdit.getState().change(() => ({ ...edit, layers: placed }));
-  player.seek(0);
+  return { ...edit, layers: placed };
 }
 
 // Shared prompts of the same kind of film, to choose its direction.

@@ -141,15 +141,16 @@ describe("scene time", () => {
       { ...rec("d", 20, 21), transition: { kind: "fade" as const, duration: 0.3 } },
     ];
     // a and b are one scene of 5 s.
-    expect(sceneTimeAt(clips, 1)).toEqual({ local: 1, length: 5, opens: true });
-    expect(sceneTimeAt(clips, 4)).toEqual({ local: 4, length: 5, opens: true });
+    expect(sceneTimeAt(clips, 1)).toEqual({ local: 1, length: 5, opens: true, index: 0 });
+    expect(sceneTimeAt(clips, 4)).toEqual({ local: 4, length: 5, opens: true, index: 0 });
     // The card is not a scene.
     expect(sceneTimeAt(clips, 6)).toBeNull();
     // c opens after the card; d opens with its transition.
-    expect(sceneTimeAt(clips, 7.5)).toEqual({ local: 0.5, length: 2, opens: true });
+    expect(sceneTimeAt(clips, 7.5)).toEqual({ local: 0.5, length: 2, opens: true, index: 1 });
     const d = sceneTimeAt(clips, 9.2);
     expect(d?.local).toBeCloseTo(0.2, 6);
     expect(d?.length).toBe(1);
+    expect(d?.index).toBe(2);
   });
 });
 

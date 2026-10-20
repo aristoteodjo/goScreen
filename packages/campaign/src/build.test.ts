@@ -130,8 +130,12 @@ describe("buildEdit", () => {
       ...base,
       tone: "energetic",
     });
-    expect(calm.clips[1].transition?.kind).toBe("fade");
-    expect(fast.clips[1].transition?.kind).toBe("slide-left");
+    expect(calm.clips[1].transition?.kind).toBe("blur");
+    expect(fast.clips[1].transition?.kind).toBe("push");
+    // Both tones present the screen the SaaS way, on a moving backdrop.
+    expect(calm.screen.tilt.x).not.toBe(0);
+    expect(calm.background.kind).toBe("mesh");
+    expect(fast.touch.style).toBe("ripple");
     expect(
       calm.clips[0].kind === "slide" && calm.clips[0].duration,
     ).toBeGreaterThan(

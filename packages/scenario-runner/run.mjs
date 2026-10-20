@@ -452,7 +452,15 @@ async function play(rec, step) {
     case "scroll": {
       const ms = step.duration ?? 900;
       if (step.by !== undefined) return smoothScroll(page, step.by, ms);
-      const loc = locate(page, step.to);
+      let loc = locate(page, step.to);
+      // A text that is both a navigation link and a section title: scroll
+      // to the section, never to the menu.
+      if (step.to.text !== undefined && step.to.nth === undefined) {
+        const outside = locate(page, step.to).and(
+          page.locator(":not(nav *):not(header *)"),
+        );
+        if ((await outside.count()) > 0) loc = outside.first();
+      }
       await loc.waitFor({ state: "attached" });
       const box = await loc.boundingBox();
       if (box) await smoothScroll(page, box.y - viewport.height * 0.3, ms);

@@ -11,6 +11,12 @@ import {
   parseRecordingFile,
 } from "@goscreen/render-engine";
 import {
+  buildEdit,
+  buildProposals,
+  defaultCampaign,
+  parseCampaign,
+} from "@goscreen/campaign";
+import {
   adoptFilm,
   alignScenesToVoice,
   applyFilm,
@@ -47,6 +53,7 @@ import {
   stopExport,
 } from "@/modules/editor/exportCurrent";
 import { probeDuration } from "@/modules/editor/media";
+import { placeProposal } from "@/modules/editor/ProposalsPanel";
 import { useSession } from "@/modules/editor/session";
 import {
   SILENCE_DEFAULTS,
@@ -54,7 +61,7 @@ import {
   stripSilences,
   trimSilentEnds,
 } from "@/modules/editor/silences";
-import { newId, useEdit } from "@/modules/editor/store";
+import { newId, useEdit, usePlayback } from "@/modules/editor/store";
 import {
   record,
   setValue,
@@ -1072,6 +1079,71 @@ export function registerCommands() {
         label: "The AI is exporting",
       });
       return { file };
+    },
+  });
+  defineCommand({
+    name: "edit.propose",
+    title: "Propose a montage from the site",
+    description:
+      "Reads the site (brand, pages, sections) behind an open recording and builds a complete montage from a generic recipe, with no prompt: cards (hook, name, walkthrough, call to action) and captioned shots chosen by the campaign brief, the premium screen look and a backdrop in the brand's colours. `list: true` only returns the eight proposals (recipe, format, reasons); `pick` applies one (0 = best). Objective, channels, tone, offer and call to action refine the brief. Replaces the montage (undoable).",
+    input: z.object({
+      video,
+      url: z.string().url().optional(),
+      list: z.boolean().default(false),
+      pick: z.number().int().min(0).max(7).default(0),
+      objective: z
+        .enum(["launch", "acquisition", "promo", "feature", "recruit-supply", "awareness"])
+        .optional(),
+      channels: z.array(z.string()).optional(),
+      tone: z.enum(["energetic", "playful", "calm", "premium", "corporate"]).optional(),
+      offer: z.string().optional(),
+      cta: z.string().optional(),
+    }),
+    run: async (i) => {
+      await openForExport(i.video);
+      const s = useSession.getState();
+      const url = i.url ?? s.chapters[0]?.url;
+      if (!url) throw new Error("Give the site's url: this recording has no page of its own.");
+      const brand = await ipc.siteBrand(url);
+      const pages = [...new Set(s.chapters.map((c) => c.url))];
+      const sections = [];
+      for (const page of pages.length > 0 ? pages : [url]) {
+        const found = await ipc.siteSections(page).catch(() => []);
+        sections.push(...found.map((x) => ({ ...x, page })));
+      }
+      const site = { url, brand, sections };
+      const base = defaultCampaign(site);
+      const campaign = parseCampaign({
+        ...base,
+        ...(i.objective ? { objective: i.objective } : {}),
+        ...(i.channels ? { channels: i.channels } : {}),
+        ...(i.tone ? { tone: i.tone } : {}),
+        ...(i.offer ? { offer: i.offer } : {}),
+        ...(i.cta ? { cta: { ...base.cta, label: i.cta } } : {}),
+      });
+      const proposals = buildProposals({ site, campaign });
+      const view = proposals.map((p, index) => ({
+        index,
+        recipe: p.recipe.id,
+        label: p.recipe.label,
+        format: p.format,
+        variant: p.variant,
+        reasons: p.reasons,
+      }));
+      if (i.list) return { brand: brand.name, sections: sections.length, proposals: view };
+      const chosen = proposals[i.pick];
+      if (!chosen) throw new Error(`Only ${proposals.length} proposals.`);
+      const edit = buildEdit(chosen, {
+        site,
+        campaign,
+        duration: usePlayback.getState().duration,
+        chapters: s.chapters,
+      });
+      await applyEdit(
+        i.video,
+        placeProposal(edit, s.layers, s.source, s.cameraUrl),
+      );
+      return { applied: view[i.pick], clips: edit.clips.length, overlays: edit.overlays.length };
     },
   });
   defineCommand({
