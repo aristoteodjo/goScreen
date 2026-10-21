@@ -1,4 +1,5 @@
 pub mod android;
+pub mod compositions;
 pub mod control;
 pub mod export;
 pub mod inspiration;
