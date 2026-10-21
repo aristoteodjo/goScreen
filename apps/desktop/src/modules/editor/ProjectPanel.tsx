@@ -25,7 +25,7 @@ import { CompositionThumb, useCompositionsDialog } from "./CompositionsDialog";
 import { useCompositions } from "./compositions";
 import { PanelFrame } from "./PanelFrame";
 import { player, useSession } from "./session";
-import { useEdit, usePlayback } from "./store";
+import { timelineEnd, useEdit, usePlayback } from "./store";
 import { SHAPES } from "./TimelineToolbar";
 import { VoiceOverButton, VoiceOverMicMenu } from "./voiceover";
 import { type LeftTab, useWorkspace } from "./workspace";
@@ -66,7 +66,10 @@ function MediaBin() {
   const name = useSession((s) => s.name);
   const videoUrl = useSession((s) => s.videoUrl);
   const assetUrls = useSession((s) => s.assetUrls);
-  const duration = usePlayback((s) => s.duration);
+  const sourceDuration = usePlayback((s) => s.duration);
+  // No recording: the first tile is the montage itself (its cards).
+  const end = useEdit((s) => timelineEnd(s.edit));
+  const duration = videoUrl === null ? end : sourceDuration;
   const assets = useEdit((s) => s.edit.assets);
   const [query, setQuery] = useState("");
   const shown = assets.filter((a) =>
@@ -101,7 +104,11 @@ function MediaBin() {
             name={name}
             meta={formatTime(duration)}
             tone="bg-sky-600"
-            title="The recording: the V1 track"
+            title={
+              videoUrl === null
+                ? "The composition: cards on the Video track"
+                : "The recording: the V1 track"
+            }
             onActivate={() => player.first()}
           >
             {videoUrl ? (

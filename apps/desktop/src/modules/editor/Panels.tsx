@@ -63,12 +63,16 @@ const tabOf = (panel: Panel): Tab =>
       ? panel
       : "look";
 
-/** Look panels this recording has something for. */
+/** Look panels this recording has something for (a montage without one keeps only the background). */
 function useLook() {
   const layered = useSession((s) => s.layers.length > 0);
   const hasCamera = useSession((s) => s.cameraUrl !== null);
+  const hasRecording = useSession((s) => s.videoUrl !== null);
   return LOOK.filter(
-    (p) => (p.id !== "devices" || layered) && (p.id !== "camera" || hasCamera),
+    (p) =>
+      (p.id !== "devices" || layered) &&
+      (p.id !== "camera" || hasCamera) &&
+      ((p.id !== "touch" && p.id !== "zoom") || hasRecording),
   );
 }
 

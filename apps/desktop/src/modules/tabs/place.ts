@@ -1,4 +1,10 @@
-export type TabKind = "home" | "project" | "flow" | "editor" | "studio" | "reproduce";
+export type TabKind =
+  | "home"
+  | "project"
+  | "flow"
+  | "editor"
+  | "studio"
+  | "reproduce";
 
 export type Tab = { id: string; href: string; title: string; kind: TabKind };
 
@@ -6,8 +12,9 @@ export type Tab = { id: string; href: string; title: string; kind: TabKind };
 export function describe(href: string): { kind: TabKind; title: string } {
   const url = new URL(href, "http://app");
   const q = url.searchParams;
+  // `take.mp4` and `launch.edit.json` (a montage without a recording) -> their stem.
   const stem = (p: string) =>
-    (p.split("/").pop() ?? p).replace(/\.[^.]+$/, "") || p;
+    (p.split("/").pop() ?? p).replace(/\.edit\.json$|\.[^.]+$/, "") || p;
   if (url.pathname.startsWith("/editor"))
     return { kind: "editor", title: stem(q.get("video") ?? "Video") };
   if (url.pathname.startsWith("/flow"))
@@ -18,7 +25,10 @@ export function describe(href: string): { kind: TabKind; title: string } {
       title: decodeURIComponent(url.pathname.split("/")[2] ?? "Project"),
     };
   if (url.pathname.startsWith("/reproduce"))
-    return { kind: "reproduce", title: q.get("reference") ? "Reference" : "Reproduce" };
+    return {
+      kind: "reproduce",
+      title: q.get("reference") ? "Reference" : "Reproduce",
+    };
   if (url.pathname.startsWith("/studio"))
     return { kind: "studio", title: "Studio" };
   return { kind: "home", title: "Projects" };

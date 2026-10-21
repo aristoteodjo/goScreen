@@ -46,7 +46,8 @@ export function ExportDialog({
       const { videoUrl, videoPath, cameraUrl, micUrl, mediaOffset, name } =
         useSession.getState();
       const timeline = currentTimeline();
-      if (!videoUrl || !timeline)
+      // A montage without a recording has no videoUrl and exports all the same.
+      if (!videoPath || !timeline)
         throw new Error("The recording is not loaded yet.");
       player.pause();
       setProgress(0);

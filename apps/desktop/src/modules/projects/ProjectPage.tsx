@@ -44,6 +44,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ASPECT_OPTIONS,
+  BLANK_DEFAULTS,
+  type BlankAspect,
+  blankEdit,
+} from "@goscreen/render-engine";
 import { projectsIpc, type VideoEntry, type VslEntry } from "@/lib/ipc";
 import { queryClient } from "@/lib/queryClient";
 import { registry } from "@/lib/registry";
@@ -54,6 +60,7 @@ import { projectKeys } from "./ProjectsHome";
 
 type Pending =
   | { kind: "new" }
+  | { kind: "new-composition" }
   | { kind: "rename-project" }
   | { kind: "rename"; vsl: VslEntry }
   | { kind: "delete"; vsl: VslEntry }
@@ -83,6 +90,9 @@ export function ProjectPage({ project }: { project: string }) {
   const [pending, setPending] = useState<Pending>(null);
   const [url, setUrl] = useState("https://");
   const [device, setDevice] = useState("galaxy-s25");
+  // A composition video: a montage made of cards and layers, no recording.
+  const [aspect, setAspect] = useState<BlankAspect>(BLANK_DEFAULTS.aspect);
+  const [duration, setDuration] = useState(String(BLANK_DEFAULTS.duration));
   const fileInput = useRef<HTMLInputElement>(null);
   const close = (open: boolean) => {
     if (!open) setPending(null);
@@ -193,6 +203,14 @@ export function ProjectPage({ project }: { project: string }) {
               e.target.value = "";
             }}
           />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setPending({ kind: "new-composition" })}
+          >
+            <HugeiconsIcon icon={Add01Icon} size={15} />
+            New composition video
+          </Button>
           <Button size="sm" onClick={() => setPending({ kind: "new" })}>
             <HugeiconsIcon icon={Add01Icon} size={15} />
             New VSL
@@ -332,6 +350,11 @@ export function ProjectPage({ project }: { project: string }) {
                           Export
                         </span>
                       ) : null}
+                      {v.composition ? (
+                        <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300">
+                          Composition
+                        </span>
+                      ) : null}
                       <span className="text-xs text-muted-foreground">
                         {ago(v.modifiedMs)}
                       </span>
@@ -419,6 +442,59 @@ export function ProjectPage({ project }: { project: string }) {
         </div>
       </NameDialog>
       <NameDialog
+        open={pending?.kind === "new-composition"}
+        onOpenChange={close}
+        title="New composition video"
+        label="A video made of cards and layers (text, blocks, media), with no screen recording."
+        action="Create"
+        onSubmit={async (videoName) => {
+          const seconds = Number(duration);
+          if (!Number.isFinite(seconds) || seconds < 1 || seconds > 600)
+            throw new Error("Give a length between 1 and 600 seconds.");
+          const path = await projectsIpc.newEdit(
+            project,
+            videoName,
+            blankEdit({ aspect, duration: seconds }),
+          );
+          await refresh();
+          navigate({ to: "/editor", search: { video: path } });
+        }}
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label>Format</Label>
+          <Select
+            value={aspect}
+            onValueChange={(v) => setAspect(v as BlankAspect)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ASPECT_OPTIONS.filter((a) => a.id !== "auto").map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.label}
+                  <span className="ml-auto text-muted-foreground">
+                    {a.ratio}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="composition-duration">Length (seconds)</Label>
+          <Input
+            id="composition-duration"
+            type="number"
+            min={1}
+            max={600}
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className="h-9"
+          />
+        </div>
+      </NameDialog>
+      <NameDialog
         open={pending?.kind === "rename-project"}
         onOpenChange={close}
         title="Rename project"
@@ -459,7 +535,7 @@ export function ProjectPage({ project }: { project: string }) {
         open={pending?.kind === "delete-video"}
         onOpenChange={close}
         title="Delete this video?"
-        description="The video, its interactions and its edit go to the system trash."
+        description="The video (or the composition), its interactions and its edit go to the system trash."
         action="Move to trash"
         onConfirm={async () => {
           if (pending?.kind !== "delete-video") return;

@@ -19,7 +19,8 @@ import { startVoices, stopVoices } from "./voices";
 type Opened = {
   videoPath: string;
   name: string;
-  videoUrl: string;
+  // null: a montage without a recording (cards and layers only).
+  videoUrl: string | null;
   cameraUrl: string | null;
   micUrl: string | null;
   pointers: RecordedPointer[];
@@ -38,7 +39,8 @@ type SessionStore = Opened & {
   video: HTMLVideoElement | null;
   camera: HTMLVideoElement | null;
   mic: HTMLAudioElement | null;
-  open: (s: Opened) => void;
+  // `source` is given up front for a montage without a recording.
+  open: (s: Opened, source?: Size) => void;
   setVideo: (video: HTMLVideoElement | null) => void;
   setCamera: (camera: HTMLVideoElement | null) => void;
   setMic: (mic: HTMLAudioElement | null) => void;
@@ -49,7 +51,7 @@ type SessionStore = Opened & {
 export const useSession = create<SessionStore>((set) => ({
   videoPath: "",
   name: "",
-  videoUrl: "",
+  videoUrl: null,
   cameraUrl: null,
   micUrl: null,
   pointers: [],
@@ -61,7 +63,7 @@ export const useSession = create<SessionStore>((set) => ({
   video: null,
   camera: null,
   mic: null,
-  open: (s) => set({ ...s, source: null }),
+  open: (s, source = undefined) => set({ ...s, source: source ?? null }),
   setVideo: (video) => set({ video }),
   setCamera: (camera) => set({ camera }),
   setMic: (mic) => set({ mic }),

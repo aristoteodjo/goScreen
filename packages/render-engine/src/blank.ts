@@ -1,12 +1,7 @@
 import { DEFAULT_LOOK } from "./look";
 import { outputSize } from "./layout";
 import { sequenceDuration } from "./sequence";
-import type {
-  AspectId,
-  BlankSource,
-  EditState,
-  SlideClip,
-} from "./types";
+import type { AspectId, BlankSource, EditState, SlideClip } from "./types";
 
 // A montage without a recording: its main track is cards only, and
 // everything else is layers (text, blocks, compositions, media) and sound.
@@ -23,7 +18,8 @@ export const BLANK_DEFAULTS = {
 
 /** A blank montage's source: the 1080p frame of its format. */
 export function blankSource(aspect: AspectId): BlankSource {
-  const chosen: BlankAspect = aspect === "auto" ? BLANK_DEFAULTS.aspect : aspect;
+  const chosen: BlankAspect =
+    aspect === "auto" ? BLANK_DEFAULTS.aspect : aspect;
   return { kind: "none", ...outputSize(chosen, { width: 16, height: 9 }) };
 }
 

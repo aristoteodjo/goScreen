@@ -23,8 +23,16 @@ describe("a montage without a recording", () => {
     expect(edit.zooms).toEqual([]);
     expect(edit.touch.style).toBe("none");
     expect(edit.cursor.visible).toBe(false);
-    expect(blankSource("16:9")).toEqual({ kind: "none", width: 1920, height: 1080 });
-    expect(blankSource("1:1")).toEqual({ kind: "none", width: 1920, height: 1920 });
+    expect(blankSource("16:9")).toEqual({
+      kind: "none",
+      width: 1920,
+      height: 1080,
+    });
+    expect(blankSource("1:1")).toEqual({
+      kind: "none",
+      width: 1920,
+      height: 1920,
+    });
     // "auto" has nothing to follow: the default format stands in.
     expect(blankSource("auto")).toEqual(blankSource("16:9"));
   });

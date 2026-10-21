@@ -87,7 +87,7 @@ async function guarded<T>(
   if (running) throw new Error("An export is already running.");
   const s = useSession.getState();
   const timeline = currentTimeline();
-  if (!s.videoUrl || !timeline) throw new Error("The video is not loaded.");
+  if (!s.videoPath || !timeline) throw new Error("The video is not loaded.");
   player.pause();
   running = new AbortController();
   const progress = toast.loading(`${label}… 0%`);
@@ -182,9 +182,10 @@ export async function renderFrameAt(
 ): Promise<{ ms: number; width: number; height: number; jpeg: string }> {
   const s = useSession.getState();
   const timeline = currentTimeline();
-  if (!s.videoUrl || !timeline) throw new Error("The video is not loaded.");
+  if (!s.videoPath || !timeline) throw new Error("The video is not loaded.");
   const edit = useEdit.getState().edit;
-  const video = await load(s.videoUrl);
+  // No recording: the montage draws on its own frame (timeline.source).
+  const video = s.videoUrl === null ? null : await load(s.videoUrl);
   const camera =
     s.cameraUrl && edit.camera.visible
       ? await load(s.cameraUrl).catch(() => null)
@@ -203,7 +204,9 @@ export async function renderFrameAt(
     if (el) media.set(o.id, el);
   }
   try {
-    const source = { width: video.videoWidth, height: video.videoHeight };
+    const source = video
+      ? { width: video.videoWidth, height: video.videoHeight }
+      : timeline.source;
     const output = outputSize(edit.aspect, source, longSide);
     const canvas = document.createElement("canvas");
     canvas.width = output.width;
@@ -211,7 +214,7 @@ export async function renderFrameAt(
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas is unavailable.");
     const st = sourceTimeAt(edit.clips, t);
-    if (st !== null) {
+    if (st !== null && video) {
       await seek(video, st);
       if (camera) {
         const local = st - s.mediaOffset;
