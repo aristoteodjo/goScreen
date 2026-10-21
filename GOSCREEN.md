@@ -647,6 +647,35 @@ n'en sait rien.
 - UI : `Timeline.tsx` (pistes), `TimelineToolbar.tsx` (ajout de contenu, split, zoom de timeline),
   `TimelineMenus.tsx` (clic droit), `SelectionPanels.tsx` (propriétés de l'élément sélectionné), `actions.ts`.
 
+### Versions du montage
+
+- Un historique façon git, lisible par une personne et par l'IA. Une **version** = `{ id, at, author: "person" | "ai",
+  command?, message?, state }` (`render-engine/versions.ts`, pur et testé) : une version sans `command` est une
+  autosave, les autres sont explicites (`save`, `restore`, ou le nom de la commande IA qui l'a écrite).
+- Stockage (Rust `media/versions.rs`) : `<stem>.versions/<id>.json` (une version entière, écriture atomique) et
+  `index.json` sans les états ; un index perdu est reconstruit depuis les fichiers. Ids `[a-z0-9-]`, chemins dérivés
+  du MP4 ouvert, jamais arbitraires. Commandes `edit_versions_list`, `edit_version_get`, `edit_version_write`,
+  `edit_version_delete`, `edit_duplicate`.
+- Quand une version est écrite (`editor/versions.ts`) : à chaque commande IA qui modifie le montage (`applyEdit` :
+  l'état d'avant est d'abord gardé s'il n'est dans aucune version, puis la version signée de la commande, **avant**
+  d'écrire sur disque ou dans l'éditeur) ; à chaque sauvegarde explicite (⌘S ou « Save version », avec message) ;
+  par l'autosave (au plus toutes les 30 s, et en quittant l'éditeur). Une version identique à la dernière n'est pas
+  réécrite.
+- `pruneHistory` (pur) : toutes les versions explicites et IA restent ; les autosaves de la dernière heure aussi,
+  au-delà une par 5 minutes ; jamais plus de 200 versions (les autosaves les plus anciennes partent d'abord, la
+  plus récente reste toujours).
+- `diffEdits(a, b)` compare par id (clips, calques, zooms, sons, assets, devices : ajoutés, retirés, champs
+  changés) et par réglage global (chemins feuille, `touch.style: "ring" -> "ripple"`) ; `describeDiff` en fait
+  quelques lignes pour l'IA.
+- Éditeur, onglet **History** de l'inspecteur : liste (auteur, commande, message, heure), clic = diff avec le
+  montage à l'écran, **Restore** (modification annulable + version `restore`), **Save version**, **Duplicate as
+  new montage** (`edit_duplicate` : la vidéo en lien dur, sidecars et versions copiés sous `<stem>-<nom>`, journal
+  recalé sur les nouveaux noms de caméra et micro ; les liens symboliques ne sont jamais suivis, rien hors du dossier
+  de la prise, profondeur bornée ; s'ouvre dans un nouvel onglet).
+- IA (`control/versions.ts`) : `edit.versions`, `edit.diff` (par défaut : dernière version vs état courant,
+  `"current"` accepté), `edit.restore`, `edit.saveVersion`. `edit.save` rend `rejected` (chemin + raison de chaque
+  élément écarté par `parseEditReport`) au lieu de compteurs muets.
+
 ### Interface façon Premiere / After Effects
 
 - **Espaces de travail** (en haut à droite : Editing, Animation, Film, Audio) : mêmes panneaux, tailles et onglets

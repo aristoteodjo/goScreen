@@ -142,6 +142,14 @@ open it.
    To check a result without exporting, `edit_frame` draws one frame at a
    timeline time and returns it as an image: look at a scene's opening
    (t just after its start) and its middle before asking for an export.
+   Every montage change you make is kept as a version (signed with your
+   command), like git: `edit_versions` lists them, `edit_diff` says what
+   changed between two of them (by default the last version and the montage
+   as it is now, by ids and fields), `edit_restore` goes back to one (the
+   person can still undo it) and `edit_saveVersion` names the current state
+   with a message before a risky change. `edit_save` answers with
+   `rejected`: the items it could not read, with their path and why; fix
+   them rather than ignore them.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees, or `export_variants` for several formats at once (9:16 for
    stories, 16:9 for web, 1:1 and 4:5 for feeds). The goScreen window must
