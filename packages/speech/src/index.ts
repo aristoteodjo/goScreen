@@ -1,9 +1,11 @@
 export {
+  type ClipRange,
   type EyeSample,
   type FaceZoomOptions,
   eyesAt,
   faceTimes,
   faceZooms,
+  faceZoomsForClips,
 } from "./facezooms";
 export {
   type FaceBox,

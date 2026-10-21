@@ -31,6 +31,7 @@ import { PanelFrame } from "./PanelFrame";
 import { CameraPanel, DevicesPanel } from "./LayerPanels";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { ProposalsPanel } from "./ProposalsPanel";
+import { QcPanel } from "./QcPanel";
 import { ClipPanel, MusicPanel, OverlayPanel } from "./SelectionPanels";
 import { useSession } from "./session";
 import { type Panel, useEdit, usePlayback } from "./store";
@@ -46,7 +47,14 @@ const PANELS: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] = [
   { id: "audio", label: "Audio", icon: VolumeHighIcon },
 ];
 
-type Tab = "controls" | "film" | "look" | "audio" | "proposals" | "history";
+type Tab =
+  | "controls"
+  | "film"
+  | "look"
+  | "audio"
+  | "proposals"
+  | "history"
+  | "qc";
 
 const LOOK: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] =
   PANELS.filter((p) =>
@@ -59,7 +67,8 @@ const tabOf = (panel: Panel): Tab =>
     : panel === "film" ||
         panel === "audio" ||
         panel === "proposals" ||
-        panel === "history"
+        panel === "history" ||
+        panel === "qc"
       ? panel
       : "look";
 
@@ -89,6 +98,7 @@ export function Inspector() {
     { id: "audio", label: "Audio" },
     { id: "proposals", label: "Assistant" },
     { id: "history", label: "History" },
+    { id: "qc", label: "QC" },
   ];
   const open = (t: Tab) => {
     if (t === "controls")
@@ -144,6 +154,7 @@ export function Inspector() {
           {panel === "film" ? <FilmPanel /> : null}
           {panel === "proposals" ? <ProposalsPanel /> : null}
           {panel === "history" ? <HistoryPanel /> : null}
+          {panel === "qc" ? <QcPanel /> : null}
           {panel === "devices" ? <DevicesPanel /> : null}
           {panel === "camera" ? <CameraPanel /> : null}
           {panel === "background" ? <BackgroundPanel /> : null}

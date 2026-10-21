@@ -1,6 +1,6 @@
 import { ZOOM_IN, ZOOM_RAMP } from "@goscreen/render-engine";
 import { describe, expect, it } from "vitest";
-import { eyesAt, faceTimes, faceZooms } from "./facezooms";
+import { eyesAt, faceTimes, faceZooms, faceZoomsForClips } from "./facezooms";
 
 const eyes = [
   { t: 0.1, u: 0.48, v: 0.38 },
@@ -48,6 +48,24 @@ describe("faceZooms", () => {
     expect(zooms).toHaveLength(1);
     expect(zooms[0].focus).toEqual({ x: 0.5, y: 0.4 });
     expect(faceZooms([0, 4, 8], eyes, { close: 1 })).toEqual([]);
+  });
+});
+
+describe("faceZoomsForClips", () => {
+  it("alternates per clip even when clips do not touch in source time", () => {
+    const zooms = faceZoomsForClips(
+      [
+        { in: 0, out: 3 },
+        { in: 10, out: 12 },
+        { in: 20, out: 25 },
+        { in: 30, out: 31 },
+      ],
+      eyes,
+    );
+    expect(zooms.map((z) => z.id)).toEqual(["face-1", "face-2"]);
+    expect(zooms[0].start).toBeCloseTo(10 - (ZOOM_IN - 0.4));
+    expect(zooms[0].end).toBeCloseTo(12 + ZOOM_RAMP);
+    expect(zooms[1].start).toBeCloseTo(30 - (ZOOM_IN - 0.4));
   });
 });
 

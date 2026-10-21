@@ -28,13 +28,15 @@ export function eyesAt(eyes: EyeSample[], t: number): EyeSample | null {
   return best;
 }
 
+export type ClipRange = { in: number; out: number };
+
 /**
- * `cuts` are the boundaries of the clips in source seconds (n + 1 values for
- * n clips, each clip from cuts[i] to cuts[i+1]). Returns one zoom per close
- * clip, none for wide ones (a wide clip shows the whole frame).
+ * One framing per clip, alternating wide and close (close ones centred on
+ * the eyes). The clips are in source seconds and need not touch. Returns a
+ * zoom per close clip, none for wide ones (a wide clip shows the whole frame).
  */
-export function faceZooms(
-  cuts: number[],
+export function faceZoomsForClips(
+  clips: ClipRange[],
   eyes: EyeSample[],
   {
     wide = 1,
@@ -50,25 +52,37 @@ export function faceZooms(
     sourceHeight !== undefined && sourceHeight <= 1080
       ? Math.min(close, cap1080)
       : close;
-  const sorted = [...cuts].sort((a, b) => a - b);
   const out: ZoomSegment[] = [];
-  for (let i = 0; i + 1 < sorted.length; i++) {
+  clips.forEach((clip, i) => {
     const isClose = (i % 2 === 0) === startClose;
-    if (!isClose || scale <= wide) continue;
-    const from = sorted[i];
-    const to = sorted[i + 1];
-    if (to - from <= 0) continue;
-    const eye = eyesAt(eyes, from);
+    if (!isClose || scale <= wide || clip.out - clip.in <= 0) return;
+    const eye = eyesAt(eyes, clip.in);
     const lead = Math.max(0, ZOOM_IN - pushIn);
     out.push({
       id: id(out.length),
-      start: Math.max(0, from - lead),
-      end: to + ZOOM_RAMP,
+      start: Math.max(0, clip.in - lead),
+      end: clip.out + ZOOM_RAMP,
       scale,
       focus: eye ? { x: eye.u, y: eye.v } : { x: 0.5, y: 0.4 },
     });
-  }
+  });
   return out;
+}
+
+/**
+ * `cuts` are the boundaries of the clips in source seconds (n + 1 values for
+ * n clips, each clip from cuts[i] to cuts[i+1]); see faceZoomsForClips.
+ */
+export function faceZooms(
+  cuts: number[],
+  eyes: EyeSample[],
+  options: FaceZoomOptions = {},
+): ZoomSegment[] {
+  const sorted = [...cuts].sort((a, b) => a - b);
+  const clips: ClipRange[] = [];
+  for (let i = 0; i + 1 < sorted.length; i++)
+    clips.push({ in: sorted[i], out: sorted[i + 1] });
+  return faceZoomsForClips(clips, eyes, options);
 }
 
 /** The times to look for a face at: the start of each clip (plus a little). */

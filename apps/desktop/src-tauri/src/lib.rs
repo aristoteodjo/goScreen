@@ -68,6 +68,7 @@ pub fn run() {
             media::transcribe::media_words_load,
             media::transcribe::media_sidecar_write,
             media::envelope::media_envelope,
+            media::envelope::media_envelope_load,
             media::face::media_face_eyes,
             media::voiceover::microphone_level,
             media::voiceover::voiceover_start,

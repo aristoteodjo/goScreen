@@ -1,6 +1,11 @@
 import { brandSchema, sectionSchema } from "@goscreen/campaign";
 import type { AudioPiece } from "@goscreen/render-engine";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  type WordsFile,
+  wordSchema,
+  wordsFileSchema,
+} from "@goscreen/speech";
 import { z } from "zod";
 
 const proxyTargetSchema = z.object({
@@ -239,6 +244,11 @@ export const projectsIpc = {
   },
 };
 
+const envelopeSchema = z.object({
+  dt: z.number().positive(),
+  rms: z.array(z.number()),
+});
+
 export const ipc = {
   proxyOpen,
   ffmpegStatus: async () =>
@@ -362,6 +372,67 @@ export const ipc = {
   voiceOverCancel: async () => {
     await invoke("voiceover_cancel");
   },
+  /** Words of the take's voice by whisper.cpp (raw: not yet snapped to the sound). */
+  mediaTranscribe: async (
+    videoPath: string,
+    options: { model?: string; language?: string } = {},
+  ) =>
+    z
+      .object({
+        language: z.string(),
+        words: z.array(wordSchema),
+        audio: z.string(),
+      })
+      .parse(
+        await invoke("media_transcribe", {
+          videoPath,
+          model: options.model ?? null,
+          language: options.language ?? null,
+        }),
+      ),
+  mediaWordsSave: async (videoPath: string, words: WordsFile) => {
+    await invoke("media_words_save", { videoPath, words });
+  },
+  mediaWordsLoad: async (videoPath: string) =>
+    wordsFileSchema
+      .nullable()
+      .parse(await invoke("media_words_load", { videoPath })),
+  /** Loudness every 10 ms of the take's voice; measured and saved. */
+  mediaEnvelope: async (videoPath: string) =>
+    envelopeSchema.parse(await invoke("media_envelope", { videoPath })),
+  mediaEnvelopeLoad: async (videoPath: string) =>
+    envelopeSchema
+      .nullable()
+      .parse(await invoke("media_envelope_load", { videoPath })),
+  /** Writes takes.md or qc.md next to the take; returns its path. */
+  mediaSidecarWrite: async (
+    videoPath: string,
+    suffix: "takes.md" | "qc.md",
+    content: string,
+  ) =>
+    z
+      .string()
+      .parse(
+        await invoke("media_sidecar_write", { videoPath, suffix, content }),
+      ),
+  /** Eyes and face box at each source time, as fractions of the camera frame. */
+  mediaFaceEyes: async (videoPath: string, times: number[]) =>
+    z
+      .array(
+        z.object({
+          t: z.number(),
+          eyes: z.object({ u: z.number(), v: z.number() }).nullable(),
+          face: z
+            .object({
+              u: z.number(),
+              v: z.number(),
+              w: z.number(),
+              h: z.number(),
+            })
+            .nullable(),
+        }),
+      )
+      .parse(await invoke("media_face_eyes", { videoPath, times })),
   assetImport: async (videoPath: string, source: string) =>
     importedAssetSchema.parse(
       await invoke("asset_import", { videoPath, source }),

@@ -59,6 +59,9 @@ importers:
       '@goscreen/scenario':
         specifier: workspace:*
         version: link:../../packages/scenario
+      '@goscreen/speech':
+        specifier: workspace:*
+        version: link:../../packages/speech
       '@hugeicons/core-free-icons':
         specifier: ^4.3.5
         version: 4.3.5

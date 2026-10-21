@@ -87,6 +87,18 @@ pub fn media_envelope(video_path: String) -> Result<Envelope, String> {
     Ok(envelope)
 }
 
+/// The saved envelope of a take, or null when it was never measured.
+#[tauri::command(async)]
+pub fn media_envelope_load(video_path: String) -> Result<Option<Envelope>, String> {
+    let video = recording_path(&video_path)?;
+    let path = envelope_path(&video);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    serde_json::from_slice(&bytes).map(Some).map_err(|e| format!("{} is not an envelope: {e}", path.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
