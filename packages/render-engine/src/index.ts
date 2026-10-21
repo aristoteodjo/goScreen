@@ -18,6 +18,15 @@ export {
 } from "./animation";
 export { AUTO_SCALE, buildAutoZooms } from "./autoZoom";
 export {
+  BLANK_DEFAULTS,
+  type BlankAspect,
+  blankEdit,
+  blankSlide,
+  blankSource,
+  isBlank,
+  montageEnd,
+} from "./blank";
+export {
   hexToHsl,
   hslToHex,
   type MeshBackground,
