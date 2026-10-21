@@ -100,6 +100,22 @@ open it.
    choose (colours follow the film), `edit_updateBlock` changes its props. A
    good VSL opens on a kinetic title or logo card, uses a counter or chart for
    proof, and ends on a call to action.
+   When no block fits, write a **composition**: your own HTML page rendered
+   frame by frame as a layer (`compositions_list`, `compositions_preview`,
+   `edit_addComposition`, `edit_updateComposition`, `compositions_save`).
+   The contract: `{ id, label, box: {width, height} px, duration, transparent,
+   props: [{name, label, type text|longtext|color|number, default}], html }`.
+   The page is self-contained (no network: inline fonts and pictures as
+   `data:` URLs, under 256 KB) and deterministic: props arrive as
+   `window.__props` and as `{{name}}` in the HTML (escaped); it animates with
+   CSS/WAAPI, or defines `window.setT(t)` (seconds) and draws that exact
+   frame; `window.random(seed)` instead of `Math.random`; no timers or
+   `requestAnimationFrame` (the renderer seeks). `window.__size` and
+   `window.__duration` are set. Always `compositions_preview` a frame or two
+   before placing it; same input renders once (cached), so iterating is cheap.
+   The layer keeps the page with the video: the person can edit its HTML.
+   Prefer a block for the common elements; a composition for a layout,
+   a chart or an effect the catalogue does not have.
    Change the film as a whole with `edit_setFilm` (format, colours, font,
    captions, zoom, cards, `screen`, `backdrop`): the person's own edits stay.
    The SaaS-ad look, the one to propose for a product spot: `screen:

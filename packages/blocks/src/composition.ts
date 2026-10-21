@@ -222,14 +222,14 @@ export function prepareCompositionHtml(
   // The prelude goes right after <head> (so it runs before the page's own
   // scripts); a page without a head gets one.
   const head = /<head[^>]*>/i.exec(body);
-  if (head)
-    return body.slice(0, head.index + head[0].length) + prelude + body.slice(head.index + head[0].length);
+  const insert = (at: number, text: string) =>
+    `${body.slice(0, at)}${text}${body.slice(at)}`;
+  if (head) return insert(head.index + head[0].length, prelude);
   const html = /<html[^>]*>/i.exec(body);
   if (html)
-    return body.slice(0, html.index + html[0].length) + `<head>${prelude}</head>` + body.slice(html.index + html[0].length);
+    return insert(html.index + html[0].length, `<head>${prelude}</head>`);
   const doctype = /^\s*<!doctype[^>]*>/i.exec(body);
-  const start = doctype ? doctype[0].length : 0;
-  return body.slice(0, start) + prelude + body.slice(start);
+  return insert(doctype ? doctype[0].length : 0, prelude);
 }
 
 /**

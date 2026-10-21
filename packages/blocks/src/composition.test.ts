@@ -57,7 +57,7 @@ describe("compositions", () => {
     expect(messages("<script>var r=Math.random()</script>").join()).toMatch(
       /window\.random/,
     );
-    expect(messages("<p>" + "x".repeat(300 * 1024)).join()).toMatch(/KB/);
+    expect(messages(`<p>${"x".repeat(300 * 1024)}`).join()).toMatch(/KB/);
     // data: URLs stay local.
     expect(messages('<img src="data:image/png;base64,AA==">')).toEqual([]);
   });
