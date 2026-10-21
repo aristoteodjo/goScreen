@@ -76,6 +76,7 @@ import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand } from "./registry";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerMotionCommands } from "@/modules/motion/commands";
+import { registerVisualCommands } from "./visual";
 
 // The commands an AI can run. Each one is what a button of the studio does,
 // on the same data, so a person and an agent can take turns on a project.
@@ -140,6 +141,7 @@ const pickPaths = (flow: Flow, picked?: number[]) => {
 export function registerCommands() {
   registerMotionCommands();
   registerInspirationCommands({ currentEdit, applyEdit });
+  registerVisualCommands();
   defineCommand({
     name: "control.catalog",
     title: "List commands",
@@ -1061,7 +1063,7 @@ export function registerCommands() {
     name: "export.video",
     title: "Export a video",
     description:
-      "Opens the video in the editor and exports its montage to MP4; returns the file. The window comes to the front and the person sees the progress. One export at a time.",
+      "Opens the video in the editor and exports its montage to MP4; returns the file and `chunks` (how many 5 s chunks were reused from the render cache and how many were rendered: after a local fix, only the chunks it touched are rendered again). The window comes to the front and the person sees the progress. One export at a time.",
     input: z.object({
       video,
       resolution: z.enum(["720", "1080", "2160"]).default("1080"),
@@ -1073,12 +1075,12 @@ export function registerCommands() {
           "An export is already running (export.cancel to stop it).",
         );
       await openForExport(i.video);
-      const file = await exportCurrent({
+      const { file, chunks } = await exportCurrent({
         resolution: i.resolution,
         fps: i.fps,
         label: "The AI is exporting",
       });
-      return { file };
+      return { file, chunks };
     },
   });
   defineCommand({

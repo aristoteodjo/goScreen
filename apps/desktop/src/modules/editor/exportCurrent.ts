@@ -5,7 +5,14 @@ import { toast } from "sonner";
 import { ipc } from "@/lib/ipc";
 import { router } from "@/lib/router";
 import { openPlace } from "@/modules/tabs/tabs";
-import { exportVideo, load, release, seek } from "./exportVideo";
+import {
+  type ExportResult,
+  exportPreview,
+  exportVideo,
+  load,
+  release,
+  seek,
+} from "./exportVideo";
 import { loadImage } from "./media";
 import { drawAt } from "./render";
 import { outputSize, sourceTimeAt } from "@goscreen/render-engine";
@@ -49,18 +56,40 @@ export async function openForExport(video: string) {
   await sleep(500);
 }
 
-/** Exports the open montage (or `edit`) to MP4; returns the file. */
-export async function exportCurrent(
-  o: { resolution: Resolution; fps: number; label?: string },
-  edit: EditState = useEdit.getState().edit,
-): Promise<string> {
+export const STALL_MESSAGE =
+  "The export does not move: bring the goScreen window to the front (not minimised, not hidden), then try again.";
+
+type Render = Pick<
+  Parameters<typeof exportVideo>[0],
+  | "edit"
+  | "timeline"
+  | "videoUrl"
+  | "videoPath"
+  | "cameraUrl"
+  | "mediaOffset"
+  | "hasMic"
+  | "assetUrl"
+  | "name"
+  | "signal"
+  | "onProgress"
+>;
+
+/**
+ * Runs one render of the open montage (or `edit`) with the window guard:
+ * one at a time, a progress toast, and a stop when nothing moves for 30 s
+ * (macOS does not draw the video of a hidden window).
+ */
+async function guarded<T>(
+  label: string,
+  edit: EditState,
+  run: (r: Render) => Promise<T>,
+): Promise<T> {
   if (running) throw new Error("An export is already running.");
   const s = useSession.getState();
   const timeline = currentTimeline();
   if (!s.videoUrl || !timeline) throw new Error("The video is not loaded.");
   player.pause();
   running = new AbortController();
-  const label = o.label ?? "Exporting";
   const progress = toast.loading(`${label}… 0%`);
   let shown = 0;
   let lastMove = Date.now();
@@ -69,17 +98,13 @@ export async function exportCurrent(
     watchdog = setInterval(() => {
       if (Date.now() - lastMove < STALL_MS) return;
       void stopExport();
-      reject(
-        new Error(
-          "The export does not move: bring the goScreen window to the front (not minimised, not hidden), then try again.",
-        ),
-      );
+      reject(new Error(STALL_MESSAGE));
     }, 1000);
   });
   try {
-    const path = await Promise.race([
+    const result = await Promise.race([
       stalled,
-      exportVideo({
+      run({
         edit,
         timeline,
         videoUrl: s.videoUrl,
@@ -89,8 +114,6 @@ export async function exportCurrent(
         hasMic: s.micUrl !== null,
         assetUrl: (a) => assetUrl(edit, a),
         name: s.name,
-        longSide: RESOLUTIONS[o.resolution],
-        fps: o.fps,
         signal: running.signal,
         onProgress: (done) => {
           lastMove = Date.now();
@@ -102,7 +125,7 @@ export async function exportCurrent(
       }),
     ]);
     toast.success(`${label}: done`, { id: progress });
-    return path;
+    return result;
   } catch (e) {
     toast.error(`${label}: stopped`, {
       id: progress,
@@ -113,6 +136,39 @@ export async function exportCurrent(
     clearInterval(watchdog);
     running = null;
   }
+}
+
+/** Exports the open montage (or `edit`) to MP4; returns the file and the chunk report. */
+export async function exportCurrent(
+  o: { resolution: Resolution; fps: number; label?: string },
+  edit: EditState = useEdit.getState().edit,
+): Promise<ExportResult> {
+  return guarded(o.label ?? "Exporting", edit, (r) =>
+    exportVideo({ ...r, longSide: RESOLUTIONS[o.resolution], fps: o.fps }),
+  );
+}
+
+/**
+ * A draft of `from..to` of the open montage, at `scale` of 1080p and a low
+ * frame rate, written to `<stem>.previews/`; returns the file.
+ */
+export async function previewCurrent(o: {
+  from: number;
+  to: number;
+  scale: number;
+  fps: number;
+  label?: string;
+}): Promise<string> {
+  const edit = useEdit.getState().edit;
+  return guarded(o.label ?? "Drafting", edit, (r) =>
+    exportPreview({
+      ...r,
+      from: o.from,
+      to: o.to,
+      longSide: Math.round(RESOLUTIONS["1080"] * o.scale),
+      fps: o.fps,
+    }),
+  );
 }
 
 /**
@@ -218,7 +274,7 @@ export async function exportVariants(
     const edit = base.film
       ? applyFilm(base, { ...film, aspect }, locale)
       : { ...base, aspect };
-    const file = await exportCurrent(
+    const { file } = await exportCurrent(
       { ...o, label: `Exporting ${aspect}` },
       edit,
     );

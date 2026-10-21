@@ -1,5 +1,6 @@
 import {
   audioPieces,
+  chunkPlan,
   type EditState,
   frameMotion,
   outputSize,
@@ -31,6 +32,13 @@ export type ExportOptions = {
   onProgress: (done: number) => void;
 };
 
+export type ExportResult = {
+  file: string;
+  // How the export was put together: chunks taken from the render cache
+  // and chunks rendered now.
+  chunks: { total: number; reused: number; rendered: number };
+};
+
 function once(target: HTMLVideoElement, event: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const ok = () => {
@@ -53,12 +61,12 @@ export async function seek(video: HTMLVideoElement, t: number) {
   await done;
 }
 
-function jpeg(canvas: HTMLCanvasElement): Promise<Blob> {
+function jpeg(canvas: HTMLCanvasElement, quality = 0.98): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Frame encoding failed."))),
       "image/jpeg",
-      0.98,
+      quality,
     ),
   );
 }
@@ -119,12 +127,25 @@ async function loadOverlayMedia(
   return out;
 }
 
+type FrameSource = Pick<
+  ExportOptions,
+  | "edit"
+  | "timeline"
+  | "videoUrl"
+  | "cameraUrl"
+  | "mediaOffset"
+  | "assetUrl"
+  | "longSide"
+  | "fps"
+>;
+
 /**
- * Renders every output frame with the preview renderer and streams it to
- * FFmpeg. Deterministic: each frame is a seek, not a realtime capture.
+ * Everything needed to draw any output frame of a montage with the preview
+ * renderer: decoded media, the output canvas, the outgoing stills of
+ * transitions. Deterministic: each frame is a seek, not a realtime capture.
  * Frames walk the timeline (clips back to back), not the source.
  */
-export async function exportVideo(o: ExportOptions): Promise<string> {
+export async function openFrames(o: FrameSource) {
   const video = await load(o.videoUrl);
   const showCamera = o.cameraUrl !== null && o.edit.camera.visible;
   const camera =
@@ -138,8 +159,10 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
   const canvas = document.createElement("canvas");
   canvas.width = output.width;
   canvas.height = output.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas is unavailable.");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas is unavailable.");
+  // A function declaration below does not keep the null check: pin the type.
+  const ctx: CanvasRenderingContext2D = context;
 
   const end = sequenceDuration(o.edit.clips);
   const frames = Math.max(1, Math.round(end * o.fps));
@@ -177,71 +200,166 @@ export async function exportVideo(o: ExportOptions): Promise<string> {
     stillOf: (p) => stills.get(p.clip.id) ?? null,
   };
 
-  await ipc.exportBegin(o.name, o.fps);
+  /** Draws output frame i (timeline time i / fps) into the canvas. */
+  async function draw(i: number) {
+    const t = Math.min(end, i / o.fps);
+    const s = sourceTimeAt(o.edit.clips, t);
+    if (s !== null) {
+      await seek(video, s);
+      if (camera) {
+        const local = s - o.mediaOffset;
+        if (local >= 0 && local <= camera.duration) await seek(camera, local);
+      }
+    }
+    for (const ov of o.edit.overlays) {
+      const el = overlayMedia.get(ov.id);
+      if (ov.kind !== "video" || !(el instanceof HTMLVideoElement)) continue;
+      const local = t - ov.start + ov.in;
+      if (t >= ov.start && t <= ov.start + ov.duration && local <= el.duration)
+        await seek(el, local);
+    }
+    const dt = 1 / o.fps;
+    const motion = frameMotion(o.edit, timeline, output, t, dt);
+    // About one sample per 3 px of travel, a 180° shutter (half the frame).
+    const SAMPLES =
+      motion > 0 ? Math.max(2, Math.min(8, Math.ceil(motion / 3))) : 1;
+    if (actx && SAMPLES > 1) {
+      actx.globalAlpha = 1;
+      actx.clearRect(0, 0, output.width, output.height);
+      for (let k = 0; k < SAMPLES; k += 1) {
+        const tk = Math.max(
+          0,
+          Math.min(
+            end,
+            t + ((k - (SAMPLES - 1) / 2) * dt) / (2 * (SAMPLES - 1)),
+          ),
+        );
+        drawAt(ctx, sources, o.edit, timeline, output, tk, 1);
+        actx.globalAlpha = 1 / (k + 1);
+        actx.drawImage(canvas, 0, 0);
+      }
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(acc, 0, 0);
+      ctx.restore();
+    } else {
+      drawAt(ctx, sources, o.edit, timeline, output, t, 1);
+    }
+  }
+
+  return {
+    source,
+    output,
+    timeline,
+    end,
+    frames,
+    canvas,
+    draw,
+    jpeg: async (quality?: number) =>
+      (await jpeg(canvas, quality)).arrayBuffer(),
+    close() {
+      release(video);
+      release(camera);
+      for (const el of overlayMedia.values())
+        if (el instanceof HTMLVideoElement) release(el);
+    },
+  };
+}
+
+const aborted = () => new DOMException("Export cancelled", "AbortError");
+
+/**
+ * Exports the montage to MP4. The timeline is cut into chunks; the ones
+ * already in the render cache with the same fingerprint are reused, the
+ * others are rendered and streamed to FFmpeg; then the chunks are joined
+ * and the soundtrack mixed in one pass.
+ */
+export async function exportVideo(o: ExportOptions): Promise<ExportResult> {
+  const f = await openFrames(o);
   try {
-    for (let i = 0; i < frames; i += 1) {
-      if (o.signal.aborted)
-        throw new DOMException("Export cancelled", "AbortError");
-      const t = Math.min(end, i / o.fps);
-      const s = sourceTimeAt(o.edit.clips, t);
-      if (s !== null) {
-        await seek(video, s);
-        if (camera) {
-          const local = s - o.mediaOffset;
-          if (local >= 0 && local <= camera.duration) await seek(camera, local);
+    const plan = chunkPlan(o.edit, {
+      fps: o.fps,
+      longSide: o.longSide,
+      source: f.source,
+    });
+    const have = new Set(await ipc.renderCacheList(o.videoPath));
+    const total = plan.reduce((s, c) => s + c.frames, 0);
+    let done = 0;
+    let reused = 0;
+    let rendered = 0;
+    for (const chunk of plan) {
+      if (o.signal.aborted) throw aborted();
+      if (have.has(chunk.hash)) {
+        reused += 1;
+        done += chunk.frames;
+        o.onProgress(done / total);
+        continue;
+      }
+      await ipc.chunkBegin(o.videoPath, chunk.hash, o.fps);
+      try {
+        for (let i = 0; i < chunk.frames; i += 1) {
+          if (o.signal.aborted) throw aborted();
+          await f.draw(chunk.frame + i);
+          await ipc.exportFrame(await f.jpeg());
+          done += 1;
+          o.onProgress(done / total);
         }
+        await ipc.chunkFinish();
+      } catch (e) {
+        await ipc.exportCancel().catch(() => {});
+        throw e;
       }
-      for (const ov of o.edit.overlays) {
-        const el = overlayMedia.get(ov.id);
-        if (ov.kind !== "video" || !(el instanceof HTMLVideoElement)) continue;
-        const local = t - ov.start + ov.in;
-        if (
-          t >= ov.start &&
-          t <= ov.start + ov.duration &&
-          local <= el.duration
-        )
-          await seek(el, local);
-      }
-      const dt = 1 / o.fps;
-      const motion = frameMotion(o.edit, timeline, output, t, dt);
-      // About one sample per 3 px of travel, a 180° shutter (half the frame).
-      const SAMPLES = motion > 0 ? Math.max(2, Math.min(8, Math.ceil(motion / 3))) : 1;
-      if (actx && SAMPLES > 1) {
-        actx.globalAlpha = 1;
-        actx.clearRect(0, 0, output.width, output.height);
-        for (let k = 0; k < SAMPLES; k += 1) {
-          const tk = Math.max(0, Math.min(end, t + ((k - (SAMPLES - 1) / 2) * dt) / (2 * (SAMPLES - 1))));
-          drawAt(ctx, sources, o.edit, timeline, output, tk, 1);
-          actx.globalAlpha = 1 / (k + 1);
-          actx.drawImage(canvas, 0, 0);
-        }
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalAlpha = 1;
-        ctx.drawImage(acc, 0, 0);
-        ctx.restore();
-      } else {
-        drawAt(ctx, sources, o.edit, timeline, output, t, 1);
-      }
-      await ipc.exportFrame(await (await jpeg(canvas)).arrayBuffer());
-      o.onProgress((i + 1) / frames);
+      rendered += 1;
+      have.add(chunk.hash);
     }
     const clicks = o.edit.sound.clicks
-      ? tapTimes(timeline.pointers, o.edit.clips)
+      ? tapTimes(f.timeline.pointers, o.edit.clips)
       : [];
-    return await ipc.exportFinish(
+    const file = await ipc.exportAssemble(
       o.videoPath,
+      o.name,
+      plan.map((c) => c.hash),
       clicks,
       o.edit.sound.volume,
       audioPieces(o.edit, o.hasMic),
     );
-  } catch (e) {
-    await ipc.exportCancel().catch(() => {});
-    throw e;
+    return { file, chunks: { total: plan.length, reused, rendered } };
   } finally {
-    release(video);
-    release(camera);
-    for (const el of overlayMedia.values())
-      if (el instanceof HTMLVideoElement) release(el);
+    f.close();
+  }
+}
+
+export type PreviewOptions = Omit<ExportOptions, "name" | "hasMic"> & {
+  from: number;
+  to: number;
+};
+
+/**
+ * A small, fast and silent draft of `from..to`: the same frames as the
+ * export at a lower size and frame rate, written to `<stem>.previews/`.
+ */
+export async function exportPreview(o: PreviewOptions): Promise<string> {
+  const f = await openFrames(o);
+  try {
+    const from = Math.max(0, Math.min(f.end, o.from));
+    const to = Math.max(from, Math.min(f.end, o.to));
+    const first = Math.round(from * o.fps);
+    const last = Math.max(first + 1, Math.round(to * o.fps));
+    await ipc.previewBegin(o.videoPath, from, to, o.fps, o.longSide);
+    try {
+      for (let i = first; i < last; i += 1) {
+        if (o.signal.aborted) throw aborted();
+        await f.draw(i);
+        await ipc.exportFrame(await f.jpeg(0.9));
+        o.onProgress((i + 1 - first) / (last - first));
+      }
+      return await ipc.previewFinish();
+    } catch (e) {
+      await ipc.exportCancel().catch(() => {});
+      throw e;
+    }
+  } finally {
+    f.close();
   }
 }

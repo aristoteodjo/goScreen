@@ -133,7 +133,7 @@ describe("chunkPlan", () => {
     expect(zoomed[4].hash).not.toBe(plain[4].hash);
     expect(zoomed[0].hash).toBe(plain[0].hash);
     const red = chunkPlan(
-      { ...base, background: { kind: "solid", color: "#ff0000" } },
+      { ...base, background: { kind: "none" } },
       settings,
     );
     expect(red.every((c, i) => c.hash !== plain[i].hash)).toBe(true);

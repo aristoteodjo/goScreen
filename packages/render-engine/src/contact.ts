@@ -34,8 +34,9 @@ export type ContactSheet = {
   height: number;
   columns: number;
   cells: SheetCell[];
-  // The picture of one cell, in pixels.
+  // The picture of one cell, in pixels, and the label band under it.
   frame: { width: number; height: number };
+  labelHeight: number;
   fontSize: number;
 };
 
@@ -103,6 +104,7 @@ export function contactSheet(o: {
     columns,
     cells,
     frame: { width: cellWidth, height: frameHeight },
+    labelHeight: label,
     fontSize: Math.max(10, Math.round(label * 0.62)),
   };
 }
