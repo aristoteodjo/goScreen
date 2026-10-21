@@ -109,11 +109,13 @@ async function before(
             ? ['[data-ai="motion-shots"]', '[data-ai="motion-steps"]']
             : command.startsWith("motion.") || command.startsWith("training.")
               ? ['[data-ai="references"]', '[data-ai="tabs"]']
-              : command === "edit.animate" || command === "edit.updateBlock"
+              : command === "edit.animate" ||
+                  command === "edit.updateBlock" ||
+                  command === "edit.updateComposition"
       ? [`[data-ai-item="${item}"]`, '[data-ai="timeline"]']
       : command === "edit.setFilm"
         ? ['[data-ai="inspector"]']
-        : command === "edit.addBlock"
+        : command === "edit.addBlock" || command === "edit.addComposition"
           ? ['[data-ai="program"]']
           : command.startsWith("edit.")
             ? ['[data-ai="timeline"]']
