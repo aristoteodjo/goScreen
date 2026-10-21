@@ -417,16 +417,15 @@ pub fn block_ext(transparent: bool) -> &'static str {
     }
 }
 
-/// A render's fingerprint (FNV-1a, 64 bits): the same page at the same
-/// size, length, rate and alpha gives the same file, so it is rendered once.
+/// A render's fingerprint (SHA-256): the same page at the same size, length,
+/// rate and alpha gives the same file, so it is rendered once. A cryptographic
+/// digest keeps two different pages from ever sharing a cached file.
 pub fn render_key(html: &str, width: u32, height: u32, fps: u32, duration: f64, transparent: bool) -> String {
-    let mut h: u64 = 0xcbf29ce484222325;
-    let key = format!("{width}x{height}@{fps}/{duration}/{}\n{html}", if transparent { "a" } else { "o" });
-    for b in key.bytes() {
-        h ^= b as u64;
-        h = h.wrapping_mul(0x100000001b3);
-    }
-    format!("{h:016x}")
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(format!("{width}x{height}@{fps}/{duration}/{}\n", if transparent { "a" } else { "o" }));
+    h.update(html.as_bytes());
+    format!("{:x}", h.finalize())
 }
 
 /// Where rendered blocks are kept between sessions, by fingerprint.
@@ -573,7 +572,7 @@ mod tests {
     #[test]
     fn render_keys_follow_every_input() {
         let a = render_key("<p>", 100, 100, 30, 2.0, true);
-        assert_eq!(a.len(), 16);
+        assert_eq!(a.len(), 64);
         assert_eq!(a, render_key("<p>", 100, 100, 30, 2.0, true));
         assert_ne!(a, render_key("<b>", 100, 100, 30, 2.0, true));
         assert_ne!(a, render_key("<p>", 100, 100, 25, 2.0, true));
