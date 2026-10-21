@@ -1,0 +1,10 @@
+{
+  "name": "@goscreen/skill-evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plays scenarios against goScreen with the goscreen skill and scores the montage with mechanical quality rules.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

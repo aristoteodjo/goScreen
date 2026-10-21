@@ -7,6 +7,7 @@
       "packages/*/src/**/*.ts",
       "packages/scenario-runner/*.mjs",
       "packages/mcp-server/*.mjs",
+      "packages/skill-evals/*.mjs",
       "!apps/*/src/components/ui",
       "!apps/*/src/routeTree.gen.ts"
     ]

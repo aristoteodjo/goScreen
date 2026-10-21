@@ -362,9 +362,39 @@ données ; la personne voit tout et garde la main (⌘Z annule une modification 
   du catalogue de l'app, `tools/call` ; les points deviennent `_` ; captures rendues en images ; app fermée =
   erreur d'outil lisible) et `cli.mjs` (`goscreen <commande> '<json>'`). `node:http` et pas `fetch` (qui
   abandonne après 5 min). Testés de bout en bout contre un faux serveur.
-- **Skill** `skills/goscreen/SKILL.md` : le modèle (projet, VSL, nœuds, étapes, cibles), le déroulé (inspecter,
-  s'accorder avec la personne, créer, simuler, corriger, tourner, retoucher, exporter) et les règles (demander
-  avant d'agir sur un vrai site).
+- **Skill routeur** `skills/goscreen/SKILL.md` : court, il dit quel sous-document charger selon la tâche, plus
+  deux règles valables partout (aperçu d'abord, export sur demande explicite ; `edit.get` juste avant tout
+  `edit.save`, ne jamais écraser le travail de la personne). Sous-documents : `workflow.md` (inspecter,
+  s'accorder, créer par petites étapes, planche de stills avec `edit.frame`, corriger, révisions une à la fois,
+  table QC avant export, chiffres réels dans le compte rendu), `rules.md` (barre de qualité : formats 9:16 /
+  16:9 / 1:1 / 4:5 avec zones sûres et tailles minimales en fractions du cadre, ouverture qui montre la promesse
+  dès l'image 1, ≤ 6 mots par ligne et un accent, courbes jamais linéaires (`out`, `bezier(0.16,1,0.3,1)`),
+  entrée = montée + fondu et sortie plus courte, « hero then place », zooms ≤ 1,15 environ toutes les 4 s,
+  gris foncés jamais noirs, un accent à la fois, vrais logos seulement, un chiffre dit = `stat-counter`, prises
+  face caméra coupées sur les mots, liste d'interdits (pulse, bounce, elastic, glow > 0,12, néon, logo
+  d'ouverture, fondu enchaîné sur place…) et la checklist en 12 points à relire sur chaque planche de stills),
+  `script.md` (une idée par vidéo, structure hook → produit → solution → 2-3 fonctionnalités chiffrées → CTA,
+  longueur = mots ÷ 2,3, hook ≤ 3 s, 4 portes de qualité, ouvertures interdites), `vsl.md` (projets, flows,
+  étapes, cibles, simuler, tourner), `editing.md` (chaque commande `edit.*`, blocs, animation, film,
+  inspirations, avec un exemple JSON conforme à `commands.ts`). La règle « un seul élément animé par scène »
+  a disparu : chaque beat est une action. Les commandes prévues ailleurs (`edit.stills`, `edit.preview`,
+  `edit.addComposition`, `edit.versions`, `edit.diff`, `edit.restore`, `edit.transcribe`, `edit.pickTakes`,
+  `edit.tightCut`, `edit.syncMap`, `edit.faceZooms`, `edit.captions`, `edit.qc`) sont citées dans « If
+  available » : à utiliser si `control.catalog` les liste, sans en dépendre.
+- **Montages de référence** `skills/goscreen/references/` : trois `.edit.json` écrits à la main avec le
+  vocabulaire réel (`ad-9x16`, pub produit 22 s ; `launch-16x9`, lancement 47 s ; `proof-1x1`, preuve chiffrée
+  19 s), la barre de qualité qu'une IA ouvre et imite (jamais ses mots). `layers: null` pour qu'ils s'ouvrent
+  sur n'importe quelle prise ; le README dit la prise attendue (format, durée) et ce qu'un fichier statique ne
+  porte pas (blocs rendus par montage, sons). `references.test.ts` (render-engine) vérifie que
+  `parseEditState` les accepte sans perdre un champ.
+- **Évals** `packages/skill-evals/` (Node, sans dépendance ; `pnpm evals`) : `scenarios.mjs` (pub 9:16 avec
+  trois phrases imposées, lancement 16:9, preuve 1:1, explainer avec voix, VSL d'un site public), `run.mjs`
+  (l'app ouverte : donne le scénario à Claude par `claude -p` si la CLI existe, sinon imprime le prompt et
+  attend ; puis `edit.get` par `mcp-server/client.mjs` et note ; `--score-only <fichier>` note un `.edit.json`
+  seul), `score.mjs` (pur, testé) : durée dans la fourchette, format, un changement visuel ≤ 1 s, ≤ 6 mots par
+  ligne, un accent par légende, aucune courbe linéaire ni overshoot, zooms ≤ 1,15, aucun trou > 4 s sans
+  mouvement, jamais deux effets à moins de 0,2 s (le kicker d'un titre excepté), CTA final, phrases imposées
+  présentes, dernière carte = première quand le film est annoncé en boucle. Les trois références passent.
 - Studio : pastille « Connect an AI » en bas à gauche (état, commandes prêtes à copier pour Claude Code, Claude
   Desktop et la CLI, journal de ce que l'IA a fait).
 - L'export suit la fenêtre : `backgroundThrottling: "disabled"`, la fenêtre passe au premier plan, et un
