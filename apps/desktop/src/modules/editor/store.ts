@@ -82,7 +82,8 @@ export type Panel =
   | "clip"
   | "overlay"
   | "music"
-  | "history";
+  | "history"
+  | "qc";
 export type Quality = 1 | 0.5 | 0.25;
 /** Timeline tool, as in Premiere: select (V), blade (C), hand (H). */
 export type Tool = "select" | "blade" | "hand";

@@ -33,6 +33,8 @@ packages/
                       rendu HTML, comparaison, relecture par une IA, exemples d'apprentissage du modèle local
   inspiration/        Bibliothèque de prompts partagés (pur, zod) : direction créative lue dans chaque prompt,
                       recherche, réglages de film, brief pour l'IA
+  speech/             Prise de parole (pur, zod) : fichier de mots, recalage sur l'onde, prises, tight cut,
+                      sync map, zooms visage, QC
 ```
 
 ## Règles
@@ -278,44 +280,61 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
 - `adoptFilm` fait d'un montage quelconque un film : premier et dernier cartons = ouverture et fin, le texte qui
   commence avec un clip devient le titre de sa scène. Panneau Film « Make it a film », ou `edit.setFilm` par l'IA.
 
-### Tranche 7 : prise de parole face caméra (guide « Edit a video 100% with Claude Code », relevé le 2026-10-21)
+### Prise de parole face caméra (guide « Edit a video 100% with Claude Code », relevé le 2026-10-21)
 
 Une personne parle à la caméra, répète chaque ligne sans couper, nomme ses effets à voix haute ; le montage
 part de la voix, mot par mot. Rien ne touche la capture : la prise caméra (`<stem>.camera.mp4`, ou une vidéo
-importée) devient la piste principale, l'écran est facultatif. Ordre de priorité pour la qualité perçue :
-mots et recalage, tight cut, prises, sync map et QC, zooms visage, légendes, ducking, étalonnage, détourage.
+importée) est la source du visage, le son vient du micro nettoyé (`<stem>.mic.m4a`) ou de la vidéo elle-même.
+Tout le raisonnement vit dans `@goscreen/speech` (pur, zod, testé) ; Rust n'apporte que whisper, l'enveloppe et
+la détection du visage ; `modules/editor/speech.ts` est la coquille qui lit et écrit les fichiers à côté de la prise.
 
-- **Mots** (`edit.transcribe`, Rust `media/transcribe.rs` : whisper.cpp en process enfant, modèle dans
-  `<data>/goScreen/models/` comme le modèle local) : `<stem>.words.json`, un mot = `{ text, start, end, p }`.
-  Les timestamps STT sont jusqu'à 1/3 s en avance : chaque début de mot est **recalé sur l'attaque** mesurée
-  dans l'enveloppe du son (`snapToOnset`, pur ; enveloppe par FFmpeg `astats` ou depuis le WAV natif).
-- **Prises** (`edit.pickTakes`, `@goscreen/speech`, pur) : les lignes du script (ou le script reconstruit
-  depuis les mots, soumis à la personne) sont appariées à toutes leurs prises ; la **dernière prise complète**
-  gagne sauf bafouille, mot coupé ou énergie plate ; `takes.md` dit ligne, prise, temps et raison. Les
-  redémarrages (même début répété) sont retirés. Résultat : la séquence de clips `in/out` en temps source.
-- **Tight cut** (`edit.tightCut`) : pauses > 0,15 s coupées sur la **piste principale** (pas seulement l'audio :
-  `edit.cleanSilences` n'agit que sur les `AudioClip`), poignées de 2 images, jamais au milieu d'un mot,
-  micro-fondu audio à chaque coupe.
-- **Sync map** (`edit.syncMap`, pur) : une table « mot (n-ième occurrence) → effet » ; chaque effet (coupe,
-  zoom, texte, bloc, SFX) est posé à 2 images au plus du début de son mot. Entre deux beats, un changement
-  toutes les 2 à 4 s, jamais deux effets ensemble.
-- **Zooms visage** (`edit.faceZooms`, Rust `media/face.rs` : macOS Vision, MediaPipe en repli) : les yeux de
-  chaque clip ; cadrage large 100 % et serré 120 % **alternés à chaque coupe**, push-in 0,4 s sur les mots
-  d'emphase, plafond 115 % en 1080p. Remplace `buildAutoZooms` pour une prise caméra.
-- **Légendes par mot** (`edit.captions`) : 2 à 4 mots, mot actif en accent, fondu 80 ms, bas-centre, jamais
-  sur la boîte du visage, zone sûre du format.
-- **Son** : voix nettoyée (`VOICE_CHAIN`), master -14 LUFS / -1 dBTP (aujourd'hui seule la voix du studio passe
-  par `loudnorm=I=-16`, l'export mixe par `amix` sans `loudnorm` ni ducking), musique 18-22 dB sous la voix et
-  **duckée** (enveloppe tirée des phrases, pure), SFX seulement sur les beats de la sync map.
-- **Étalonnage** (plus tard) : `EditState.grade` (contraste, température, saturation, vignette, grain), raccord
-  d'exposition entre prises ; un clip `grade: false` sert de « reveal ». Détourage du sujet (texte derrière la
-  tête, Vision) après.
-- **QC** (`edit.qc`, mécanique, pass/fail) : effets à 2 images de leur mot, texte sur le visage, zone sûre,
-  coupe mi-mot, -14 LUFS, dernière image = première (boucle), image noire ou figée. Export seulement si tout
-  passe. Chaque commande rend ses **chiffres réels** (durée brute, finale, prises retirées, pauses coupées) :
-  la skill les rapporte, et les blocs « bande de timeline » et « compteur » peuvent les dessiner.
-- Révisions : un changement à la fois (« Don't touch anything else »), chaque changement listé avec son temps,
-  note /10 et « 3 choses qui retiennent » ; la version (tranche 1) montre que le diff est minimal.
+- **Mots** (`edit.transcribe`, bouton Transcribe du panneau d'un clip de prise ou du Mic ; Rust
+  `media/transcribe.rs`) : whisper.cpp en process enfant (`whisper-cli` dans le PATH, Homebrew, ou
+  `GOSCREEN_WHISPER`), modèle `ggml-base` ou `small` téléchargé une fois dans `<data>/goScreen/models/whisper/`
+  (`local_ai::fetch_file`, progression `speech-progress`), voix extraite par FFmpeg en WAV 16 kHz mono, sortie
+  `-ojf -ml 1 -sow` (un segment par mot, confiance par token) convertie au contrat **`<stem>.words.json`** :
+  `{ language, source: "whisper" | "manual", words: [{ text, start, end, p }] }` (secondes en temps source,
+  `p` 0-1). Les timestamps STT sont en avance : `media/envelope.rs` mesure l'**enveloppe RMS** (10 ms, PCM décodé
+  par FFmpeg, `<stem>.envelope.json`) et `snapToOnset` (pur) recale chaque début de mot sur l'attaque la plus
+  proche (montée nette au-dessus d'un seuil relatif entre plancher et crête), jamais plus de 0,35 s, jamais après
+  la fin du mot ni avant la fin du précédent. whisper absent : erreur `{ code: "whisper-missing", detail }` qui
+  dit comment l'installer.
+- **Prises** (`takes.ts`, `edit.pickTakes`, dialogue « Pick takes… ») : chaque ligne du script est appariée à
+  toutes ses prises (`matchTakes` : normalisation accents/casse/ponctuation, un trait d'union ou une apostrophe
+  joint le mot, distance de Levenshtein par ligne sur une fenêtre glissante, un tiers des mots peut différer,
+  jamais deux prises sur les mêmes mots) ; les **redémarrages** (le début de la ligne redit avant une prise)
+  sont relevés. `pickTakes` garde la **dernière prise propre** sauf bafouille (mot répété ou interrompu), mot
+  coupé (`p` < 0,4 ou plus de 1,2 s) ou énergie plate (écart-type de l'enveloppe < 20 % de sa moyenne) ; sinon
+  celle qui a le moins de défauts, avec la raison. `takesReport` écrit `<stem>.takes.md` (ligne, prise, temps,
+  raison) et les chiffres réels `{ rawSeconds, keptSeconds, takesRemoved, restartsRemoved }`. Sans script,
+  `scriptFromWords` reconstruit les phrases (ponctuation ou pause > 0,6 s, chaque phrase gardée une fois, la
+  dernière lecture gagne) et la commande le **renvoie pour accord** avant d'appliquer. Résultat : un clip par
+  ligne dans l'ordre du script, poignée de 2 images.
+- **Tight cut** (`tightcut.ts`, `edit.tightCut`, bouton Tight cut) : chaque pause > 0,15 s de la **piste
+  principale** est coupée (pas seulement l'audio : `edit.cleanSilences` n'agit que sur les `AudioClip`), poignées
+  de 2 images, **jamais au milieu d'un mot** (une coupe tombe toujours entre `end` d'un mot et `start` du suivant),
+  rend `{ clips, pausesCut, removedSeconds }`.
+- **Sync map** (`syncmap.ts`, `edit.syncMap`) : « mot (n-ième occurrence, -1 = la dernière, une courte phrase
+  marche aussi) → effet » ; `syncMap` pose chaque effet au début de son mot, `checkSync` vérifie à 2 images,
+  `beatGaps` liste les trous sans changement (> 4 s), les effets empilés (< 0,2 s) et les changements trop
+  serrés (< 2 s). Effets : texte, zoom (temps source), coupe, SFX (asset audio), retime d'un calque ou d'un zoom
+  existant. Chaque calque posé porte `syncWord: { word, nth }` (`OverlayBase`, lu par le QC).
+- **Zooms visage** (`facezooms.ts`, `edit.faceZooms`, bouton Face zooms ; Rust `media/face.rs`) : pour le début
+  de chaque clip, une image est extraite par FFmpeg (640 px) et les yeux trouvés par le détecteur de visages du
+  système (Core Image `CIDetector`, précision haute, en process ; repères rendus en `u, v` depuis l'origine
+  bas-gauche de Core Image) ; hors macOS, erreur claire « face detection needs macOS » (MediaPipe plus tard).
+  Cadrage large 100 % et serré 120 % **alternés à chaque coupe** (`faceZoomsForClips`), serré centré sur les
+  yeux, push-in de 0,4 s visible après la coupe (le segment commence avant la coupe, dans du temps source retiré),
+  plafond 115 % quand la source fait 1080p ou moins. Remplace les zooms `face-*` précédents, jamais les autres.
+- **QC** (`qc.ts`, `edit.qc`, onglet **QC** de l'inspecteur) : table pass/fail mécanique : effets `syncWord` à
+  2 images de leur mot (temps timeline du mot via `timelineTimesOf`), texte ∩ boîte du visage, zone sûre 5 %,
+  coupe mi-mot, boucle (première carte = dernière, ou `loop` déclaré), clip vide ou figé ; chiffres réels (durée,
+  clips, mots, effets synchronisés, échecs). Écrit `<stem>.qc.md`.
+- Chaque commande rend ses chiffres réels ; chaque bouton est une modification annulable (`change`, clé
+  `speech`) ; les mutations utilisent `isPending` et vérifient la forme dans `onSuccess`.
+- Pas encore : légendes par mot, musique et loudness (tranche 6) ; **étalonnage** (`EditState.grade` :
+  contraste, température, saturation, vignette, grain, raccord d'exposition entre prises, clip `grade: false`
+  en « reveal ») et **détourage** du sujet (texte derrière la tête, Vision) : voir « À faire ».
 
 ### Blocs : compositions HTML (méthode HyperFrames)
 
@@ -936,6 +955,10 @@ n'en sait rien.
   - inspirations : détecter le tempo d'une musique (grille de temps) et caler coupes, cartons et entrées de blocs
     dessus (« beat-sync », la technique la plus demandée) ; flou de mouvement à l'export (sous-images mélangées) ;
     grain/vignette en option de film.
+  - prise de parole : **étalonnage** (`EditState.grade` : contraste, température, saturation, vignette, grain ;
+    raccord d'exposition entre prises ; un clip `grade: false` sert de « reveal ») et **détourage** du sujet
+    (texte derrière la tête, Vision) ; détection du visage hors macOS (MediaPipe) ; micro-fondu audio à chaque
+    coupe du tight cut ; whisper.cpp n'est pas embarqué dans l'app packagée (`brew install whisper-cpp`).
 
 ## Plan : vidéos produit automatiques, pilotées par la campagne
 

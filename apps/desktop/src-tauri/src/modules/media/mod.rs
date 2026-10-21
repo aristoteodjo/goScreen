@@ -26,8 +26,11 @@ use tokio::sync::{mpsc, OnceCell};
 
 use super::local_http;
 
+pub mod envelope;
+pub mod face;
 pub mod mic;
 pub mod silence;
+pub mod transcribe;
 pub mod versions;
 pub mod voiceover;
 

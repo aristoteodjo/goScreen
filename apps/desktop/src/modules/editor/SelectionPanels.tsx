@@ -4,6 +4,7 @@ import {
   DEFAULT_TRANSITION,
   type EditBackground,
   type MainClip,
+  MIC_ASSET,
   type Overlay,
   type RecordingClip,
   type SlideClip,
@@ -44,6 +45,7 @@ import { useSession } from "./session";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
 import { SILENCE_DEFAULTS } from "./silences";
+import { SpeechSection } from "./SpeechSection";
 import { useEdit, usePlayback } from "./store";
 import { SHAPES } from "./TimelineToolbar";
 
@@ -278,6 +280,7 @@ function RecordingClipPanel({ clip }: { clip: RecordingClip }) {
           />
         }
       />
+      <SpeechSection />
       <div className="flex gap-2">
         <Button
           variant="outline"
@@ -914,6 +917,7 @@ export function MusicPanel() {
         />
       </Section>
       <SilenceSection clipId={clip.id} />
+      {clip.asset === MIC_ASSET ? <SpeechSection /> : null}
       <DeleteButton
         label={
           name?.startsWith("Voice-over") ? "Delete voice-over" : "Delete sound"

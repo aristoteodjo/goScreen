@@ -86,6 +86,7 @@ import { registerVersionCommands } from "./versions";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerBlankCommands } from "./blank";
 import { registerCompositionCommands } from "./compositions";
+import { registerSpeechCommands } from "./speech";
 import { registerMotionCommands } from "@/modules/motion/commands";
 import { registerVisualCommands } from "./visual";
 
@@ -160,6 +161,7 @@ export function registerCommands() {
   registerInspirationCommands({ currentEdit, applyEdit });
   registerCompositionCommands({ currentEdit, applyEdit });
   registerBlankCommands();
+  registerSpeechCommands({ currentEdit, applyEdit });
   registerVisualCommands();
   registerVersionCommands();
   defineCommand({

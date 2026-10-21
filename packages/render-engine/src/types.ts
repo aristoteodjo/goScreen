@@ -194,6 +194,9 @@ export type OverlayBase = {
   motion: number;
   // After Effects-style: values over time, per property (see animation.ts).
   keyframes?: PropertyTracks;
+  // The spoken word this layer is timed on (a sync map entry), so a QC can
+  // tell whether it still lands on it: the n-th occurrence (-1: the last).
+  syncWord?: { word: string; nth: number } | null;
 };
 
 /**
