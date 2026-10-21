@@ -409,4 +409,52 @@ export const ipc = {
   exportCancel: async () => {
     await invoke("export_cancel");
   },
+  /** Hashes of the chunks already rendered for this recording. */
+  renderCacheList: async (videoPath: string) =>
+    z.array(z.string()).parse(await invoke("render_cache_list", { videoPath })),
+  /** Starts one chunk of an export; frames go through `exportFrame`. */
+  chunkBegin: async (videoPath: string, hash: string, fps: number) => {
+    await invoke("chunk_begin", { videoPath, hash, fps });
+  },
+  chunkFinish: async () => {
+    await invoke("chunk_finish");
+  },
+  /** Joins cached chunks in order and mixes the soundtrack; returns the file. */
+  exportAssemble: async (
+    videoPath: string,
+    name: string,
+    hashes: string[],
+    clicks: number[],
+    volume: number,
+    pieces: AudioPiece[],
+  ) =>
+    z
+      .string()
+      .min(1)
+      .parse(
+        await invoke("export_assemble", {
+          videoPath,
+          name,
+          hashes,
+          clicks,
+          volume,
+          pieces,
+        }),
+      ),
+  /** Starts a small, fast draft of `from..to`; returns the file it writes. */
+  previewBegin: async (
+    videoPath: string,
+    from: number,
+    to: number,
+    fps: number,
+    longSide: number,
+  ) =>
+    z
+      .string()
+      .min(1)
+      .parse(
+        await invoke("preview_begin", { videoPath, from, to, fps, longSide }),
+      ),
+  previewFinish: async () =>
+    z.string().min(1).parse(await invoke("preview_finish")),
 };

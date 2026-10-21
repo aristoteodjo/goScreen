@@ -67,12 +67,17 @@ export function ExportDialog({
         onProgress: setProgress,
       });
     },
-    onSuccess: (path) => {
-      if (typeof path !== "string" || path.length === 0) {
+    onSuccess: (r) => {
+      if (typeof r?.file !== "string" || r.file.length === 0) {
         toast.error("Export finished without a file.");
         return;
       }
+      const path = r.file;
       toast.success("Video exported", {
+        description:
+          r.chunks.reused > 0
+            ? `${r.chunks.reused} of ${r.chunks.total} chunks came from the render cache.`
+            : undefined,
         action: { label: "Show", onClick: () => revealItemInDir(path) },
       });
     },
@@ -90,7 +95,7 @@ export function ExportDialog({
     onOpenChange(next);
   };
 
-  const done = run.isSuccess ? run.data : null;
+  const done = run.isSuccess ? run.data.file : null;
 
   return (
     <Dialog open={open} onOpenChange={close}>

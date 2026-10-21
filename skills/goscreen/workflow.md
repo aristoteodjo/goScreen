@@ -103,3 +103,14 @@ only happens when the person asks.
 - With **Follow** on (top right), each command opens its place and an orange
   cursor named "AI" shows what you change. Prefer showing (`app.show`) over
   describing.
+
+## Look before you export
+
+**Look before you export** (stills cost seconds, drafts a minute,
+exports several): `edit_stills` draws a contact sheet of the whole
+montage (one frame every 2 s, 4 columns; or `times`, or `every` with
+`from`/`to`) with a timecode and the card or scene under each cell. Read
+it, fix what is wrong (`edit_save`, `edit_animate`...), ask for stills
+again, and only then draft the scene that matters with `edit_preview`
+(`from`, `to`, a small silent MP4 at half size and 12 fps) or look at one
+exact instant with `edit_frame`. Export last.
