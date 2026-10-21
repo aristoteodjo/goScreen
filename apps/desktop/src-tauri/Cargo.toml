@@ -42,3 +42,8 @@ hound = "3.5"
 # Window-only capture: other apps' windows over goScreen never reach the video.
 screencapturekit = { version = "10.0.3", features = ["macos_15_0"] }
 libc = "0.2"
+# Face detection (eyes of a talking head) through the system's Core Image detector.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSDictionary", "NSString", "NSURL"] }
+objc2-core-foundation = "0.3"
+objc2-core-image = { version = "0.3", features = ["CIContext", "CIDetector", "CIFeature", "CIImage", "objc2-core-foundation"] }

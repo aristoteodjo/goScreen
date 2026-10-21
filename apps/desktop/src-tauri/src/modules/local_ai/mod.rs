@@ -247,10 +247,7 @@ async fn download(app: &AppHandle, cancel: &AtomicBool, m: &'static Model) -> Re
     let dir = model_dir(m)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     let total: u64 = m.files.iter().map(|f| f.size).sum();
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = download_client()?;
     let mut before = 0u64;
     for f in m.files {
         let target = dir.join(f.name);
@@ -258,39 +255,71 @@ async fn download(app: &AppHandle, cancel: &AtomicBool, m: &'static Model) -> Re
             before += f.size;
             continue;
         }
-        let part = dir.join(format!("{}.part", f.name));
-        let mut res = client.get(f.url).send().await.map_err(|e| format!("Download failed: {e}"))?;
-        if !res.status().is_success() {
-            return Err(format!("Download failed: {} answered {}.", f.url, res.status()));
-        }
-        let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
-        let mut done = 0u64;
-        let mut last_emit = 0u64;
-        while let Some(chunk) = res.chunk().await.map_err(|e| format!("Download interrupted: {e}"))? {
-            if cancel.load(Ordering::SeqCst) {
-                drop(out);
-                let _ = std::fs::remove_file(&part);
-                return Err("Download cancelled.".into());
-            }
-            std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
-            done += chunk.len() as u64;
-            if done - last_emit > 8 * 1024 * 1024 || done == f.size {
-                last_emit = done;
-                let _ = app.emit(
-                    PROGRESS_EVENT,
-                    serde_json::json!({ "model": m.id, "type": "progress", "done": before + done, "total": total }),
-                );
-            }
-        }
-        drop(out);
-        if done != f.size {
-            let _ = std::fs::remove_file(&part);
-            return Err(format!("{} arrived incomplete ({done} of {} bytes).", f.name, f.size));
-        }
-        std::fs::rename(&part, &target).map_err(|e| e.to_string())?;
+        fetch_file(&client, f.url, &target, Some(f.size), cancel, |done| {
+            let _ = app.emit(
+                PROGRESS_EVENT,
+                serde_json::json!({ "model": m.id, "type": "progress", "done": before + done, "total": total }),
+            );
+        })
+        .await?;
         before += f.size;
     }
     Ok(())
+}
+
+pub fn download_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// Downloads one file through a `.part` next to it, calling `progress` with
+/// the bytes done every 8 MB (and at the end). With `expected`, a file of
+/// another size is refused. Returns the size written.
+pub async fn fetch_file(
+    client: &reqwest::Client,
+    url: &str,
+    target: &Path,
+    expected: Option<u64>,
+    cancel: &AtomicBool,
+    mut progress: impl FnMut(u64),
+) -> Result<u64, String> {
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let part = target.with_file_name(format!("{name}.part"));
+    let mut res = client.get(url).send().await.map_err(|e| format!("Download failed: {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!("Download failed: {url} answered {}.", res.status()));
+    }
+    let size = expected.or(res.content_length());
+    let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+    let mut done = 0u64;
+    let mut last_emit = 0u64;
+    while let Some(chunk) = res.chunk().await.map_err(|e| format!("Download interrupted: {e}"))? {
+        if cancel.load(Ordering::SeqCst) {
+            drop(out);
+            let _ = std::fs::remove_file(&part);
+            return Err("Download cancelled.".into());
+        }
+        std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
+        done += chunk.len() as u64;
+        if done - last_emit > 8 * 1024 * 1024 || Some(done) == size {
+            last_emit = done;
+            progress(done);
+        }
+    }
+    drop(out);
+    if last_emit != done {
+        progress(done);
+    }
+    if let Some(size) = size {
+        if done != size {
+            let _ = std::fs::remove_file(&part);
+            return Err(format!("{name} arrived incomplete ({done} of {size} bytes)."));
+        }
+    }
+    std::fs::rename(&part, target).map_err(|e| e.to_string())?;
+    Ok(done)
 }
 
 #[tauri::command]
