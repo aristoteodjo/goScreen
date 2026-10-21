@@ -1,0 +1,24 @@
+{
+  "name": "@goscreen/music",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Music beds and sound effects synthesised in code: no rights to clear, the same samples every time.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "goscreen-music": "./render.mjs"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
