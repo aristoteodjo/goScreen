@@ -93,6 +93,30 @@ only happens when the person asks.
 - Report real numbers, never impressions: raw length, final length, takes
   removed, pauses cut, scenes, words on screen.
 
+## Talking head: the voice leads the cut
+
+A person read a script to the camera, repeating each line without stopping.
+Nothing here touches the capture; every command returns its real numbers and
+every change is one undoable step. In this order:
+
+1. `edit.transcribe` `{ "video" }`: words of the voice (`<stem>.words.json`),
+   each start snapped on the attack of its sound. Needs whisper.cpp
+   (`brew install whisper-cpp`); say so when the error says it is missing.
+2. `edit.pickTakes` `{ "video" }` without a script returns the script rebuilt
+   from the words and the takes found: show it, agree on the lines with the
+   person, then call again with `script` (one line per entry). The last clean
+   take of each line is kept, restarts removed, `takes.md` written. Report
+   raw and kept seconds, takes and restarts removed.
+3. `edit.tightCut` `{ "video" }`: pauses over 0.15 s cut out of the main
+   track, 2-frame handles, never inside a word.
+4. `edit.syncMap` `{ "video", "entries": [...] }`: the effects the person
+   named while speaking, each on its word (text, zoom, cut, sfx, retime).
+   One change every 2 to 4 s, never two on one beat.
+5. `edit.faceZooms` `{ "video" }`: wide and close framings alternating at
+   every cut, close ones on the eyes (macOS).
+6. `edit.stills`, then `edit.qc` `{ "video" }`: fix every failed line (the
+   detail names the item), run it again, and only then `export.video`.
+
 ## 6. Export only on request
 
 - Preview is the deliverable of a working session: `app.show` the editor so

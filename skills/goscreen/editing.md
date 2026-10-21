@@ -147,6 +147,35 @@ Use: a spoken number → `stat-counter`; a command → `prompt-input`; a tool �
 - The person records a voice-over in the editor (mic button on an audio
   track): suggest it, do not wait for it.
 
+## Talking head: `edit.transcribe`, `edit.pickTakes`, `edit.tightCut`, `edit.syncMap`, `edit.faceZooms`, `edit.qc`
+
+The order and the rules are in `workflow.md` ("Talking head"). The shapes:
+
+- `edit.transcribe`: `{ "video", "model": "base" }` (`"small"` for a better
+  ear, `"language": "fr"` to skip detection). Returns `{ language, words,
+  snapped }`; writes `<stem>.words.json` (`{ text, start, end, p }`, source
+  seconds) and `<stem>.envelope.json`.
+- `edit.pickTakes`: `{ "video" }` returns `{ applied: false, script, lines,
+  stats }` for the person to agree on; `{ "video", "script": ["Hello, this is
+  goScreen.", "It films any site."] }` applies: one clip per line in script
+  order, `takes.md` next to the take, `stats: { rawSeconds, keptSeconds,
+  takesRemoved, restartsRemoved, linesMissing }`. Each line says which take
+  was kept and why (last clean take; a stutter, a cut word or a flat voice
+  rejects one).
+- `edit.tightCut`: `{ "video", "minPause": 0.15 }` returns `{ pausesCut,
+  removedSeconds, clips }`.
+- `edit.syncMap`: `{ "video", "entries": [ { "word": "zoom", "nth": 2,
+  "effect": { "kind": "zoom", "scale": 1.3, "duration": 1.5 } }, { "word":
+  "three reasons", "effect": { "kind": "text", "text": "3 reasons" } },
+  { "word": "now", "effect": { "kind": "cut" } }, { "word": "boom", "effect":
+  { "kind": "sfx", "asset": "<audio asset id>" } }, { "word": "here", "nth":
+  -1, "effect": { "kind": "retime", "overlay": "<layer id>" } } ] }`. Returns
+  `{ placed, missing, skipped }`; a layer placed this way carries `syncWord`.
+- `edit.faceZooms`: `{ "video" }` returns `{ zooms, clips, faces }`.
+- `edit.qc`: `{ "video", "loop": false }` returns `{ pass, checks: [{ id,
+  label, pass, detail }], stats }` and writes `<stem>.qc.md`. Checks: sync,
+  face, safe-zone, mid-word, loop, frozen.
+
 ## Inspirations
 
 - `inspiration.sync` once, then `inspiration.search` (`text`, `category`,
