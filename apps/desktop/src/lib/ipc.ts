@@ -48,6 +48,14 @@ const openedRecordingSchema = z.object({
   assets: z.record(z.string(), z.string().url()).catch({}),
 });
 
+const versionMetaSchema = z.object({
+  id: z.string().min(1),
+  at: z.string(),
+  author: z.enum(["person", "ai"]),
+  command: z.string().optional(),
+  message: z.string().optional(),
+});
+
 const importedAssetSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -257,6 +265,26 @@ export const ipc = {
   editSave: async (videoPath: string, edit: unknown) => {
     await invoke("edit_save", { videoPath, edit });
   },
+  // Durable versions of a montage (`<stem>.versions/`).
+  editVersionsList: async (videoPath: string) =>
+    z
+      .array(versionMetaSchema)
+      .parse(await invoke("edit_versions_list", { videoPath })),
+  editVersionGet: async (videoPath: string, id: string) =>
+    z.unknown().parse(await invoke("edit_version_get", { videoPath, id })),
+  editVersionWrite: async (videoPath: string, version: unknown) =>
+    versionMetaSchema.parse(
+      await invoke("edit_version_write", { videoPath, version }),
+    ),
+  editVersionDelete: async (videoPath: string, id: string) => {
+    await invoke("edit_version_delete", { videoPath, id });
+  },
+  // The new video's path: the take linked, sidecars and versions copied.
+  editDuplicate: async (videoPath: string, name: string | null) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("edit_duplicate", { videoPath, name })),
   exportBegin: async (name: string, fps: number) =>
     z
       .string()

@@ -74,6 +74,7 @@ import { type Quality, timelineEnd, useEdit, usePlayback } from "./store";
 import { Timeline } from "./Timeline";
 import { timecode } from "./timecode";
 import { useEditorShortcuts } from "./useEditorShortcuts";
+import { autosaveVersion } from "./versions";
 
 const SAVE_DELAY = 800;
 
@@ -398,24 +399,37 @@ function useAutosave(videoPath: string | null) {
       clearTimeout(timer);
       timer = setTimeout(() => {
         pending = null;
-        ipc.editSave(videoPath, edit).catch((e) => {
-          if (warned) return;
-          warned = true;
-          toast.error("Edits could not be saved", { description: String(e) });
-        });
+        ipc
+          .editSave(videoPath, edit)
+          // Now and then the autosave also leaves a version (coalesced).
+          .then(() => autosaveVersion(videoPath, edit))
+          .catch((e) => {
+            if (warned) return;
+            warned = true;
+            toast.error("Edits could not be saved", {
+              description: String(e),
+            });
+          });
       }, SAVE_DELAY);
     };
     let pending: EditState | null = null;
+    let latest: EditState | null = null;
     const off = useEdit.subscribe((s, prev) => {
       if (s.edit === prev.edit) return;
       pending = s.edit;
+      latest = s.edit;
       save(s.edit);
     });
     return () => {
       off();
       clearTimeout(timer);
-      // Leaving (another tab, another page) saves what is still waiting.
-      if (pending) void ipc.editSave(videoPath, pending).catch(() => {});
+      // Leaving (another tab, another page) saves what is still waiting,
+      // and the last state becomes a version whatever the pace.
+      const last = pending ?? latest;
+      if (!last) return;
+      void (pending ? ipc.editSave(videoPath, pending) : Promise.resolve())
+        .then(() => autosaveVersion(videoPath, last, true))
+        .catch(() => {});
     };
   }, [videoPath]);
 }

@@ -26,6 +26,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
 import { FilmPanel } from "./FilmPanel";
+import { HistoryPanel } from "./HistoryPanel";
 import { PanelFrame } from "./PanelFrame";
 import { CameraPanel, DevicesPanel } from "./LayerPanels";
 import { Section, SliderRow, useChange } from "./PanelKit";
@@ -45,7 +46,7 @@ const PANELS: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] = [
   { id: "audio", label: "Audio", icon: VolumeHighIcon },
 ];
 
-type Tab = "controls" | "film" | "look" | "audio" | "proposals";
+type Tab = "controls" | "film" | "look" | "audio" | "proposals" | "history";
 
 const LOOK: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] =
   PANELS.filter((p) =>
@@ -55,7 +56,10 @@ const LOOK: { id: Panel; label: string; icon: typeof PaintBoardIcon }[] =
 const tabOf = (panel: Panel): Tab =>
   panel === "clip" || panel === "overlay" || panel === "music"
     ? "controls"
-    : panel === "film" || panel === "audio" || panel === "proposals"
+    : panel === "film" ||
+        panel === "audio" ||
+        panel === "proposals" ||
+        panel === "history"
       ? panel
       : "look";
 
@@ -84,6 +88,7 @@ export function Inspector() {
     { id: "look", label: "Look" },
     { id: "audio", label: "Audio" },
     { id: "proposals", label: "Assistant" },
+    { id: "history", label: "History" },
   ];
   const open = (t: Tab) => {
     if (t === "controls")
@@ -138,6 +143,7 @@ export function Inspector() {
           ) : null}
           {panel === "film" ? <FilmPanel /> : null}
           {panel === "proposals" ? <ProposalsPanel /> : null}
+          {panel === "history" ? <HistoryPanel /> : null}
           {panel === "devices" ? <DevicesPanel /> : null}
           {panel === "camera" ? <CameraPanel /> : null}
           {panel === "background" ? <BackgroundPanel /> : null}
@@ -221,20 +227,50 @@ function MeshControls({
         type="single"
         value={bg.style}
         onValueChange={(v) =>
-          v && onChange({ ...meshPreset(v as MeshStyle, bg.colors[3] ?? bg.colors[0]), base: bg.base, colors: bg.colors })
+          v &&
+          onChange({
+            ...meshPreset(v as MeshStyle, bg.colors[3] ?? bg.colors[0]),
+            base: bg.base,
+            colors: bg.colors,
+          })
         }
         className="w-full"
       >
         {MESH_STYLES.map((s) => (
-          <ToggleGroupItem key={s.id} value={s.id} className="flex-1 text-[11px]">
+          <ToggleGroupItem
+            key={s.id}
+            value={s.id}
+            className="flex-1 text-[11px]"
+          >
             {s.label}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
       {row("Motion", bg.speed, 3, 0.1, "speed", (v) => `${v.toFixed(1)}×`)}
-      {row("Softness", bg.blur, 0.6, 0.01, "blur", (v) => `${Math.round(v * 100)}`)}
-      {row("Grain", bg.grain, 0.2, 0.01, "grain", (v) => `${Math.round(v * 100)}%`)}
-      {row("Vignette", bg.vignette, 1, 0.05, "vignette", (v) => `${Math.round(v * 100)}%`)}
+      {row(
+        "Softness",
+        bg.blur,
+        0.6,
+        0.01,
+        "blur",
+        (v) => `${Math.round(v * 100)}`,
+      )}
+      {row(
+        "Grain",
+        bg.grain,
+        0.2,
+        0.01,
+        "grain",
+        (v) => `${Math.round(v * 100)}%`,
+      )}
+      {row(
+        "Vignette",
+        bg.vignette,
+        1,
+        0.05,
+        "vignette",
+        (v) => `${Math.round(v * 100)}%`,
+      )}
     </div>
   );
 }

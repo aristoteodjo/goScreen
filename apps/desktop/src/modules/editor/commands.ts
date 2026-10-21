@@ -2,6 +2,7 @@ import { placeZoom, sourceTimeAt } from "@goscreen/render-engine";
 import { editActions } from "./actions";
 import { player } from "./session";
 import { useEdit, usePlayback } from "./store";
+import { useVersionsUi } from "./versions";
 import { cancelVoiceOver, startVoiceOver, useVoiceOver } from "./voiceover";
 
 const FRAME = 1 / 30;
@@ -170,6 +171,16 @@ export function editorCommands(openExport: () => void): EditorCommand[] {
       run: () => editActions.duplicate(),
     },
     {
+      id: "save-version",
+      group: "Edit",
+      label: "Save a version…",
+      shortcut: "⌘ S",
+      run: () => {
+        usePlayback.getState().setPanel("history");
+        useVersionsUi.getState().setPrompt("save");
+      },
+    },
+    {
       id: "delete",
       group: "Edit",
       label: "Delete selection",
@@ -301,6 +312,7 @@ export function commandForKey(e: KeyboardEvent): string | null {
   if (mod && key === "z") return e.shiftKey ? "redo" : "undo";
   if (mod && key === "e") return "export";
   if (mod && key === "d") return "duplicate";
+  if (mod && key === "s") return "save-version";
   if (mod && key === "0") return "view-100";
   if (mod && (key === "=" || key === "+")) return "view-in";
   if (mod && key === "-") return "view-out";

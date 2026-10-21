@@ -119,7 +119,7 @@ describe("diffEdits", () => {
     };
     const b: EditState = {
       ...a,
-      layers: [{ ...a.layers![0], scale: 0.6 }],
+      layers: [{ ...(a.layers ?? [])[0], scale: 0.6 }],
       film: undefined,
     };
     const d = diffEdits(a, b);

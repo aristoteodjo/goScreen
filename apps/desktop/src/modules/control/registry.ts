@@ -57,12 +57,22 @@ export async function runCommand(name: string, raw: unknown): Promise<Answer> {
         (i) => `${i.path.join(".") || "(input)"}: ${i.message}`,
       ),
     };
+  running.push(name);
   try {
     return { ok: true, result: (await command.run(input.data)) ?? null };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    running.splice(running.lastIndexOf(name), 1);
   }
 }
+
+// Commands in flight, innermost last: what a montage version is signed with.
+const running: string[] = [];
+
+/** The AI command running now (null outside a command). */
+export const runningCommand = (): string | null =>
+  running[running.length - 1] ?? null;
 
 // What the AI did, for the human watching the studio.
 export type ActivityEntry = {
