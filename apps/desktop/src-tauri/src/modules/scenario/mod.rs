@@ -417,39 +417,28 @@ pub fn block_ext(transparent: bool) -> &'static str {
     }
 }
 
-/// Renders a block (HTML composition) to a video in the temp folder, frame
-/// by frame in headless Chrome; returns its path, ready for `asset_import`.
-#[tauri::command(async)]
-pub fn block_render(
-    html: String,
-    width: u32,
-    height: u32,
-    fps: u32,
-    duration: f64,
-    transparent: bool,
-) -> Result<String, String> {
-    if !(2..=4096).contains(&width) || !(2..=4096).contains(&height) {
-        return Err("Block size out of range.".into());
+/// A render's fingerprint (FNV-1a, 64 bits): the same page at the same
+/// size, length, rate and alpha gives the same file, so it is rendered once.
+pub fn render_key(html: &str, width: u32, height: u32, fps: u32, duration: f64, transparent: bool) -> String {
+    let mut h: u64 = 0xcbf29ce484222325;
+    let key = format!("{width}x{height}@{fps}/{duration}/{}\n{html}", if transparent { "a" } else { "o" });
+    for b in key.bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
     }
-    if !(0.1..=60.0).contains(&duration) || !(1..=60).contains(&fps) {
-        return Err("Block length or frame rate out of range.".into());
-    }
+    format!("{h:016x}")
+}
+
+/// Where rendered blocks are kept between sessions, by fingerprint.
+fn block_cache_dir() -> PathBuf {
+    dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("goScreen").join("blocks")
+}
+
+/// Runs the composer on a job and returns once `out` exists.
+fn compose(job: serde_json::Value, out: &Path) -> Result<(), String> {
     let node = locate_node().ok_or("Node.js is required to render blocks.")?;
     let script = compose_path()?;
-    let ffmpeg = ffmpeg::locate().ok_or("FFmpeg not found. Install it (brew install ffmpeg).")?;
-    let id = uuid::Uuid::new_v4();
-    let out = std::env::temp_dir().join(format!("goscreen-block-{id}.{}", block_ext(transparent)));
-    let job_file = std::env::temp_dir().join(format!("goscreen-block-{id}.json"));
-    let job = serde_json::json!({
-        "html": html,
-        "width": width / 2 * 2,
-        "height": height / 2 * 2,
-        "fps": fps,
-        "duration": duration,
-        "transparent": transparent,
-        "out": out.to_string_lossy(),
-        "ffmpeg": ffmpeg.to_string_lossy(),
-    });
+    let job_file = std::env::temp_dir().join(format!("goscreen-block-{}.json", uuid::Uuid::new_v4()));
     write_private(&job_file, job.to_string().as_bytes()).map_err(|e| e.to_string())?;
     let output = Command::new(&node)
         .arg(&script)
@@ -464,11 +453,86 @@ pub fn block_render(
         .filter_map(progress_line)
         .last();
     match last.as_ref().and_then(|e| e.get("type")).and_then(Value::as_str) {
-        Some("done") if out.is_file() => Ok(out.to_string_lossy().into_owned()),
+        Some("done") if out.is_file() => Ok(()),
         _ => Err(last
             .and_then(|e| e.get("message").and_then(Value::as_str).map(str::to_string))
             .unwrap_or_else(|| String::from_utf8_lossy(&output.stderr).trim().chars().take(400).collect())),
     }
+}
+
+fn check_block_size(width: u32, height: u32) -> Result<(), String> {
+    if !(2..=4096).contains(&width) || !(2..=4096).contains(&height) {
+        return Err("Block size out of range.".into());
+    }
+    Ok(())
+}
+
+/// Renders a block (HTML composition) to a video, frame by frame in headless
+/// Chrome; returns its path, ready for `asset_import`. The file is kept in
+/// the cache by fingerprint: the same input is never rendered twice.
+#[tauri::command(async)]
+pub fn block_render(
+    html: String,
+    width: u32,
+    height: u32,
+    fps: u32,
+    duration: f64,
+    transparent: bool,
+) -> Result<String, String> {
+    check_block_size(width, height)?;
+    if !(0.1..=60.0).contains(&duration) || !(1..=60).contains(&fps) {
+        return Err("Block length or frame rate out of range.".into());
+    }
+    let (width, height) = (width / 2 * 2, height / 2 * 2);
+    let ffmpeg = ffmpeg::locate().ok_or("FFmpeg not found. Install it (brew install ffmpeg).")?;
+    let dir = block_cache_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
+    let key = render_key(&html, width, height, fps, duration, transparent);
+    let ext = block_ext(transparent);
+    let out = dir.join(format!("{key}.{ext}"));
+    if out.is_file() {
+        return Ok(out.to_string_lossy().into_owned());
+    }
+    let part = dir.join(format!("{key}.{}.part.{ext}", uuid::Uuid::new_v4().simple()));
+    let job = serde_json::json!({
+        "html": html,
+        "width": width,
+        "height": height,
+        "fps": fps,
+        "duration": duration,
+        "transparent": transparent,
+        "out": part.to_string_lossy(),
+        "ffmpeg": ffmpeg.to_string_lossy(),
+    });
+    compose(job, &part)?;
+    std::fs::rename(&part, &out).map_err(|e| format!("keep {}: {e}", out.display()))?;
+    Ok(out.to_string_lossy().into_owned())
+}
+
+/// One still of a block (HTML composition) at `t` seconds, as a base64 JPEG:
+/// a look at a composition without rendering it.
+#[tauri::command(async)]
+pub fn block_frame(html: String, width: u32, height: u32, t: f64, transparent: bool) -> Result<String, String> {
+    use base64::Engine;
+    check_block_size(width, height)?;
+    if !(0.0..=60.0).contains(&t) {
+        return Err("Time out of range.".into());
+    }
+    let out = std::env::temp_dir().join(format!("goscreen-block-{}.jpg", uuid::Uuid::new_v4()));
+    let job = serde_json::json!({
+        "html": html,
+        "width": width / 2 * 2,
+        "height": height / 2 * 2,
+        "fps": 30,
+        "duration": t.max(0.1),
+        "transparent": transparent,
+        "frame": t,
+        "out": out.to_string_lossy(),
+        "ffmpeg": "",
+    });
+    let result = compose(job, &out).and_then(|()| std::fs::read(&out).map_err(|e| e.to_string()));
+    let _ = std::fs::remove_file(&out);
+    Ok(base64::engine::general_purpose::STANDARD.encode(result?))
 }
 
 /// Stops the running scenario; the runner removes its partial video.
@@ -504,6 +568,16 @@ mod tests {
             done,
             serde_json::json!({"status": "done", "videoPath": "/m/a.mp4", "interactionsPath": "/m/a.interactions.json", "durationMs": 1200})
         );
+    }
+
+    #[test]
+    fn render_keys_follow_every_input() {
+        let a = render_key("<p>", 100, 100, 30, 2.0, true);
+        assert_eq!(a.len(), 16);
+        assert_eq!(a, render_key("<p>", 100, 100, 30, 2.0, true));
+        assert_ne!(a, render_key("<b>", 100, 100, 30, 2.0, true));
+        assert_ne!(a, render_key("<p>", 100, 100, 25, 2.0, true));
+        assert_ne!(a, render_key("<p>", 100, 100, 30, 2.0, false));
     }
 
     #[test]
