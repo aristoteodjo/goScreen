@@ -142,6 +142,8 @@ const ordered = (pointers: RecordedPointer[]) =>
   pointers.filter((p) => p.t >= 0).sort((a, b) => a.t - b.t);
 
 export function parseRecordingFile(json: unknown): RecordingFile {
+  // A montage without a recording has no journal at all.
+  if (json === null || json === undefined) return EMPTY_RECORDING;
   const v3 = v3Schema.safeParse(json);
   if (v3.success) {
     const layers = v3.data.layers.map((l) => ({

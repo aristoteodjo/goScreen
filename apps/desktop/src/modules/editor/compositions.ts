@@ -16,7 +16,13 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { compositionsIpc, ipc } from "@/lib/ipc";
 import { queryClient } from "@/lib/queryClient";
-import { brandProps, freeLaneAt, pixelSize } from "./blocks";
+import {
+  brandProps,
+  freeLaneAt,
+  given,
+  pixelSize,
+  sourceOf,
+} from "./blocks";
 import { useSession } from "./session";
 import { newId, useEdit, usePlayback } from "./store";
 
@@ -152,7 +158,7 @@ export async function renderComposition(
   box: Box,
   duration: number,
 ): Promise<Rendered> {
-  const size = pixelSize(edit, box, useSession.getState().source);
+  const size = pixelSize(edit, box, sourceOf(edit));
   const job = {
     html: prepareCompositionHtml(c, props, size),
     width: size.width,
@@ -252,7 +258,10 @@ export async function addComposition(
 ): Promise<{ edit: EditState; overlay: string }> {
   const c = checkComposition(composition);
   await saveComposition(videoPath, c);
-  const box = { ...defaultBox(edit, c, useSession.getState().source), ...place };
+  const box = {
+    ...defaultBox(edit, c, sourceOf(edit)),
+    ...given(place),
+  };
   const duration = place?.duration ?? c.duration;
   const merged = { ...compositionBrand(edit, c), ...props };
   const { asset } = await renderComposition(
@@ -343,7 +352,7 @@ export async function convertBlockLayer(
   const o = edit.overlays.find((x) => x.id === overlayId);
   if (o?.kind !== "video" || !o.source || !("block" in o.source))
     throw new Error("This layer is not a block.");
-  const size = pixelSize(edit, o, useSession.getState().source);
+  const size = pixelSize(edit, o, sourceOf(edit));
   const taken = new Set(
     (await loadCompositions(videoPath)).video.map((c) => c.id),
   );

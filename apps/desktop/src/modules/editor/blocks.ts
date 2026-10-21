@@ -51,6 +51,23 @@ export function brandProps(
   return out;
 }
 
+/** The fields of a partial box that were actually given (an undefined
+ * `width` must never override the default one). */
+export function given<T extends object>(place?: T): Partial<T> {
+  if (!place) return {};
+  return Object.fromEntries(
+    Object.entries(place).filter(([, v]) => v !== undefined),
+  ) as Partial<T>;
+}
+
+/** The frame a montage is rendered against: its own blank source, or the
+ * recording opened in the session (null before any is known). */
+export function sourceOf(edit: EditState) {
+  return edit.source?.kind === "none"
+    ? edit.source
+    : useSession.getState().source;
+}
+
 export function pixelSize(
   edit: EditState,
   box: Box,
@@ -78,7 +95,7 @@ export async function renderBlock(
   box: Box,
   duration: number,
 ): Promise<Rendered> {
-  const size = pixelSize(edit, box, useSession.getState().source);
+  const size = pixelSize(edit, box, sourceOf(edit));
   const file = await ipc.blockRender({
     html: renderHtml(block, props, size),
     width: size.width,
@@ -162,7 +179,7 @@ export async function addBlock(
 ): Promise<{ edit: EditState; overlay: string }> {
   const block = blockById(blockId);
   if (!block) throw new Error(`Unknown block "${blockId}".`);
-  const box = { ...block.box, ...place };
+  const box = { ...block.box, ...given(place) };
   const duration = place?.duration ?? block.duration;
   const merged = { ...brandProps(edit, block), ...props };
   const { asset } = await renderBlock(

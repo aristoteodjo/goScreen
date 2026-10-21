@@ -1,3 +1,4 @@
+import { captionLook } from "@/modules/editor/sound";
 import { BLOCKS } from "@goscreen/blocks";
 import {
   ANIMATION_PRESETS,
@@ -985,6 +986,7 @@ export function registerCommands() {
     }),
     run: async (i) => {
       const edit = await currentEdit(i.video);
+      const look = captionLook(edit);
       const lane = Math.max(-1, ...edit.overlays.map((o) => o.lane)) + 1;
       let o: Overlay = {
         id: `ai-text-${Date.now().toString(36)}`,
@@ -1003,12 +1005,14 @@ export function registerCommands() {
         motion: 0.4,
         text: i.text,
         style: {
-          font: "Inter",
+          font: look.font,
           size: i.size,
           weight: i.weight,
           color: i.color,
           align: "center",
           background: i.background,
+          // *Words between stars* take the film's accent colour.
+          accent: /\*[^*]+\*/.test(i.text) ? look.accent : undefined,
         },
       };
       if (i.preset) o = applyPreset(o, i.preset);
