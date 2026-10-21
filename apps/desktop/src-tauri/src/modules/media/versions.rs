@@ -139,19 +139,40 @@ fn link_or_copy(src: &Path, dst: &Path) -> Result<(), String> {
     std::fs::copy(src, dst).map(|_| ()).map_err(|e| format!("copy {}: {e}", src.display()))
 }
 
-fn clone_tree(src: &Path, dst: &Path) -> Result<(), String> {
-    if src.is_dir() {
+/// Sidecar folders are shallow (`assets/`, `versions/`); anything deeper is not ours.
+const CLONE_DEPTH: usize = 3;
+
+/// Copies plain files and folders only. A symbolic link is skipped, never
+/// followed: a link planted in `<stem>.assets/` must not copy another folder.
+/// `root` is the recording's folder: every source must stay inside it.
+fn clone_tree(src: &Path, dst: &Path, root: &Path, depth: usize) -> Result<(), String> {
+    let meta = std::fs::symlink_metadata(src).map_err(|e| format!("read {}: {e}", src.display()))?;
+    if meta.file_type().is_symlink() {
+        log::warn!("duplicate: skipping link {}", src.display());
+        return Ok(());
+    }
+    let canonical = std::fs::canonicalize(src).map_err(|e| format!("read {}: {e}", src.display()))?;
+    if !canonical.starts_with(root) {
+        return Err(format!("{} is outside the recording's folder.", src.display()));
+    }
+    if meta.is_dir() {
+        if depth >= CLONE_DEPTH {
+            log::warn!("duplicate: {} is too deep, skipped", src.display());
+            return Ok(());
+        }
         std::fs::create_dir_all(dst).map_err(|e| format!("create {}: {e}", dst.display()))?;
         for entry in std::fs::read_dir(src).map_err(|e| e.to_string())?.filter_map(Result::ok) {
             let name = entry.file_name();
             if name.to_string_lossy().ends_with(".tmp") {
                 continue;
             }
-            clone_tree(&entry.path(), &dst.join(name))?;
+            clone_tree(&entry.path(), &dst.join(name), root, depth + 1)?;
         }
         Ok(())
-    } else {
+    } else if meta.is_file() {
         link_or_copy(src, dst)
+    } else {
+        Ok(())
     }
 }
 
@@ -203,9 +224,13 @@ pub fn duplicate(video: &Path, name: Option<&str>) -> Result<PathBuf, String> {
     let dir = video.parent().ok_or("The video has no folder.")?;
     let stem = video.file_stem().and_then(|s| s.to_str()).ok_or("The video has no name.")?;
     let ext = video.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
+    let root = std::fs::canonicalize(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
     let new_stem = free_stem(dir, stem, &slug(name.unwrap_or("")));
     let target = dir.join(format!("{new_stem}.{ext}"));
-    link_or_copy(video, &target)?;
+    clone_tree(video, &target, &root, 0)?;
+    if !target.is_file() {
+        return Err("The video is a link; only real files can be duplicated.".into());
+    }
     let prefix = format!("{stem}.");
     let entries: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| e.to_string())?
@@ -217,7 +242,10 @@ pub fn duplicate(video: &Path, name: Option<&str>) -> Result<PathBuf, String> {
     for src in entries {
         let name = src.file_name().and_then(|n| n.to_str()).unwrap_or_default();
         let dst = dir.join(format!("{new_stem}.{}", &name[prefix.len()..]));
-        if name == format!("{stem}.interactions.json") {
+        let is_link = std::fs::symlink_metadata(&src).is_ok_and(|m| m.file_type().is_symlink());
+        if is_link {
+            log::warn!("duplicate: skipping link {}", src.display());
+        } else if name == format!("{stem}.interactions.json") {
             let bytes = std::fs::read(&src).map_err(|e| e.to_string())?;
             match serde_json::from_slice::<serde_json::Value>(&bytes) {
                 Ok(mut journal) => {
@@ -228,7 +256,7 @@ pub fn duplicate(video: &Path, name: Option<&str>) -> Result<PathBuf, String> {
                 Err(_) => link_or_copy(&src, &dst)?,
             }
         } else {
-            clone_tree(&src, &dst)?;
+            clone_tree(&src, &dst, &root, 0)?;
         }
     }
     Ok(target)
@@ -369,6 +397,55 @@ mod tests {
         let again = duplicate(&video, Some("Variante B")).unwrap();
         assert_eq!(again, dir.join("goscreen-1-variante-b-2.mp4"));
         assert_eq!(duplicate(&video, None).unwrap(), dir.join("goscreen-1-copy.mp4"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn duplicate_never_follows_symbolic_links() {
+        let video = temp_video("links");
+        let dir = video.parent().unwrap().to_path_buf();
+        // A folder outside the recording, reachable only through links.
+        let outside = dir.join("../goscreen-outside-".to_string() + &uuid::Uuid::new_v4().simple().to_string());
+        std::fs::create_dir_all(outside.join("deep")).unwrap();
+        std::fs::write(outside.join("secret.txt"), b"secret").unwrap();
+        std::fs::write(outside.join("deep/more.txt"), b"more").unwrap();
+        std::fs::create_dir_all(dir.join("goscreen-1.assets")).unwrap();
+        std::fs::write(dir.join("goscreen-1.assets/logo.png"), b"png").unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("goscreen-1.assets/evil")).unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), dir.join("goscreen-1.assets/evil.txt")).unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join("goscreen-1.versions")).unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), dir.join("goscreen-1.edit.json")).unwrap();
+
+        let copy = duplicate(&video, None).unwrap();
+        assert_eq!(copy, dir.join("goscreen-1-copy.mp4"));
+        assert!(dir.join("goscreen-1-copy.assets/logo.png").is_file());
+        assert!(!dir.join("goscreen-1-copy.assets/evil").exists());
+        assert!(!dir.join("goscreen-1-copy.assets/evil.txt").exists());
+        assert!(!dir.join("goscreen-1-copy.versions").exists());
+        assert!(!dir.join("goscreen-1-copy.edit.json").exists());
+
+        // A video that is itself a link is refused.
+        let linked = dir.join("goscreen-2.mp4");
+        std::os::unix::fs::symlink(outside.join("secret.txt"), &linked).unwrap();
+        assert!(duplicate(&linked, None).is_err());
+        assert!(!dir.join("goscreen-2-copy.mp4").exists());
+
+        std::fs::remove_dir_all(&outside).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn deep_folders_are_not_followed() {
+        let video = temp_video("depth");
+        let dir = video.parent().unwrap().to_path_buf();
+        std::fs::create_dir_all(dir.join("goscreen-1.assets/a/b/c/d")).unwrap();
+        std::fs::write(dir.join("goscreen-1.assets/a/b/c/d/x.txt"), b"x").unwrap();
+        std::fs::write(dir.join("goscreen-1.assets/a/y.txt"), b"y").unwrap();
+        let copy = duplicate(&video, None).unwrap();
+        assert!(copy.is_file());
+        assert!(dir.join("goscreen-1-copy.assets/a/y.txt").is_file());
+        assert!(!dir.join("goscreen-1-copy.assets/a/b/c/d/x.txt").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
