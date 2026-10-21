@@ -198,14 +198,26 @@ impl MediaState {
     }
 }
 
+/// The file of a montage without a recording: `<stem>.edit.json` with no
+/// `<stem>.mp4` next to it. Every sidecar still derives from the stem.
+pub const BLANK_SUFFIX: &str = ".edit.json";
+
+fn is_video_file(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(),
+        Some("mp4") | Some("mov") | Some("m4v")
+    )
+}
+
+/// A montage file is either a recording or a blank montage's `.edit.json`.
+pub fn is_blank_montage(path: &Path) -> bool {
+    path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(BLANK_SUFFIX) && n.len() > BLANK_SUFFIX.len())
+}
+
 /// Only recordings (video files that exist) may be opened or annotated.
 pub fn recording_path(raw: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(raw);
-    let is_video = matches!(
-        path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(),
-        Some("mp4") | Some("mov") | Some("m4v")
-    );
-    if !is_video {
+    if !is_video_file(&path) {
         return Err("Only MP4 or MOV recordings can be opened.".into());
     }
     if !path.is_file() {
@@ -214,9 +226,35 @@ pub fn recording_path(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// `video.mp4` -> `video.<suffix>` next to it.
+/// A recording, or a montage without one (`<stem>.edit.json`): what every
+/// edit command accepts. Both must exist.
+pub fn montage_path(raw: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(raw);
+    if !is_video_file(&path) && !is_blank_montage(&path) {
+        return Err("Only MP4 or MOV recordings, or .edit.json montages, can be opened.".into());
+    }
+    if !path.is_file() {
+        return Err(format!("{} no longer exists.", path.display()));
+    }
+    Ok(path)
+}
+
+/// `rec.mp4` and `rec.edit.json` -> `rec`: what every sidecar is named after.
+pub fn stem_name(video: &Path) -> &str {
+    let name = video.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    match name.strip_suffix(BLANK_SUFFIX) {
+        Some(stem) if is_blank_montage(video) => stem,
+        _ => video.file_stem().and_then(|s| s.to_str()).unwrap_or_default(),
+    }
+}
+
+/// `video.mp4` -> `video.<suffix>` next to it (also from `video.edit.json`).
 pub fn sidecar(video: &Path, suffix: &str) -> PathBuf {
-    video.with_extension(suffix)
+    let name = format!("{}.{suffix}", stem_name(video));
+    match video.parent() {
+        Some(dir) => dir.join(name),
+        None => PathBuf::from(name),
+    }
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
@@ -228,7 +266,8 @@ fn read_json(path: &Path) -> Option<serde_json::Value> {
 #[serde(rename_all = "camelCase")]
 pub struct OpenedRecording {
     video_path: String,
-    video_url: String,
+    /// None: a montage without a recording (nothing to serve).
+    video_url: Option<String>,
     name: String,
     interactions: Option<serde_json::Value>,
     edit: Option<serde_json::Value>,
@@ -250,7 +289,7 @@ pub fn asset_kind(path: &Path) -> Option<&'static str> {
 
 /// `rec.mp4` -> `rec.assets/`: media added in the editor travel with the recording.
 pub fn assets_dir(video: &Path) -> PathBuf {
-    video.with_extension("assets")
+    sidecar(video, "assets")
 }
 
 /// A file of the assets folder, by bare name only.
@@ -276,7 +315,7 @@ pub struct ImportedAsset {
 /// where the original lives, and serves it to the editor.
 #[tauri::command]
 pub async fn asset_import(state: State<'_, MediaState>, video_path: String, source: String) -> Result<ImportedAsset, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     let source = PathBuf::from(source);
     let kind = asset_kind(&source).ok_or("This file type cannot be added. Use an image, a video or an audio file.")?;
     if !source.is_file() {
@@ -317,9 +356,10 @@ pub fn companion_file(video: &Path, name: Option<&str>) -> Option<PathBuf> {
 
 #[tauri::command]
 pub async fn recording_open(state: State<'_, MediaState>, video_path: String) -> Result<OpenedRecording, String> {
-    let path = recording_path(&video_path)?;
-    let video_url = state.publish(path.clone()).await?;
-    let interactions = read_json(&sidecar(&path, "interactions.json"));
+    let path = montage_path(&video_path)?;
+    // A blank montage has no video to serve, and no journal, camera or mic.
+    let video_url = if is_blank_montage(&path) { None } else { Some(state.publish(path.clone()).await?) };
+    let interactions = if video_url.is_some() { read_json(&sidecar(&path, "interactions.json")) } else { None };
     let media = |key: &str| {
         interactions
             .as_ref()
@@ -354,7 +394,7 @@ pub async fn recording_open(state: State<'_, MediaState>, video_path: String) ->
         }
     }
     Ok(OpenedRecording {
-        name: path.file_stem().and_then(|s| s.to_str()).unwrap_or("Recording").to_string(),
+        name: Some(stem_name(&path)).filter(|s| !s.is_empty()).unwrap_or("Recording").to_string(),
         camera_url,
         mic_url,
         assets,
@@ -368,7 +408,7 @@ pub async fn recording_open(state: State<'_, MediaState>, video_path: String) ->
 /// Saves the non-destructive edit next to the recording. The MP4 is never touched.
 #[tauri::command(async)]
 pub fn edit_save(video_path: String, edit: serde_json::Value) -> Result<(), String> {
-    let path = recording_path(&video_path)?;
+    let path = montage_path(&video_path)?;
     let json = serde_json::to_vec_pretty(&edit).map_err(|e| e.to_string())?;
     let target = sidecar(&path, "edit.json");
     let tmp = sidecar(&path, "edit.json.tmp");
@@ -481,5 +521,29 @@ mod tests {
         assert!(recording_path("/etc/passwd").is_err());
         assert!(recording_path("/nope/missing.mp4").is_err());
         assert_eq!(sidecar(Path::new("/a/rec.mp4"), "edit.json"), PathBuf::from("/a/rec.edit.json"));
+    }
+
+    #[test]
+    fn a_blank_montage_shares_the_sidecar_layout_of_a_recording() {
+        let blank = Path::new("/a/launch.edit.json");
+        assert!(is_blank_montage(blank));
+        assert!(!is_blank_montage(Path::new("/a/.edit.json")));
+        assert!(!is_blank_montage(Path::new("/a/rec.mp4")));
+        assert_eq!(stem_name(blank), "launch");
+        assert_eq!(stem_name(Path::new("/a/rec.mp4")), "rec");
+        assert_eq!(sidecar(blank, "edit.json"), PathBuf::from("/a/launch.edit.json"));
+        assert_eq!(sidecar(blank, "versions"), PathBuf::from("/a/launch.versions"));
+        assert_eq!(assets_dir(blank), PathBuf::from("/a/launch.assets"));
+        // A stem with a dot keeps it whole.
+        assert_eq!(sidecar(Path::new("/a/v1.2.mp4"), "assets"), PathBuf::from("/a/v1.2.assets"));
+        assert!(montage_path("/etc/passwd").is_err());
+        assert!(montage_path("/nope/missing.edit.json").is_err());
+        let dir = std::env::temp_dir().join(format!("goscreen-blank-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("launch.edit.json");
+        std::fs::write(&file, b"{}").unwrap();
+        assert!(montage_path(&file.to_string_lossy()).is_ok());
+        assert!(recording_path(&file.to_string_lossy()).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

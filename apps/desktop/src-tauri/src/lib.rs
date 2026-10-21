@@ -107,6 +107,7 @@ pub fn run() {
             projects::project_duplicate,
             projects::project_delete,
             projects::project_videos,
+            projects::edit_new,
             projects::project_video_delete,
             projects::vsl_list,
             projects::vsl_create,

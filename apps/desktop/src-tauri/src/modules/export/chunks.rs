@@ -17,7 +17,7 @@ use std::{
 use tauri::State;
 
 use super::{begin, export_paths, finish, mix, ExportState, PieceRequest, Quality};
-use crate::modules::{media::recording_path, recording::ffmpeg};
+use crate::modules::{media::montage_path, recording::ffmpeg};
 
 /// The cache never grows past this many chunks or this many bytes.
 pub const MAX_CHUNKS: usize = 200;
@@ -25,12 +25,12 @@ pub const MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// `rec.mp4` -> `rec.render-cache/`.
 pub fn cache_dir(video: &Path) -> PathBuf {
-    video.with_extension("render-cache")
+    crate::modules::media::sidecar(video, "render-cache")
 }
 
 /// `rec.mp4` -> `rec.previews/`.
 pub fn previews_dir(video: &Path) -> PathBuf {
-    video.with_extension("previews")
+    crate::modules::media::sidecar(video, "previews")
 }
 
 /// A chunk hash is 16 lowercase hex characters (FNV-1a 64), nothing else.
@@ -126,14 +126,14 @@ pub fn preview_name(from: f64, to: f64, fps: u32, long_side: u32) -> String {
 
 #[tauri::command(async)]
 pub fn render_cache_list(video_path: String) -> Result<Vec<String>, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     Ok(cached_hashes(&cache_dir(&video)))
 }
 
 /// Starts encoding one chunk; frames come through `export_frame`.
 #[tauri::command(async)]
 pub fn chunk_begin(state: State<'_, ExportState>, video_path: String, hash: String, fps: u32) -> Result<(), String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     let output = chunk_file(&video, &hash).ok_or("Bad chunk hash.")?;
     let dir = cache_dir(&video);
     std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
@@ -159,7 +159,7 @@ pub fn export_assemble(
     volume: f64,
     pieces: Vec<PieceRequest>,
 ) -> Result<String, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     let bin = ffmpeg::locate().ok_or("FFmpeg was not found. Install it (brew install ffmpeg) and retry.")?;
     let mut files = Vec::with_capacity(hashes.len());
     let now = SystemTime::now();
@@ -209,7 +209,7 @@ pub fn preview_begin(
     fps: u32,
     long_side: u32,
 ) -> Result<String, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     if !(from.is_finite() && to.is_finite()) || to <= from {
         return Err("The draft needs from < to.".into());
     }

@@ -219,7 +219,7 @@ pub struct PieceRequest {
 /// The microphone file and its offset (seconds) from the first screen frame.
 fn resolve_mic(video: &Path) -> Option<(PathBuf, f64)> {
     let json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(video.with_extension("interactions.json")).ok()?).ok()?;
+        serde_json::from_slice(&std::fs::read(crate::modules::media::sidecar(video, "interactions.json")).ok()?).ok()?;
     let media = json.get("media")?;
     let file = crate::modules::media::companion_file(video, media.get("mic")?.as_str())?;
     Some((file, media.get("offsetMs").and_then(|v| v.as_f64()).unwrap_or(0.0) / 1000.0))
@@ -264,7 +264,7 @@ pub(super) fn mix(
         .filter(|t| t.is_finite() && **t >= 0.0)
         .map(|t| (t * 1000.0).round() as u64)
         .collect();
-    let recording = crate::modules::media::recording_path(video_path).ok();
+    let recording = crate::modules::media::montage_path(video_path).ok();
     let mic = recording.as_deref().and_then(resolve_mic);
 
     // Inputs: 0 = the silent video, 1 = the click (if any), then one per piece.

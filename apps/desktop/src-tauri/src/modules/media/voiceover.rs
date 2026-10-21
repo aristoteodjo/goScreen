@@ -13,7 +13,7 @@ use serde::Serialize;
 use tauri::State;
 
 use super::mic::{self, MicCapture};
-use super::{assets_dir, recording_path, ImportedAsset, MediaState};
+use super::{assets_dir, montage_path, ImportedAsset, MediaState};
 use crate::modules::recording::{ffmpeg, voice};
 
 const START_TIMEOUT: Duration = Duration::from_secs(6);
@@ -49,7 +49,7 @@ pub struct VoiceOverTake {
 /// once sound is being written.
 #[tauri::command(async)]
 pub fn voiceover_start(state: State<'_, VoiceOverState>, video_path: String, microphone: String) -> Result<VoiceOverStarted, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     let mut slot = state.take.lock().map_err(|_| "voice-over state poisoned")?;
     if slot.is_some() {
         return Err("A voice-over is already recording.".into());
