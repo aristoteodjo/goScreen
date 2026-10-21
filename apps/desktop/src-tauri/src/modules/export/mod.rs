@@ -1,8 +1,11 @@
 //! MP4 export. The editor renders each frame in a canvas (the same renderer
 //! as the preview) and streams JPEGs here; FFmpeg encodes them, then mixes
-//! tap sounds in a second, video-copy pass.
+//! tap sounds in a second, video-copy pass. The same frame pipe serves the
+//! cached chunks of an incremental export and the small drafts the AI asks
+//! for (`chunks.rs`).
 
 mod audio;
+pub mod chunks;
 
 use std::{
     collections::VecDeque,
@@ -19,26 +22,43 @@ use crate::modules::recording::ffmpeg;
 
 const STDERR_TAIL: usize = 30;
 
-struct Session {
+pub(super) struct Session {
     child: Child,
     stdin: Option<ChildStdin>,
-    video: PathBuf,
-    output: PathBuf,
+    /// The file FFmpeg writes (silent video, or a part file).
+    pub(super) video: PathBuf,
+    /// Where the finished file goes.
+    pub(super) output: PathBuf,
     frames: u64,
     stderr: Arc<Mutex<VecDeque<String>>>,
 }
 
 #[derive(Default)]
-pub struct ExportState(Mutex<Option<Session>>);
+pub struct ExportState(pub(super) Mutex<Option<Session>>);
+
+/// How the piped JPEGs are encoded: the final quality, or a fast draft.
+#[derive(Clone, Copy)]
+pub enum Quality {
+    Final,
+    Draft,
+}
 
 pub fn encode_args(fps: u32, output: &str) -> Vec<String> {
-    let fps = fps.clamp(15, 60).to_string();
+    encode_args_for(Quality::Final, fps, output)
+}
+
+pub fn encode_args_for(quality: Quality, fps: u32, output: &str) -> Vec<String> {
+    let fps = fps.clamp(5, 60).to_string();
+    let (preset, crf) = match quality {
+        Quality::Final => ("slow", "15"),
+        Quality::Draft => ("veryfast", "24"),
+    };
     [
         "-hide_banner", "-y", "-f", "image2pipe", "-framerate", &fps, "-c:v", "mjpeg", "-i", "pipe:0",
         // Browser JPEGs are full-range BT.601; tag and convert to BT.709 TV
         // range so players do not wash out or shift colors.
         "-vf", "scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=lanczos",
-        "-c:v", "libx264", "-preset", "slow", "-crf", "15", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p",
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-r", &fps,
         "-movflags", "+faststart", output,
     ]
@@ -59,7 +79,7 @@ fn sanitize(name: &str) -> String {
     }
 }
 
-fn export_paths(name: &str) -> Result<(PathBuf, PathBuf), String> {
+pub(super) fn export_paths(name: &str) -> Result<(PathBuf, PathBuf), String> {
     let dir = dirs::video_dir()
         .or_else(dirs::home_dir)
         .ok_or("No home directory")?
@@ -80,23 +100,29 @@ fn tail(lines: &Arc<Mutex<VecDeque<String>>>) -> String {
         .unwrap_or_default()
 }
 
-fn kill(mut session: Session) {
+pub(super) fn kill(mut session: Session) {
     drop(session.stdin.take());
     let _ = session.child.kill();
     let _ = session.child.wait();
     let _ = std::fs::remove_file(&session.video);
 }
 
-#[tauri::command(async)]
-pub fn export_begin(state: State<'_, ExportState>, name: String, fps: u32) -> Result<String, String> {
+/// Starts FFmpeg on `video` (the file it writes) for a session that ends in
+/// `output`; a session already running is killed first.
+pub(super) fn begin(
+    state: &ExportState,
+    quality: Quality,
+    fps: u32,
+    video: PathBuf,
+    output: PathBuf,
+) -> Result<(), String> {
     let bin = ffmpeg::locate().ok_or("FFmpeg was not found. Install it (brew install ffmpeg) and retry.")?;
     let mut slot = state.0.lock().map_err(|_| "export state poisoned")?;
     if let Some(previous) = slot.take() {
         kill(previous);
     }
-    let (video, output) = export_paths(&name)?;
     let mut child = Command::new(bin)
-        .args(encode_args(fps, &video.to_string_lossy()))
+        .args(encode_args_for(quality, fps, &video.to_string_lossy()))
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -117,7 +143,32 @@ pub fn export_begin(state: State<'_, ExportState>, name: String, fps: u32) -> Re
         });
     }
     let stdin = child.stdin.take();
-    *slot = Some(Session { child, stdin, video, output: output.clone(), frames: 0, stderr });
+    *slot = Some(Session { child, stdin, video, output, frames: 0, stderr });
+    Ok(())
+}
+
+/// Takes the running session and waits for FFmpeg to finish its file.
+pub(super) fn finish(state: &ExportState) -> Result<Session, String> {
+    let mut session = state
+        .0
+        .lock()
+        .map_err(|_| "export state poisoned")?
+        .take()
+        .ok_or("No export is running.")?;
+    drop(session.stdin.take());
+    let status = session.child.wait().map_err(|e| e.to_string())?;
+    if !status.success() || session.frames == 0 {
+        let detail = tail(&session.stderr);
+        let _ = std::fs::remove_file(&session.video);
+        return Err(format!("Encoding failed:\n{detail}"));
+    }
+    Ok(session)
+}
+
+#[tauri::command(async)]
+pub fn export_begin(state: State<'_, ExportState>, name: String, fps: u32) -> Result<String, String> {
+    let (video, output) = export_paths(&name)?;
+    begin(&state, Quality::Final, fps, video, output.clone())?;
     Ok(output.to_string_lossy().into_owned())
 }
 
@@ -192,19 +243,20 @@ pub fn export_finish(
     volume: f64,
     pieces: Vec<PieceRequest>,
 ) -> Result<String, String> {
-    let mut session = state
-        .0
-        .lock()
-        .map_err(|_| "export state poisoned")?
-        .take()
-        .ok_or("No export is running.")?;
-    drop(session.stdin.take());
-    let status = session.child.wait().map_err(|e| e.to_string())?;
-    if !status.success() || session.frames == 0 {
-        let detail = tail(&session.stderr);
-        let _ = std::fs::remove_file(&session.video);
-        return Err(format!("Encoding failed:\n{detail}"));
-    }
+    let session = finish(&state)?;
+    mix(&session.video, &session.output, &video_path, &clicks, volume, &pieces)
+}
+
+/// Mixes the soundtrack under the silent `video` into `output` (which then
+/// owns the file; `video` is removed), or just moves it when there is no sound.
+pub(super) fn mix(
+    video: &Path,
+    output: &Path,
+    video_path: &str,
+    clicks: &[f64],
+    volume: f64,
+    pieces: &[PieceRequest],
+) -> Result<String, String> {
     let bin = ffmpeg::locate().ok_or("FFmpeg disappeared during export.")?;
 
     let clicks_ms: Vec<u64> = clicks
@@ -212,14 +264,14 @@ pub fn export_finish(
         .filter(|t| t.is_finite() && **t >= 0.0)
         .map(|t| (t * 1000.0).round() as u64)
         .collect();
-    let recording = crate::modules::media::recording_path(&video_path).ok();
+    let recording = crate::modules::media::recording_path(video_path).ok();
     let mic = recording.as_deref().and_then(resolve_mic);
 
     // Inputs: 0 = the silent video, 1 = the click (if any), then one per piece.
     let mut files: Vec<PathBuf> = Vec::new();
     let mut placed: Vec<audio::Piece> = Vec::new();
     let first = if clicks_ms.is_empty() { 1 } else { 2 };
-    for p in &pieces {
+    for p in pieces {
         if !(p.duration.is_finite() && p.from.is_finite() && p.at.is_finite()) || p.duration <= 0.0 {
             continue;
         }
@@ -255,13 +307,13 @@ pub fn export_finish(
     }
 
     let Some(filter) = audio::mix_filter(&clicks_ms, volume, &placed) else {
-        std::fs::rename(&session.video, &session.output).map_err(|e| e.to_string())?;
-        return Ok(session.output.to_string_lossy().into_owned());
+        std::fs::rename(video, output).map_err(|e| e.to_string())?;
+        return Ok(output.to_string_lossy().into_owned());
     };
 
-    let click = session.video.with_extension("click.wav");
+    let click = video.with_extension("click.wav");
     let mut cmd = Command::new(bin);
-    cmd.args(["-hide_banner", "-y", "-i"]).arg(&session.video);
+    cmd.args(["-hide_banner", "-y", "-i"]).arg(video);
     if !clicks_ms.is_empty() {
         std::fs::write(&click, audio::wav(&audio::click_samples())).map_err(|e| e.to_string())?;
         cmd.arg("-i").arg(&click);
@@ -272,18 +324,18 @@ pub fn export_finish(
     let out = cmd
         .args(["-filter_complex", &filter, "-map", "0:v", "-map", "[aout]"])
         .args(["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart"])
-        .arg(&session.output)
+        .arg(output)
         .output()
         .map_err(|e| format!("ffmpeg: {e}"))?;
     let _ = std::fs::remove_file(&click);
     if !out.status.success() {
         // Keep the silent video rather than lose the export.
-        std::fs::rename(&session.video, &session.output).map_err(|e| e.to_string())?;
+        std::fs::rename(video, output).map_err(|e| e.to_string())?;
         log::warn!("audio mix failed: {}", String::from_utf8_lossy(&out.stderr));
-        return Ok(session.output.to_string_lossy().into_owned());
+        return Ok(output.to_string_lossy().into_owned());
     }
-    let _ = std::fs::remove_file(&session.video);
-    Ok(session.output.to_string_lossy().into_owned())
+    let _ = std::fs::remove_file(video);
+    Ok(output.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -303,6 +355,13 @@ mod tests {
         let args = encode_args(240, "out.mp4").join(" ");
         assert!(args.contains("-f image2pipe -framerate 60 -c:v mjpeg -i pipe:0"));
         assert!(args.ends_with("+faststart out.mp4"));
+    }
+
+    #[test]
+    fn drafts_encode_fast_and_accept_slow_frame_rates() {
+        let args = encode_args_for(Quality::Draft, 10, "d.mp4").join(" ");
+        assert!(args.contains("-framerate 10 "));
+        assert!(args.contains("-preset veryfast -crf 24"));
     }
 
     #[test]
