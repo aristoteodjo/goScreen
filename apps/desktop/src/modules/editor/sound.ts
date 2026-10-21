@@ -16,6 +16,7 @@ import {
   type TimedWord,
   srtOf,
   voiceSpans,
+  BLANK_ACCENT,
 } from "@goscreen/render-engine";
 import {
   filmSchema,
@@ -154,7 +155,13 @@ export function captionLook(
     aspect: edit.aspect,
     font: over.font ?? film?.font ?? "Inter",
     color: over.color ?? "#ffffff",
-    accent: over.accent ?? film?.accent ?? edit.touch.color,
+    accent:
+      over.accent ??
+      film?.accent ??
+      // A white touch colour would hide accent words on white text.
+      (edit.touch.color.toLowerCase() === (over.color ?? "#ffffff")
+        ? BLANK_ACCENT
+        : edit.touch.color),
     lane,
   };
 }

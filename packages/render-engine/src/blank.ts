@@ -17,6 +17,9 @@ export const BLANK_DEFAULTS = {
 };
 
 /** A blank montage's source: the 1080p frame of its format. */
+/** A warm accent a montage without a film starts with (never white on white). */
+export const BLANK_ACCENT = "#e8613c";
+
 export function blankSource(aspect: AspectId): BlankSource {
   const chosen: BlankAspect =
     aspect === "auto" ? BLANK_DEFAULTS.aspect : aspect;
@@ -67,7 +70,8 @@ export function blankEdit(o: {
     audio: [],
     assets: [],
     zooms: [],
-    touch: { style: "none", color: "#ffffff", size: 44 },
+    // The touch colour doubles as the accent of texts (*words*) and blocks.
+    touch: { style: "none", color: BLANK_ACCENT, size: 44 },
     cursor: { visible: false, size: 28 },
     sound: { clicks: false, volume: 0.6 },
     layers: [],

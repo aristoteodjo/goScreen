@@ -20,6 +20,7 @@ export { AUTO_SCALE, buildAutoZooms } from "./autoZoom";
 export {
   BLANK_DEFAULTS,
   type BlankAspect,
+  BLANK_ACCENT,
   blankEdit,
   blankSlide,
   blankSource,

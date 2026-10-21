@@ -1,3 +1,4 @@
+import { BLANK_ACCENT } from "@goscreen/render-engine";
 import {
   DEFAULT_EDIT,
   type EditState,
@@ -65,8 +66,12 @@ describe("words on the timeline", () => {
       kind: "text",
       style: { accent: "#ff0000", font: "Georgia" },
     });
-    // Without a film: the touch colour is the accent.
-    expect(captionLook(edit).accent).toBe(edit.touch.color);
+    // Without a film: the touch colour is the accent, unless it is the text
+    // colour itself (white on white would hide the accent words).
+    const touched = { ...edit, touch: { ...edit.touch, color: "#3366ff" } };
+    expect(captionLook(touched).accent).toBe("#3366ff");
+    const white = { ...edit, touch: { ...edit.touch, color: "#ffffff" } };
+    expect(captionLook(white).accent).toBe(BLANK_ACCENT);
   });
 });
 

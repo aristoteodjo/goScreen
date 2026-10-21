@@ -1107,7 +1107,17 @@ function drawAnimatedText(
   const size = o.style.size * out.height;
   ctx.font = `${o.style.weight} ${size * 0.8}px ${o.style.font}, -apple-system, system-ui, sans-serif`;
   ctx.textBaseline = "middle";
-  const lines = wrapLines(ctx, o.text, r.width);
+  // *Words between stars* are drawn in the accent colour, stars dropped.
+  const { plain, accented } = stripStars(o.text, Boolean(o.style.accent));
+  const lines = wrapLines(ctx, plain, r.width);
+  let scan = 0;
+  const lineStart = lines.map((l) => {
+    const at = Math.max(0, plain.indexOf(l, scan));
+    scan = at + l.length;
+    return at;
+  });
+  const isAccent = (line: number, at: number, len: number) =>
+    accented.slice(lineStart[line] + at, lineStart[line] + at + len).some(Boolean);
   const height = lines.length * size;
   const top = r.y + r.height / 2 - height / 2;
   const cx = r.x + r.width / 2;
@@ -1142,7 +1152,13 @@ function drawAnimatedText(
 
   // Where each unit sits at rest: its left edge in the line, and its width.
   const units = unitsOf(lines, anim.unit);
-  const placed: { text: string; x: number; y: number; w: number }[] = [];
+  const placed: {
+    text: string;
+    x: number;
+    y: number;
+    w: number;
+    accent: boolean;
+  }[] = [];
   const cursor = lines.map(() => 0);
   for (const u of units) {
     const line = lines[u.line];
@@ -1153,6 +1169,7 @@ function drawAnimatedText(
         x: lineLeft(line),
         y,
         w: ctx.measureText(line).width,
+        accent: isAccent(u.line, 0, line.length),
       });
       continue;
     }
@@ -1160,7 +1177,13 @@ function drawAnimatedText(
     const at = line.indexOf(u.text, cursor[u.line]);
     cursor[u.line] = at + u.text.length;
     const x = lineLeft(line) + ctx.measureText(line.slice(0, at)).width;
-    placed.push({ text: u.text, x, y, w: ctx.measureText(u.text).width });
+    placed.push({
+      text: u.text,
+      x,
+      y,
+      w: ctx.measureText(u.text).width,
+      accent: isAccent(u.line, at, u.text.length),
+    });
   }
 
   const states = animatorAt(anim, units.length, local, o.duration);
@@ -1177,7 +1200,33 @@ function drawAnimatedText(
     ctx.translate(ux, uy);
     if (s.rotation) ctx.rotate((s.rotation * Math.PI) / 180);
     if (s.scale !== 1) ctx.scale(s.scale, s.scale);
+    if (p.accent && o.style.accent) ctx.fillStyle = o.style.accent;
     ctx.fillText(p.text, -p.w / 2, 0);
     ctx.restore();
   });
+}
+
+/**
+ * Drops the stars of `*accent*` spans and says, per remaining character,
+ * whether it sits in one. Without an accent colour the stars are kept as
+ * written.
+ */
+function stripStars(
+  text: string,
+  enabled: boolean,
+): { plain: string; accented: boolean[] } {
+  if (!enabled || !/\*[^*]+\*/.test(text))
+    return { plain: text, accented: Array(text.length).fill(false) };
+  let plain = "";
+  const accented: boolean[] = [];
+  let inside = false;
+  for (const ch of text) {
+    if (ch === "*") {
+      inside = !inside;
+      continue;
+    }
+    plain += ch;
+    accented.push(inside);
+  }
+  return { plain, accented };
 }
