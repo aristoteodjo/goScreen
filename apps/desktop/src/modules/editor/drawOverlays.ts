@@ -1,6 +1,8 @@
 import {
   activeOverlays,
   animatorAt,
+  type CaptionWord,
+  captionStateAt,
   propsAt,
   type TextAnimator,
   unitsOf,
@@ -133,7 +135,10 @@ function drawMesh(
     const rx = sh.rx * mw;
     const ry = sh.ry * mh;
     const r = Math.max(rx, ry);
-    const soft = Math.min(1, (bg.blur * short * (1 + sh.soft)) / Math.max(1, r));
+    const soft = Math.min(
+      1,
+      (bg.blur * short * (1 + sh.soft)) / Math.max(1, r),
+    );
     g.save();
     g.translate(sh.x * mw, sh.y * mh);
     g.scale(rx / r, ry / r);
@@ -195,7 +200,9 @@ function drawMesh(
 
 /** Relative luminance of a #rrggbb colour (0 = black, 1 = white). */
 function luminanceOf(hex: string): number {
-  const c = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
+  const c = [1, 3, 5].map(
+    (i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255,
+  );
   const lin = c.map((v) =>
     v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4,
   );
@@ -327,15 +334,31 @@ function drawEmphasisText(
 
   if (b.background) {
     const pad = b.size * 0.35;
-    const left = b.align === "left" ? b.x - b.width / 2 : b.align === "right" ? b.x + b.width / 2 - widest : b.x - widest / 2;
+    const left =
+      b.align === "left"
+        ? b.x - b.width / 2
+        : b.align === "right"
+          ? b.x + b.width / 2 - widest
+          : b.x - widest / 2;
     ctx.fillStyle = b.background;
     ctx.beginPath();
-    ctx.roundRect(left - pad, top - pad * 0.6, widest + pad * 2, height + pad * 1.2, b.size * 0.3);
+    ctx.roundRect(
+      left - pad,
+      top - pad * 0.6,
+      widest + pad * 2,
+      height + pad * 1.2,
+      b.size * 0.3,
+    );
     ctx.fill();
   }
   if (mode === "wipe") {
     ctx.beginPath();
-    ctx.rect(b.x - widest / 2 - b.size, top - b.size, (widest + b.size * 2) * m.reveal, height + b.size * 2);
+    ctx.rect(
+      b.x - widest / 2 - b.size,
+      top - b.size,
+      (widest + b.size * 2) * m.reveal,
+      height + b.size * 2,
+    );
     ctx.clip();
   }
 
@@ -354,7 +377,10 @@ function drawEmphasisText(
     const step = Math.floor(local / 0.1);
     if (step === 0) return { color: lighten(accent, 0.05, 0.08), alpha: 1 };
     if (step === 1) return { color: lighten(accent, 0.45, -0.1), alpha: 1 };
-    return { color: lighten(accent, 0.45, -0.1), alpha: 1 - (local - 0.2) / 0.1 };
+    return {
+      color: lighten(accent, 0.45, -0.1),
+      alpha: 1 - (local - 0.2) / 0.1,
+    };
   })();
   const glow = (b.glow ?? 0) * glowEnvelope(local);
   // Sweep: a band crosses the accent words in 0.9 s, fast then slow.
@@ -958,6 +984,8 @@ export function drawOverlays(
     if (p.blur > 0 && o.kind !== "blur")
       ctx.filter = `blur(${(p.blur * short).toFixed(2)}px)`;
     if (o.kind === "blur") drawBlur(ctx, o, r, out);
+    else if (o.kind === "text" && o.words?.length)
+      drawCaption(ctx, o, o.words, t - o.start, r, out);
     else if (o.kind === "text" && o.animator)
       drawAnimatedText(ctx, o, o.animator, t - o.start, r, out);
     else if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out, t - o.start);
@@ -1001,6 +1029,67 @@ function drawTextOverlay(
     m,
     mode,
   );
+}
+
+/**
+ * Word-timed caption: the group's words laid out once (centred lines, so
+ * nothing shifts), each fading in as it is spoken; the word being said is
+ * in the accent colour and pops on a sharp curve; the group fades out.
+ */
+function drawCaption(
+  ctx: CanvasRenderingContext2D,
+  o: TextOverlay,
+  words: CaptionWord[],
+  local: number,
+  r: DOMRectLike,
+  out: Size,
+) {
+  const size = o.style.size * out.height;
+  const px = size * 0.8;
+  ctx.font = `${o.style.weight} ${px}px ${o.style.font}, -apple-system, system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  const space = ctx.measureText(" ").width;
+  // Lines of words that fit the box; a word never splits.
+  const lines: { i: number; w: number }[][] = [[]];
+  let used = 0;
+  words.forEach((word, i) => {
+    const w = ctx.measureText(word.text).width;
+    const line = lines[lines.length - 1];
+    if (line.length > 0 && used + space + w > r.width) {
+      lines.push([{ i, w }]);
+      used = w;
+    } else {
+      line.push({ i, w });
+      used += (line.length > 1 ? space : 0) + w;
+    }
+  });
+  const states = captionStateAt(words, local, o.duration);
+  const top = r.y + r.height / 2 - (lines.length * size) / 2;
+  const cx = r.x + r.width / 2;
+  lines.forEach((line, row) => {
+    const width = line.reduce((s, u, k) => s + u.w + (k ? space : 0), 0);
+    let x = cx - width / 2;
+    const y = top + size * (row + 0.5);
+    for (const u of line) {
+      const s = states[u.i];
+      if (s && s.opacity > 0.001) {
+        ctx.save();
+        ctx.globalAlpha *= s.opacity;
+        ctx.translate(x + u.w / 2, y);
+        if (s.scale !== 1) ctx.scale(s.scale, s.scale);
+        const text = words[u.i].text;
+        if (o.style.shadow) {
+          ctx.fillStyle = `rgba(0, 0, 0, ${(o.style.shadow * 0.9).toFixed(3)})`;
+          ctx.fillText(text, -u.w / 2 + px * 0.04, px * 0.05);
+        }
+        ctx.fillStyle =
+          s.active && o.style.accent ? o.style.accent : o.style.color;
+        ctx.fillText(text, -u.w / 2, 0);
+        ctx.restore();
+      }
+      x += u.w + space;
+    }
+  });
 }
 
 /**

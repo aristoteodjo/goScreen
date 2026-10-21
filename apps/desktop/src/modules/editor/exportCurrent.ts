@@ -17,6 +17,7 @@ import { loadImage } from "./media";
 import { drawAt } from "./render";
 import { outputSize, sourceTimeAt } from "@goscreen/render-engine";
 import { assetUrl, currentTimeline, player, useSession } from "./session";
+import { voiceRangesOf } from "./sound";
 import { useEdit } from "./store";
 
 // Exports of the open montage that run without the export dialog: from the
@@ -140,11 +141,22 @@ async function guarded<T>(
 
 /** Exports the open montage (or `edit`) to MP4; returns the file and the chunk report. */
 export async function exportCurrent(
-  o: { resolution: Resolution; fps: number; label?: string },
+  o: {
+    resolution: Resolution;
+    fps: number;
+    label?: string;
+    normalize?: boolean;
+  },
   edit: EditState = useEdit.getState().edit,
 ): Promise<ExportResult> {
-  return guarded(o.label ?? "Exporting", edit, (r) =>
-    exportVideo({ ...r, longSide: RESOLUTIONS[o.resolution], fps: o.fps }),
+  return guarded(o.label ?? "Exporting", edit, async (r) =>
+    exportVideo({
+      ...r,
+      longSide: RESOLUTIONS[o.resolution],
+      fps: o.fps,
+      normalize: o.normalize,
+      voice: await voiceRangesOf(edit, r.hasMic, r.videoPath),
+    }),
   );
 }
 

@@ -23,6 +23,7 @@
     "@goscreen/device-registry": "workspace:*",
     "@goscreen/inspiration": "workspace:*",
     "@goscreen/motion": "workspace:*",
+    "@goscreen/music": "workspace:*",
     "@goscreen/render-engine": "workspace:*",
     "@goscreen/scenario": "workspace:*",
     "@goscreen/speech": "workspace:*",

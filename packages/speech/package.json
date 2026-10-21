@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@goscreen/render-engine": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@goscreen/scenario": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.3",

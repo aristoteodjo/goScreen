@@ -440,6 +440,17 @@ const overlaySchema = z.discriminatedUnion("kind", [
       sweep: z.boolean().optional().catch(undefined),
     }),
     animator: animatorSchema,
+    words: z
+      .array(
+        z.object({
+          text: z.string().min(1),
+          start: z.number().min(0),
+          end: z.number().min(0),
+        }),
+      )
+      .nullable()
+      .optional()
+      .catch(undefined),
   }),
   z.object({
     ...overlayBase,
@@ -494,6 +505,7 @@ const audioClipSchema = z.object({
   volume: z.number().min(0).max(2).catch(1),
   fadeIn: z.number().min(0).catch(0),
   fadeOut: z.number().min(0).catch(0),
+  duck: z.boolean().optional().catch(undefined),
 });
 
 const assetSchema = z.object({

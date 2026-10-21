@@ -12,3 +12,4 @@ pub mod proxy;
 pub mod recording;
 pub mod scenario;
 pub mod site;
+pub mod sound;

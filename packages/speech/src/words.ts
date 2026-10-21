@@ -1,36 +1,33 @@
+import { type Word, type WordsFile, wordSchema } from "@goscreen/scenario";
 import { z } from "zod";
 
 // The words of a take: what a speech-to-text engine heard, in source seconds.
 // This file (`<stem>.words.json`) is the contract every speech tool reads.
 
-export const wordSchema = z.object({
-  text: z.string().min(1),
-  start: z.number().min(0),
-  end: z.number().min(0),
-  // Confidence, 0..1.
-  p: z.number().min(0).max(1),
-});
+export { wordSchema, wordsFileSchema } from "@goscreen/scenario";
+export type { Word, WordsFile };
 
-export const wordsFileSchema = z.object({
-  language: z.string(),
-  source: z.enum(["whisper", "manual"]),
-  words: z.array(wordSchema),
-});
-
-export type Word = z.infer<typeof wordSchema>;
-export type WordsFile = z.infer<typeof wordsFileSchema>;
-
-/** Parses a words file; words out of order or ending before they start are dropped. */
+/**
+ * Parses a words file: the envelope (language, source) must be right; a word
+ * out of shape, or ending before it starts, is dropped alone and the rest is
+ * kept in time order.
+ */
 export function parseWords(raw: unknown): WordsFile | null {
-  const parsed = wordsFileSchema.safeParse(raw);
-  if (!parsed.success) return null;
-  const words = parsed.data.words
-    .filter((w) => w.end > w.start)
+  const shell = z
+    .object({
+      language: z.string(),
+      source: z.enum(["whisper", "manual"]),
+      words: z.array(z.unknown()),
+    })
+    .safeParse(raw);
+  if (!shell.success) return null;
+  const words = shell.data.words
+    .map((w) => wordSchema.safeParse(w))
+    .flatMap((r) => (r.success && r.data.end > r.data.start ? [r.data] : []))
     .sort((a, b) => a.start - b.start);
-  return { ...parsed.data, words };
+  return { language: shell.data.language, source: shell.data.source, words };
 }
 
-/** Loudness over time: one RMS value every `dt` seconds, from time 0. */
 export type Envelope = { dt: number; rms: number[] };
 
 const quantile = (sorted: number[], q: number) =>

@@ -82,6 +82,7 @@ import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand, runningCommand } from "./registry";
+import { registerSoundCommands } from "./sound";
 import { registerVersionCommands } from "./versions";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerBlankCommands } from "./blank";
@@ -164,6 +165,7 @@ export function registerCommands() {
   registerSpeechCommands({ currentEdit, applyEdit });
   registerVisualCommands();
   registerVersionCommands();
+  registerSoundCommands({ currentEdit, applyEdit });
   defineCommand({
     name: "control.catalog",
     title: "List commands",

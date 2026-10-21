@@ -1,6 +1,9 @@
 import {
   type Chapter,
   clipAt,
+  duckEnvelope,
+  duckFor,
+  ducks,
   type EditState,
   MIC_ASSET,
   type RecordedLayer,
@@ -8,6 +11,7 @@ import {
   type Size,
   type Timeline,
   timelineOf,
+  voiceSpans,
 } from "@goscreen/render-engine";
 import { create } from "zustand";
 import { geometryOf } from "./devices";
@@ -171,6 +175,10 @@ export function setMonitorMuted(muted: boolean) {
 /** Audio clips sound through Web Audio (voices.ts); a detached mic voice keeps its element. */
 function voicesFrom(t: number) {
   const { edit } = useEdit.getState();
+  // Music ducks under the voice in the preview too, on the clips' spans
+  // (the export listens for the actual phrases).
+  const hasMic = useSession.getState().micUrl !== null;
+  const curve = duckEnvelope(voiceSpans(edit, hasMic));
   startVoices(
     edit.audio,
     t,
@@ -179,6 +187,10 @@ function voicesFrom(t: number) {
       clip.asset === MIC_ASSET ||
       monitorOff ||
       edit.tracks.muted.includes(clip.lane),
+    (clip) =>
+      curve.length && ducks(edit, clip)
+        ? duckFor(curve, clip.start, clip.duration)
+        : null,
   );
 }
 

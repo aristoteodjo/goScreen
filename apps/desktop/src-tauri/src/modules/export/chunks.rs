@@ -16,7 +16,7 @@ use std::{
 
 use tauri::State;
 
-use super::{begin, export_paths, finish, mix, ExportState, PieceRequest, Quality};
+use super::{begin, export_paths, finish, mix, ExportOutput, ExportState, PieceRequest, Quality};
 use crate::modules::{media::montage_path, recording::ffmpeg};
 
 /// The cache never grows past this many chunks or this many bytes.
@@ -158,7 +158,8 @@ pub fn export_assemble(
     clicks: Vec<f64>,
     volume: f64,
     pieces: Vec<PieceRequest>,
-) -> Result<String, String> {
+    normalize: Option<bool>,
+) -> Result<ExportOutput, String> {
     let video = montage_path(&video_path)?;
     let bin = ffmpeg::locate().ok_or("FFmpeg was not found. Install it (brew install ffmpeg) and retry.")?;
     let mut files = Vec::with_capacity(hashes.len());
@@ -194,7 +195,7 @@ pub fn export_assemble(
         let tail: Vec<&str> = detail.lines().rev().take(20).collect::<Vec<_>>().into_iter().rev().collect();
         return Err(format!("Joining the chunks failed:\n{}", tail.join("\n")));
     }
-    let result = mix(&silent, &output, &video_path, &clicks, volume, &pieces);
+    let result = mix(&silent, &output, &video_path, &clicks, volume, &pieces, normalize.unwrap_or(true));
     prune(&cache_dir(&video));
     result
 }

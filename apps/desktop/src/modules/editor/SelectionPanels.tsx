@@ -2,7 +2,9 @@ import {
   type Animation,
   type AudioClip,
   DEFAULT_TRANSITION,
+  ducks,
   type EditBackground,
+  isVoiceClip,
   type MainClip,
   MIC_ASSET,
   type Overlay,
@@ -45,6 +47,7 @@ import { useSession } from "./session";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
 import { SILENCE_DEFAULTS } from "./silences";
+import { captionsFromTake, writeSubtitles } from "./sound";
 import { SpeechSection } from "./SpeechSection";
 import { useEdit, usePlayback } from "./store";
 import { SHAPES } from "./TimelineToolbar";
@@ -588,7 +591,9 @@ export function OverlayPanel() {
           onReset={() => set({ rotation: 0 })}
         />
       </Section>
-      {overlay.kind === "video" && overlay.source && "block" in overlay.source ? (
+      {overlay.kind === "video" &&
+      overlay.source &&
+      "block" in overlay.source ? (
         <BlockSection overlay={overlay} source={overlay.source} />
       ) : null}
       {overlay.kind === "video" &&
@@ -656,7 +661,9 @@ function BlockSection({
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => useBlocksDialog.getState().show({ editing: overlay.id })}
+          onClick={() =>
+            useBlocksDialog.getState().show({ editing: overlay.id })
+          }
         >
           Edit block…
         </Button>
@@ -787,7 +794,9 @@ function TextSection({
               <input
                 type="color"
                 value={overlay.style.accent}
-                onChange={(e) => style({ accent: e.target.value }, "text-accent")}
+                onChange={(e) =>
+                  style({ accent: e.target.value }, "text-accent")
+                }
                 className="h-7 w-12 cursor-pointer rounded border border-white/10 bg-transparent"
               />
             ) : null}
@@ -852,6 +861,8 @@ export function MusicPanel() {
   const name = useEdit(
     (s) => s.edit.assets.find((a) => a.id === clip?.asset)?.name,
   );
+  const voice = useEdit((s) => (clip ? isVoiceClip(s.edit, clip) : false));
+  const ducked = useEdit((s) => (clip ? ducks(s.edit, clip) : false));
   const change = useChange();
   if (!clip) return <Empty what="Music" />;
   const set = (patch: Partial<AudioClip>, key?: string) =>
@@ -870,6 +881,20 @@ export function MusicPanel() {
         title={name ?? "Music"}
         hint={`Starts at ${secs(clip.start)}, plays ${secs(clip.duration)}.`}
       />
+      {voice ? (
+        <CaptionsSection />
+      ) : (
+        <Section
+          title="Duck under voice"
+          hint="Lowered by 20 dB while a voice speaks (80 ms down, 600 ms back), in the preview and the export."
+          aside={
+            <Switch
+              checked={ducked}
+              onCheckedChange={(duck) => set({ duck }, "duck")}
+            />
+          }
+        />
+      )}
       <Section
         title="Voice leads the cut"
         hint="Each scene lasts until the next phrase of this voice starts, so scene changes land on the attack of a sentence."
@@ -879,7 +904,11 @@ export function MusicPanel() {
           size="sm"
           onClick={() =>
             alignToVoice(clip.id)
-              .then((n) => toast.success(`${n} scene${n > 1 ? "s" : ""} aligned to the voice`))
+              .then((n) =>
+                toast.success(
+                  `${n} scene${n > 1 ? "s" : ""} aligned to the voice`,
+                ),
+              )
               .catch((e: Error) => toast.error(e.message))
           }
         >
@@ -924,6 +953,63 @@ export function MusicPanel() {
         }
       />
     </>
+  );
+}
+
+/** Captions and subtitles cut from the take's transcription (`<stem>.words.json`). */
+function CaptionsSection() {
+  const captions = useMutation({
+    mutationFn: captionsFromTake,
+    onSuccess: (count) => {
+      if (typeof count !== "number") return;
+      toast.success(
+        count > 0
+          ? `${count} caption${count > 1 ? "s" : ""} from the words`
+          : "No word falls on the timeline",
+      );
+    },
+    onError: (e) =>
+      toast.error("No captions", {
+        description: e instanceof Error ? e.message : String(e),
+      }),
+  });
+  const srt = useMutation({
+    mutationFn: writeSubtitles,
+    onSuccess: (path) => {
+      if (typeof path !== "string") return;
+      toast.success("Subtitles written", { description: path });
+    },
+    onError: (e) =>
+      toast.error("No subtitles", {
+        description: e instanceof Error ? e.message : String(e),
+      }),
+  });
+  return (
+    <Section
+      title="Captions"
+      hint="Two to four words at a time, each shown as it is said, the spoken one in the accent colour. Needs the take's transcription."
+    >
+      <div className="flex gap-2 pt-1">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+          disabled={captions.isPending}
+          onClick={() => captions.mutate()}
+        >
+          Captions from words
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+          disabled={srt.isPending}
+          onClick={() => srt.mutate()}
+        >
+          Write .srt
+        </Button>
+      </div>
+    </Section>
   );
 }
 

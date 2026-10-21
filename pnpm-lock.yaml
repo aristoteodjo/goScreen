@@ -53,6 +53,9 @@ importers:
       '@goscreen/motion':
         specifier: workspace:*
         version: link:../../packages/motion
+      '@goscreen/music':
+        specifier: workspace:*
+        version: link:../../packages/music
       '@goscreen/render-engine':
         specifier: workspace:*
         version: link:../../packages/render-engine
@@ -280,6 +283,19 @@ importers:
         specifier: ^4.1.10
         version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
 
+  packages/music:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
   packages/render-engine:
     dependencies:
       zod:
@@ -322,6 +338,9 @@ importers:
       '@goscreen/render-engine':
         specifier: workspace:*
         version: link:../render-engine
+      '@goscreen/scenario':
+        specifier: workspace:*
+        version: link:../scenario
       zod:
         specifier: ^4.6.5
         version: 4.6.5

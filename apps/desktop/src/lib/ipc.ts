@@ -70,6 +70,29 @@ const importedAssetSchema = z.object({
   url: z.string().url(),
 });
 export type ImportedAsset = z.infer<typeof importedAssetSchema>;
+
+/** What `ebur128` hears in a master: integrated LUFS and true peak dBTP. */
+const loudnessSchema = z.object({
+  integrated: z.number(),
+  truePeak: z.number(),
+});
+export type Loudness = z.infer<typeof loudnessSchema>;
+const exportOutputSchema = z.object({
+  file: z.string().min(1),
+  loudness: loudnessSchema.nullable(),
+});
+export type ExportOutput = z.infer<typeof exportOutputSchema>;
+
+/** A generated sound: a bed of a style and seed, or one effect. */
+export type SoundJob =
+  | {
+      kind: "music";
+      style: string;
+      seed: number;
+      duration: number;
+      payoff: number | null;
+    }
+  | { kind: "sfx"; sfx: string };
 export type OpenedRecording = z.infer<typeof openedRecordingSchema>;
 
 const recordingEntrySchema = z.object({
@@ -343,13 +366,38 @@ export const ipc = {
     clicks: number[],
     volume: number,
     pieces: AudioPiece[],
+    normalize = true,
   ) =>
+    exportOutputSchema.parse(
+      await invoke("export_finish", {
+        videoPath,
+        clicks,
+        volume,
+        pieces,
+        normalize,
+      }),
+    ),
+  /** A music bed or a sound effect rendered into the recording's assets. */
+  soundRender: async (videoPath: string, job: SoundJob) =>
+    z
+      .object({
+        asset: importedAssetSchema,
+        offset: z.number().min(0),
+        seconds: z.number().min(0),
+      })
+      .parse(await invoke("sound_render", { videoPath, job })),
+  /** Integrated loudness (LUFS) and true peak (dBTP) of a video or audio file. */
+  audioLoudness: async (path: string) =>
+    loudnessSchema.parse(await invoke("audio_loudness", { path })),
+  /** The take's transcription as written next to it, or null. */
+  wordsRead: async (videoPath: string) =>
+    (await invoke("words_read", { videoPath })) as unknown,
+  /** Writes `<stem>.srt`; returns its path. */
+  srtWrite: async (videoPath: string, text: string) =>
     z
       .string()
       .min(1)
-      .parse(
-        await invoke("export_finish", { videoPath, clicks, volume, pieces }),
-      ),
+      .parse(await invoke("srt_write", { videoPath, text })),
   /** Starts the mic for a voice-over; resolves once sound is recording. */
   voiceOverStart: async (videoPath: string, microphone: string) =>
     z
@@ -535,20 +583,19 @@ export const ipc = {
     clicks: number[],
     volume: number,
     pieces: AudioPiece[],
+    normalize = true,
   ) =>
-    z
-      .string()
-      .min(1)
-      .parse(
-        await invoke("export_assemble", {
-          videoPath,
-          name,
-          hashes,
-          clicks,
-          volume,
-          pieces,
-        }),
-      ),
+    exportOutputSchema.parse(
+      await invoke("export_assemble", {
+        videoPath,
+        name,
+        hashes,
+        clicks,
+        volume,
+        pieces,
+        normalize,
+      }),
+    ),
   /** Starts a small, fast draft of `from..to`; returns the file it writes. */
   previewBegin: async (
     videoPath: string,
@@ -564,5 +611,8 @@ export const ipc = {
         await invoke("preview_begin", { videoPath, from, to, fps, longSide }),
       ),
   previewFinish: async () =>
-    z.string().min(1).parse(await invoke("preview_finish")),
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("preview_finish")),
 };

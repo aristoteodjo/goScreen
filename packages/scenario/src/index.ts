@@ -3,3 +3,4 @@ export * from "./example";
 export * from "./flow";
 export * from "./scenario";
 export * from "./voice";
+export * from "./words";

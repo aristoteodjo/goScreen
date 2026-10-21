@@ -270,11 +270,17 @@ export type TextStyle = {
   sweep?: boolean;
 };
 
+// One spoken word of a caption, in seconds from the overlay's start.
+export type CaptionWord = { text: string; start: number; end: number };
+
 export type TextOverlay = OverlayBase & {
   kind: "text";
   text: string;
   style: TextStyle;
   animator?: TextAnimator | null;
+  // Word-timed caption: the words are drawn as they are spoken, the one
+  // being said in the accent colour. `text` holds them joined.
+  words?: CaptionWord[] | null;
 };
 export type ImageOverlay = OverlayBase & {
   kind: "image";
@@ -327,6 +333,9 @@ export type AudioClip = {
   volume: number;
   fadeIn: number;
   fadeOut: number;
+  // Lowered while a voice speaks (music under narration). Unset: yes for
+  // any sound that is not itself a voice.
+  duck?: boolean;
 };
 
 // A file added to the edit, copied next to the recording (`<stem>.assets/`).
