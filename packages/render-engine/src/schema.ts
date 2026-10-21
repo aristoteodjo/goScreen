@@ -411,6 +411,11 @@ const overlayBase = {
   exit: animation,
   motion: z.number().min(0).max(5).catch(0.4),
   keyframes: keyframesSchema,
+  syncWord: z
+    .object({ word: z.string().min(1), nth: z.number().int() })
+    .nullable()
+    .optional()
+    .catch(undefined),
 };
 
 const overlaySchema = z.discriminatedUnion("kind", [

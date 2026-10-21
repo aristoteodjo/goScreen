@@ -312,6 +312,24 @@ importers:
         specifier: 1.57.0
         version: 1.57.0
 
+  packages/skill-evals: {}
+
+  packages/speech:
+    dependencies:
+      '@goscreen/render-engine':
+        specifier: workspace:*
+        version: link:../render-engine
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.11(@types/node@24.19.1)(vite@8.3.4(@types/node@24.19.1)(jiti@2.7.0))
+
 packages:
 
   '@babel/code-frame@7.29.7':
