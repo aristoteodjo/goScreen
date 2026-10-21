@@ -213,6 +213,25 @@ mod tests {
         assert_eq!(sample_of(1.0, None), FaceSample { t: 1.0, eyes: None, face: None });
     }
 
+    /// Needs FFmpeg and macOS: the system detector runs on a plain image and sees no face.
+    #[test]
+    #[ignore]
+    fn the_detector_runs_on_a_frame_without_a_face() {
+        let dir = std::env::temp_dir().join(format!("goscreen-face-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let frame = dir.join("gray.png");
+        let bin = ffmpeg::locate().expect("ffmpeg");
+        let ok = Command::new(bin)
+            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=gray:s=320x240", "-frames:v", "1"])
+            .arg(&frame)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok);
+        assert_eq!(detect(&frame).unwrap(), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn asks_ffmpeg_for_one_small_frame() {
         let args = frame_args(Path::new("/v.mp4"), 3.14159, Path::new("/f.png")).join(" ");
