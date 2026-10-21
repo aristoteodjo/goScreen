@@ -136,9 +136,11 @@ export {
   DEFAULT_EDIT,
   EMPTY_RECORDING,
   fullClip,
+  parseEditReport,
   parseEditState,
   parseRecordingFile,
   type RecordingFile,
+  type Rejected,
 } from "./schema";
 export {
   clampToSource,
@@ -201,3 +203,23 @@ export {
   transitionMix,
 } from "./transitions";
 export type * from "./types";
+export {
+  describeDiff,
+  type DiffKind,
+  diffEdits,
+  type EditAuthor,
+  type EditDiff,
+  type EditHistory,
+  type EditVersion,
+  type EditVersionMeta,
+  isAutosave,
+  isEmptyDiff,
+  type ItemChange,
+  type ItemRef,
+  type KindDiff,
+  labelOf,
+  PRUNE_DEFAULTS,
+  type PruneOptions,
+  pruneHistory,
+  type SettingChange,
+} from "./versions";

@@ -278,6 +278,45 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
 - `adoptFilm` fait d'un montage quelconque un film : premier et dernier cartons = ouverture et fin, le texte qui
   commence avec un clip devient le titre de sa scène. Panneau Film « Make it a film », ou `edit.setFilm` par l'IA.
 
+### Tranche 7 : prise de parole face caméra (guide « Edit a video 100% with Claude Code », relevé le 2026-10-21)
+
+Une personne parle à la caméra, répète chaque ligne sans couper, nomme ses effets à voix haute ; le montage
+part de la voix, mot par mot. Rien ne touche la capture : la prise caméra (`<stem>.camera.mp4`, ou une vidéo
+importée) devient la piste principale, l'écran est facultatif. Ordre de priorité pour la qualité perçue :
+mots et recalage, tight cut, prises, sync map et QC, zooms visage, légendes, ducking, étalonnage, détourage.
+
+- **Mots** (`edit.transcribe`, Rust `media/transcribe.rs` : whisper.cpp en process enfant, modèle dans
+  `<data>/goScreen/models/` comme le modèle local) : `<stem>.words.json`, un mot = `{ text, start, end, p }`.
+  Les timestamps STT sont jusqu'à 1/3 s en avance : chaque début de mot est **recalé sur l'attaque** mesurée
+  dans l'enveloppe du son (`snapToOnset`, pur ; enveloppe par FFmpeg `astats` ou depuis le WAV natif).
+- **Prises** (`edit.pickTakes`, `@goscreen/speech`, pur) : les lignes du script (ou le script reconstruit
+  depuis les mots, soumis à la personne) sont appariées à toutes leurs prises ; la **dernière prise complète**
+  gagne sauf bafouille, mot coupé ou énergie plate ; `takes.md` dit ligne, prise, temps et raison. Les
+  redémarrages (même début répété) sont retirés. Résultat : la séquence de clips `in/out` en temps source.
+- **Tight cut** (`edit.tightCut`) : pauses > 0,15 s coupées sur la **piste principale** (pas seulement l'audio :
+  `edit.cleanSilences` n'agit que sur les `AudioClip`), poignées de 2 images, jamais au milieu d'un mot,
+  micro-fondu audio à chaque coupe.
+- **Sync map** (`edit.syncMap`, pur) : une table « mot (n-ième occurrence) → effet » ; chaque effet (coupe,
+  zoom, texte, bloc, SFX) est posé à 2 images au plus du début de son mot. Entre deux beats, un changement
+  toutes les 2 à 4 s, jamais deux effets ensemble.
+- **Zooms visage** (`edit.faceZooms`, Rust `media/face.rs` : macOS Vision, MediaPipe en repli) : les yeux de
+  chaque clip ; cadrage large 100 % et serré 120 % **alternés à chaque coupe**, push-in 0,4 s sur les mots
+  d'emphase, plafond 115 % en 1080p. Remplace `buildAutoZooms` pour une prise caméra.
+- **Légendes par mot** (`edit.captions`) : 2 à 4 mots, mot actif en accent, fondu 80 ms, bas-centre, jamais
+  sur la boîte du visage, zone sûre du format.
+- **Son** : voix nettoyée (`VOICE_CHAIN`), master -14 LUFS / -1 dBTP (aujourd'hui seule la voix du studio passe
+  par `loudnorm=I=-16`, l'export mixe par `amix` sans `loudnorm` ni ducking), musique 18-22 dB sous la voix et
+  **duckée** (enveloppe tirée des phrases, pure), SFX seulement sur les beats de la sync map.
+- **Étalonnage** (plus tard) : `EditState.grade` (contraste, température, saturation, vignette, grain), raccord
+  d'exposition entre prises ; un clip `grade: false` sert de « reveal ». Détourage du sujet (texte derrière la
+  tête, Vision) après.
+- **QC** (`edit.qc`, mécanique, pass/fail) : effets à 2 images de leur mot, texte sur le visage, zone sûre,
+  coupe mi-mot, -14 LUFS, dernière image = première (boucle), image noire ou figée. Export seulement si tout
+  passe. Chaque commande rend ses **chiffres réels** (durée brute, finale, prises retirées, pauses coupées) :
+  la skill les rapporte, et les blocs « bande de timeline » et « compteur » peuvent les dessiner.
+- Révisions : un changement à la fois (« Don't touch anything else »), chaque changement listé avec son temps,
+  note /10 et « 3 choses qui retiennent » ; la version (tranche 1) montre que le diff est minimal.
+
 ### Blocs : compositions HTML (méthode HyperFrames)
 
 - Un **bloc** (`@goscreen/blocks`, pur et testé) est une petite page HTML animée **en CSS seulement** : titre
@@ -755,6 +794,35 @@ n'en sait rien.
 - L'export mixe la bande-son par morceaux (`audioPieces` -> `export_finish`) : micro découpé par clip, musiques, sons de tap.
 - UI : `Timeline.tsx` (pistes), `TimelineToolbar.tsx` (ajout de contenu, split, zoom de timeline),
   `TimelineMenus.tsx` (clic droit), `SelectionPanels.tsx` (propriétés de l'élément sélectionné), `actions.ts`.
+
+### Versions du montage
+
+- Un historique façon git, lisible par une personne et par l'IA. Une **version** = `{ id, at, author: "person" | "ai",
+  command?, message?, state }` (`render-engine/versions.ts`, pur et testé) : une version sans `command` est une
+  autosave, les autres sont explicites (`save`, `restore`, ou le nom de la commande IA qui l'a écrite).
+- Stockage (Rust `media/versions.rs`) : `<stem>.versions/<id>.json` (une version entière, écriture atomique) et
+  `index.json` sans les états ; un index perdu est reconstruit depuis les fichiers. Ids `[a-z0-9-]`, chemins dérivés
+  du MP4 ouvert, jamais arbitraires. Commandes `edit_versions_list`, `edit_version_get`, `edit_version_write`,
+  `edit_version_delete`, `edit_duplicate`.
+- Quand une version est écrite (`editor/versions.ts`) : à chaque commande IA qui modifie le montage (`applyEdit` :
+  l'état d'avant est d'abord gardé s'il n'est dans aucune version, puis la version signée de la commande, **avant**
+  d'écrire sur disque ou dans l'éditeur) ; à chaque sauvegarde explicite (⌘S ou « Save version », avec message) ;
+  par l'autosave (au plus toutes les 30 s, et en quittant l'éditeur). Une version identique à la dernière n'est pas
+  réécrite.
+- `pruneHistory` (pur) : toutes les versions explicites et IA restent ; les autosaves de la dernière heure aussi,
+  au-delà une par 5 minutes ; jamais plus de 200 versions (les autosaves les plus anciennes partent d'abord, la
+  plus récente reste toujours).
+- `diffEdits(a, b)` compare par id (clips, calques, zooms, sons, assets, devices : ajoutés, retirés, champs
+  changés) et par réglage global (chemins feuille, `touch.style: "ring" -> "ripple"`) ; `describeDiff` en fait
+  quelques lignes pour l'IA.
+- Éditeur, onglet **History** de l'inspecteur : liste (auteur, commande, message, heure), clic = diff avec le
+  montage à l'écran, **Restore** (modification annulable + version `restore`), **Save version**, **Duplicate as
+  new montage** (`edit_duplicate` : la vidéo en lien dur, sidecars et versions copiés sous `<stem>-<nom>`, journal
+  recalé sur les nouveaux noms de caméra et micro ; les liens symboliques ne sont jamais suivis, rien hors du dossier
+  de la prise, profondeur bornée ; s'ouvre dans un nouvel onglet).
+- IA (`control/versions.ts`) : `edit.versions`, `edit.diff` (par défaut : dernière version vs état courant,
+  `"current"` accepté), `edit.restore`, `edit.saveVersion`. `edit.save` rend `rejected` (chemin + raison de chaque
+  élément écarté par `parseEditReport`) au lieu de compteurs muets.
 
 ### Interface façon Premiere / After Effects
 

@@ -28,6 +28,7 @@ use super::local_http;
 
 pub mod mic;
 pub mod silence;
+pub mod versions;
 pub mod voiceover;
 
 const CHUNK: usize = 256 * 1024;

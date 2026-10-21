@@ -7,6 +7,7 @@ import {
   type EditState,
   MIC_ASSET,
   type Overlay,
+  parseEditReport,
   parseEditState,
   parseRecordingFile,
 } from "@goscreen/render-engine";
@@ -63,6 +64,12 @@ import {
 } from "@/modules/editor/silences";
 import { newId, useEdit, usePlayback } from "@/modules/editor/store";
 import {
+  applyState,
+  currentEditOf,
+  recordVersion,
+  snapshotIfChanged,
+} from "@/modules/editor/versions";
+import {
   record,
   setValue,
   simulate,
@@ -73,7 +80,8 @@ import { useFlowDoc } from "@/modules/flow/store";
 import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
-import { catalog, defineCommand } from "./registry";
+import { catalog, defineCommand, runningCommand } from "./registry";
+import { registerVersionCommands } from "./versions";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerCompositionCommands } from "./compositions";
 import { registerMotionCommands } from "@/modules/motion/commands";
@@ -144,6 +152,7 @@ export function registerCommands() {
   registerInspirationCommands({ currentEdit, applyEdit });
   registerCompositionCommands({ currentEdit, applyEdit });
   registerVisualCommands();
+  registerVersionCommands();
   defineCommand({
     name: "control.catalog",
     title: "List commands",
@@ -588,13 +597,20 @@ export function registerCommands() {
     name: "edit.save",
     title: "Change a montage",
     description:
-      "Replaces the edit (validated field by field). If the video is open, the person sees it at once and can undo it.",
+      "Replaces the edit (validated field by field; `rejected` lists every item left out, with its path and why). If the video is open, the person sees it at once and can undo it. A version is written first (edit.versions).",
     input: z.object({ video, edit: z.unknown() }),
     run: async (i) => {
-      const edit = parseEditState(i.edit);
-      if (!edit) throw new Error("This edit cannot be read.");
+      const { edit, rejected } = parseEditReport(i.edit);
+      if (!edit)
+        throw new Error(
+          `This edit cannot be read: ${rejected.map((r) => `${r.path}: ${r.reason}`).join("; ")}`,
+        );
       await applyEdit(i.video, edit);
-      return { clips: edit.clips.length, overlays: edit.overlays.length };
+      return {
+        clips: edit.clips.length,
+        overlays: edit.overlays.length,
+        rejected,
+      };
     },
   });
   defineCommand({
@@ -1213,8 +1229,17 @@ async function currentEdit(videoPath: string): Promise<EditState> {
   return edit;
 }
 
+/**
+ * Every montage change by the AI leaves a version signed with its command,
+ * written before the change reaches the editor or the disk. What the montage
+ * held before is kept too when no version has it yet.
+ */
 async function applyEdit(videoPath: string, edit: EditState) {
-  const open = useSession.getState().videoPath === videoPath;
-  if (open) useEdit.getState().change(() => edit, "ai");
-  else await ipc.editSave(videoPath, edit);
+  await snapshotIfChanged(videoPath, await currentEditOf(videoPath));
+  await recordVersion(videoPath, {
+    author: "ai",
+    command: runningCommand() ?? "edit.save",
+    state: edit,
+  });
+  await applyState(videoPath, edit, "ai");
 }

@@ -39,9 +39,7 @@ Two rules apply everywhere:
 ## If available
 
 Commands developed alongside this skill. Use them when `control.catalog`
-lists them; never depend on them: `edit.versions`,
-`edit.diff`, `edit.restore` (history of a montage); for talking-head takes,
+lists them; never depend on them: for talking-head takes,
 `edit.transcribe`, `edit.pickTakes`, `edit.tightCut`, `edit.syncMap`,
 `edit.faceZooms`, `edit.captions`, `edit.qc` (`rules.md`, "Talking-head
-takes"; `workflow.md`, "Revisions and QC"). Without them, `edit.get` before each change is the
-version check, and `edit.cleanSilences` plus `edit.alignToVoice` are the cut.
+takes"; `workflow.md`, "Revisions and QC"). Without them, `edit.cleanSilences` plus `edit.alignToVoice` are the cut.

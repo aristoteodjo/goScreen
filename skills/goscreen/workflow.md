@@ -114,3 +114,14 @@ it, fix what is wrong (`edit_save`, `edit_animate`...), ask for stills
 again, and only then draft the scene that matters with `edit_preview`
 (`from`, `to`, a small silent MP4 at half size and 12 fps) or look at one
 exact instant with `edit_frame`. Export last.
+
+## Versions
+
+Every montage change you make is kept as a version (signed with your
+command), like git: `edit_versions` lists them, `edit_diff` says what
+changed between two of them (by default the last version and the montage
+as it is now, by ids and fields), `edit_restore` goes back to one (the
+person can still undo it) and `edit_saveVersion` names the current state
+with a message before a risky change. `edit_save` answers with
+`rejected`: the items it could not read, with their path and why; fix
+them rather than ignore them.
