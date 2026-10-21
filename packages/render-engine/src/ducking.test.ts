@@ -42,7 +42,13 @@ const edit: EditState = {
   ...DEFAULT_EDIT,
   assets: [
     { id: "bed", name: "Music", kind: "audio", file: "bed.wav", duration: 10 },
-    { id: "vo", name: "Voice-over", kind: "audio", file: "vo.m4a", duration: 3 },
+    {
+      id: "vo",
+      name: "Voice-over",
+      kind: "audio",
+      file: "vo.m4a",
+      duration: 3,
+    },
   ],
   audio: [music, voice],
   tracks: { hidden: [], muted: [], micMuted: true },
@@ -74,7 +80,13 @@ describe("duckEnvelope", () => {
     expect(curve[0]).toEqual({ t: 0, gain: 1 });
     expect(duckGainAt(curve, 1.15)).toBeCloseTo(depth, 6);
     expect(duckGainAt(curve, 4)).toBe(1);
-    expect(mergeRanges([[3, 4], [1, 2], [1.5, 2.5]])).toEqual([
+    expect(
+      mergeRanges([
+        [3, 4],
+        [1, 2],
+        [1.5, 2.5],
+      ]),
+    ).toEqual([
       [1, 2.5],
       [3, 4],
     ]);
@@ -108,12 +120,18 @@ describe("who ducks", () => {
   it("finds the voice spans and attaches the curve to the pieces", () => {
     expect(voiceSpans(edit, false)).toEqual([[2, 5]]);
     const pieces = audioPieces(edit, false, voiceSpans(edit, false));
-    const bed = pieces.find((p) => p.source.kind === "asset" && p.source.file === "bed.wav");
-    const vo = pieces.find((p) => p.source.kind === "asset" && p.source.file === "vo.m4a");
+    const bed = pieces.find(
+      (p) => p.source.kind === "asset" && p.source.file === "bed.wav",
+    );
+    const vo = pieces.find(
+      (p) => p.source.kind === "asset" && p.source.file === "vo.m4a",
+    );
     expect(vo?.duck).toBeUndefined();
     expect(bed?.duck?.map((p) => p.at)).toEqual([0, 1.92, 2, 5, 5.6, 10]);
     // Without voice ranges nothing changes.
-    expect(audioPieces(edit, false).every((p) => p.duck === undefined)).toBe(true);
+    expect(audioPieces(edit, false).every((p) => p.duck === undefined)).toBe(
+      true,
+    );
   });
 
   it("counts the mic under the clips when the take has one", () => {

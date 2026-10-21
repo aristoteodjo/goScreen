@@ -6,7 +6,13 @@
 import { z } from "zod";
 import { type MusicStyle, musicStyleSchema, STYLE_SPECS } from "./styles.ts";
 
-export const SECTION_KINDS = ["intro", "build", "full", "break", "outro"] as const;
+export const SECTION_KINDS = [
+  "intro",
+  "build",
+  "full",
+  "break",
+  "outro",
+] as const;
 export type SectionKind = (typeof SECTION_KINDS)[number];
 
 export const sectionSchema = z.object({
@@ -49,9 +55,14 @@ const MAJOR = [0, 2, 4, 5, 7, 9, 11];
 const MINOR = [0, 2, 3, 5, 7, 8, 10];
 
 /** The triad on a scale degree, as MIDI notes above the root. */
-export function triad(root: number, mode: "major" | "minor", degree: number): number[] {
+export function triad(
+  root: number,
+  mode: "major" | "minor",
+  degree: number,
+): number[] {
   const scale = mode === "major" ? MAJOR : MINOR;
-  const note = (d: number) => root + 12 * Math.floor(d / 7) + scale[((d % 7) + 7) % 7];
+  const note = (d: number) =>
+    root + 12 * Math.floor(d / 7) + scale[((d % 7) + 7) % 7];
   return [note(degree), note(degree + 2), note(degree + 4)];
 }
 
@@ -94,11 +105,16 @@ export function sectionsFor(bars: number, bar: number): Section[] {
 }
 
 /** A deterministic plan for `duration` seconds of a style (rounded up to whole bars). */
-export function musicPlan(style: MusicStyle, seed: number, duration: number): MusicPlan {
+export function musicPlan(
+  style: MusicStyle,
+  seed: number,
+  duration: number,
+): MusicPlan {
   const spec = STYLE_SPECS[style];
   const rand = seeded(seed);
   const root = spec.roots[Math.floor(rand() * spec.roots.length)];
-  const progression = spec.progressions[Math.floor(rand() * spec.progressions.length)];
+  const progression =
+    spec.progressions[Math.floor(rand() * spec.progressions.length)];
   const bar = round((60 / spec.tempo) * 4);
   const bars = Math.max(2, Math.ceil(Math.max(1, duration) / bar));
   const chords = progression.map((degree) => triad(root, spec.mode, degree));

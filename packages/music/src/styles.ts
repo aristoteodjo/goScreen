@@ -134,7 +134,10 @@ const TONES: [RegExp, MusicStyle][] = [
 const GENRES: [RegExp, MusicStyle][] = [
   [/teaser|video-ad|\bad\b|promo/, "pulse"],
   [/launch|awareness/, "rise"],
-  [/explainer|demo|walkthrough|tutorial|onboarding|feature|integration/, "focus"],
+  [
+    /explainer|demo|walkthrough|tutorial|onboarding|feature|integration/,
+    "focus",
+  ],
   [/booth|corporate|case/, "calm"],
   [/testimonial|recruit|use-case|acquisition/, "warm"],
 ];
@@ -144,7 +147,10 @@ const GENRES: [RegExp, MusicStyle][] = [
  * calls for. Unknown words fall back to "focus", the one that fits a
  * product demo.
  */
-export function pickStyle(tone?: string | null, genre?: string | null): MusicStyle {
+export function pickStyle(
+  tone?: string | null,
+  genre?: string | null,
+): MusicStyle {
   const t = (tone ?? "").toLowerCase();
   for (const [re, style] of TONES) if (re.test(t)) return style;
   const g = (genre ?? "").toLowerCase();

@@ -81,6 +81,7 @@ import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand, runningCommand } from "./registry";
+import { registerSoundCommands } from "./sound";
 import { registerVersionCommands } from "./versions";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerCompositionCommands } from "./compositions";
@@ -153,6 +154,7 @@ export function registerCommands() {
   registerCompositionCommands({ currentEdit, applyEdit });
   registerVisualCommands();
   registerVersionCommands();
+  registerSoundCommands({ currentEdit, applyEdit });
   defineCommand({
     name: "control.catalog",
     title: "List commands",
@@ -203,11 +205,22 @@ export function registerCommands() {
     description:
       "Puts a screen in front of the person: home, a project, a VSL flow, a video in the editor, the studio, or a reference video being reproduced (all references without `reference`).",
     input: z.object({
-      view: z.enum(["home", "project", "flow", "editor", "studio", "reproduce"]),
+      view: z.enum([
+        "home",
+        "project",
+        "flow",
+        "editor",
+        "studio",
+        "reproduce",
+      ]),
       project: project.optional(),
       vsl: vsl.optional(),
       video: video.optional(),
-      reference: z.string().min(1).optional().describe("Reference id (motion.references)"),
+      reference: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Reference id (motion.references)"),
     }),
     run: async (i) => {
       // The AI's places open in their own tabs, so the person keeps theirs.
@@ -802,7 +815,10 @@ export function registerCommands() {
         throw new Error("No phrase was heard in this sound.");
       const scenes = edit.clips.filter((c) => c.kind === "recording").length;
       await applyEdit(i.video, alignScenesToVoice(edit, phrases));
-      return { scenes: Math.min(scenes, phrases.length), phrases: phrases.length };
+      return {
+        scenes: Math.min(scenes, phrases.length),
+        phrases: phrases.length,
+      };
     },
   });
   defineCommand({
@@ -1112,10 +1128,19 @@ export function registerCommands() {
       list: z.boolean().default(false),
       pick: z.number().int().min(0).max(7).default(0),
       objective: z
-        .enum(["launch", "acquisition", "promo", "feature", "recruit-supply", "awareness"])
+        .enum([
+          "launch",
+          "acquisition",
+          "promo",
+          "feature",
+          "recruit-supply",
+          "awareness",
+        ])
         .optional(),
       channels: z.array(z.string()).optional(),
-      tone: z.enum(["energetic", "playful", "calm", "premium", "corporate"]).optional(),
+      tone: z
+        .enum(["energetic", "playful", "calm", "premium", "corporate"])
+        .optional(),
       offer: z.string().optional(),
       cta: z.string().optional(),
     }),
@@ -1123,7 +1148,10 @@ export function registerCommands() {
       await openForExport(i.video);
       const s = useSession.getState();
       const url = i.url ?? s.chapters[0]?.url;
-      if (!url) throw new Error("Give the site's url: this recording has no page of its own.");
+      if (!url)
+        throw new Error(
+          "Give the site's url: this recording has no page of its own.",
+        );
       const brand = await ipc.siteBrand(url);
       const pages = [...new Set(s.chapters.map((c) => c.url))];
       const sections = [];
@@ -1150,7 +1178,12 @@ export function registerCommands() {
         variant: p.variant,
         reasons: p.reasons,
       }));
-      if (i.list) return { brand: brand.name, sections: sections.length, proposals: view };
+      if (i.list)
+        return {
+          brand: brand.name,
+          sections: sections.length,
+          proposals: view,
+        };
       const chosen = proposals[i.pick];
       if (!chosen) throw new Error(`Only ${proposals.length} proposals.`);
       const edit = buildEdit(chosen, {
@@ -1163,7 +1196,11 @@ export function registerCommands() {
         i.video,
         placeProposal(edit, s.layers, s.source, s.cameraUrl),
       );
-      return { applied: view[i.pick], clips: edit.clips.length, overlays: edit.overlays.length };
+      return {
+        applied: view[i.pick],
+        clips: edit.clips.length,
+        overlays: edit.overlays.length,
+      };
     },
   });
   defineCommand({

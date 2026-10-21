@@ -53,6 +53,9 @@ importers:
       '@goscreen/motion':
         specifier: workspace:*
         version: link:../../packages/motion
+      '@goscreen/music':
+        specifier: workspace:*
+        version: link:../../packages/music
       '@goscreen/render-engine':
         specifier: workspace:*
         version: link:../../packages/render-engine

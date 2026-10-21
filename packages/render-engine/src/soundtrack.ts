@@ -131,15 +131,22 @@ export function ducks(edit: EditState, clip: AudioClip): boolean {
  * clip, and every voice clip. Coarse (clip spans); the shell refines them
  * with the sounding ranges FFmpeg finds when it can.
  */
-export function voiceSpans(edit: EditState, hasMic: boolean): [number, number][] {
+export function voiceSpans(
+  edit: EditState,
+  hasMic: boolean,
+): [number, number][] {
   const out: [number, number][] = [];
   const { muted, micMuted } = edit.tracks;
   if (hasMic && edit.mic.volume > 0 && !micMuted)
     for (const { clip, start } of recordingSpans(edit.clips))
       if (!clip.muted)
-        out.push([start, start + (clip.out - clip.in) / Math.max(0.01, clip.speed)]);
+        out.push([
+          start,
+          start + (clip.out - clip.in) / Math.max(0.01, clip.speed),
+        ]);
   for (const a of edit.audio) {
-    if (a.volume <= 0 || muted.includes(a.lane) || !isVoiceClip(edit, a)) continue;
+    if (a.volume <= 0 || muted.includes(a.lane) || !isVoiceClip(edit, a))
+      continue;
     if (a.asset === MIC_ASSET && !hasMic) continue;
     out.push([a.start, a.start + a.duration]);
   }

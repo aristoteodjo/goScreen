@@ -91,6 +91,8 @@ pub fn run() {
             export::chunks::preview_finish,
             sound::sound_render,
             sound::audio_loudness,
+            sound::words_read,
+            sound::srt_write,
             scenario::scenario_run,
             scenario::scenario_cancel,
             control::control_reply,

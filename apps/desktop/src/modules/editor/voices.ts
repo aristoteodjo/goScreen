@@ -1,4 +1,8 @@
-import type { AudioClip } from "@goscreen/render-engine";
+import {
+  type AudioClip,
+  type DuckPoint,
+  duckGainAt,
+} from "@goscreen/render-engine";
 import { delayed, envelope, planVoices } from "./voicePlan";
 
 // Audio clips of the preview, decoded whole and scheduled on the audio clock.
@@ -49,12 +53,17 @@ export function stopVoices() {
   live = [];
 }
 
-/** Plays every clip from timeline time t on, replacing what was scheduled. */
+/**
+ * Plays every clip from timeline time t on, replacing what was scheduled.
+ * `duckOf` gives a clip's gain curve under the voice (seconds from the
+ * clip's start), applied as the export applies it.
+ */
 export function startVoices(
   clips: AudioClip[],
   t: number,
   urlOf: (clip: AudioClip) => string | null,
   skip: (clip: AudioClip) => boolean,
+  duckOf: (clip: AudioClip) => DuckPoint[] | null = () => null,
 ) {
   stopVoices();
   const run = generation;
@@ -76,7 +85,18 @@ export function startVoices(
           gain.gain.linearRampToValueAtTime(p.gain, when + p.at);
         const source = audio.createBufferSource();
         source.buffer = buffer;
-        source.connect(gain).connect(audio.destination);
+        let chain: AudioNode = source.connect(gain);
+        const duck = duckOf(v.clip);
+        if (duck?.length) {
+          const curve = duck.map((p) => ({ t: p.at, gain: p.gain }));
+          const ducked = audio.createGain();
+          ducked.gain.setValueAtTime(duckGainAt(curve, v.into), when);
+          for (const p of duck)
+            if (p.at > v.into)
+              ducked.gain.linearRampToValueAtTime(p.gain, when + p.at - v.into);
+          chain = chain.connect(ducked);
+        }
+        chain.connect(audio.destination);
         source.start(when, v.offset, v.duration);
         source.onended = () => {
           live = live.filter((s) => s !== source);

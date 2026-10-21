@@ -1,6 +1,9 @@
 // A 16-bit mono PCM WAV: what FFmpeg, WebKit and the editor all read.
 
-export function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array {
+export function encodeWav(
+  samples: Float32Array,
+  sampleRate: number,
+): Uint8Array {
   const dataLen = samples.length * 2;
   const out = new ArrayBuffer(44 + dataLen);
   const v = new DataView(out);

@@ -12,7 +12,7 @@ import {
   type Timeline,
   tapTimes,
 } from "@goscreen/render-engine";
-import { ipc } from "@/lib/ipc";
+import { ipc, type Loudness } from "@/lib/ipc";
 import { loadImage } from "./media";
 import { drawAt, drawStill, stillTime, type TimelineSources } from "./render";
 
@@ -30,6 +30,10 @@ export type ExportOptions = {
   fps: number;
   signal: AbortSignal;
   onProgress: (done: number) => void;
+  // Timeline stretches where a voice speaks: music ducks under them.
+  voice?: [number, number][];
+  // Bring the master to -14 LUFS / -1 dBTP (default yes).
+  normalize?: boolean;
 };
 
 export type ExportResult = {
@@ -37,6 +41,8 @@ export type ExportResult = {
   // How the export was put together: chunks taken from the render cache
   // and chunks rendered now.
   chunks: { total: number; reused: number; rendered: number };
+  // The master as measured after the mix; null for a silent film.
+  loudness: Loudness | null;
 };
 
 function once(target: HTMLVideoElement, event: string): Promise<void> {
@@ -316,15 +322,20 @@ export async function exportVideo(o: ExportOptions): Promise<ExportResult> {
     const clicks = o.edit.sound.clicks
       ? tapTimes(f.timeline.pointers, o.edit.clips)
       : [];
-    const file = await ipc.exportAssemble(
+    const { file, loudness } = await ipc.exportAssemble(
       o.videoPath,
       o.name,
       plan.map((c) => c.hash),
       clicks,
       o.edit.sound.volume,
-      audioPieces(o.edit, o.hasMic),
+      audioPieces(o.edit, o.hasMic, o.voice ?? []),
+      o.normalize ?? true,
     );
-    return { file, chunks: { total: plan.length, reused, rendered } };
+    return {
+      file,
+      chunks: { total: plan.length, reused, rendered },
+      loudness,
+    };
   } finally {
     f.close();
   }

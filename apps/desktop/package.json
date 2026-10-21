@@ -23,6 +23,7 @@
     "@goscreen/device-engine": "workspace:*",
     "@goscreen/device-registry": "workspace:*",
     "@goscreen/motion": "workspace:*",
+    "@goscreen/music": "workspace:*",
     "@goscreen/render-engine": "workspace:*",
     "@goscreen/scenario": "workspace:*",
     "@hugeicons/core-free-icons": "^4.3.5",

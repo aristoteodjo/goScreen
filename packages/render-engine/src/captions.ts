@@ -156,7 +156,11 @@ export const CAPTION_FADE = 0.08;
 const POP = 0.08;
 const POP_TIME = 0.18;
 
-export type CaptionWordState = { opacity: number; active: boolean; scale: number };
+export type CaptionWordState = {
+  opacity: number;
+  active: boolean;
+  scale: number;
+};
 
 /**
  * Each word's state at `local` seconds into the group: fades in 80 ms as it

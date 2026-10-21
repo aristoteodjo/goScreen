@@ -176,6 +176,31 @@ pub fn audio_loudness(path: String) -> Result<Loudness, String> {
     measure_loudness(&bin, &file).ok_or_else(|| "This file has no sound to measure.".into())
 }
 
+/// The take's transcription (`<stem>.words.json`), as written; null when
+/// nothing was transcribed yet. The studio validates it.
+#[tauri::command(async)]
+pub fn words_read(video_path: String) -> Result<Option<Value>, String> {
+    let video = recording_path(&video_path)?;
+    let path = video.with_extension("words.json");
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    Ok(serde_json::from_slice(&bytes).ok())
+}
+
+/// Writes the take's subtitles next to it (`<stem>.srt`); returns the path.
+#[tauri::command(async)]
+pub fn srt_write(video_path: String, text: String) -> Result<String, String> {
+    let video = recording_path(&video_path)?;
+    if text.len() > 4_000_000 {
+        return Err("Subtitles are too long.".into());
+    }
+    let path = video.with_extension("srt");
+    std::fs::write(&path, text).map_err(|e| format!("write {}: {e}", path.display()))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

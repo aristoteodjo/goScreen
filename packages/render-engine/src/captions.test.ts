@@ -46,7 +46,10 @@ describe("captionsFromWords", () => {
   });
 
   it("writes overlays the schema accepts, placed in the format's safe zone", () => {
-    const groups = captionsFromWords([w("Hello", 1, 1.3), w("there", 1.35, 1.7)]);
+    const groups = captionsFromWords([
+      w("Hello", 1, 1.3),
+      w("there", 1.35, 1.7),
+    ]);
     const overlays = captionOverlays(groups, {
       aspect: "9:16",
       font: "Inter",

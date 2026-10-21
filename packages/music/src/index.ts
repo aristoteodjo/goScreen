@@ -11,7 +11,12 @@ export {
   seeded,
   triad,
 } from "./plan.ts";
-export { RENDER_PEAK, renderMusic, SAMPLE_RATE, SECTION_MIX } from "./render.ts";
+export {
+  RENDER_PEAK,
+  renderMusic,
+  SAMPLE_RATE,
+  SECTION_MIX,
+} from "./render.ts";
 export {
   MAX_SFX,
   renderSfx,

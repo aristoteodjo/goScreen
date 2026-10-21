@@ -12,9 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { exportVideo } from "./exportVideo";
 import { assetUrl, currentTimeline, player, useSession } from "./session";
+import { voiceRangesOf } from "./sound";
 import { useEdit } from "./store";
 
 const RESOLUTIONS = [
@@ -33,6 +35,7 @@ export function ExportDialog({
   const [resolution, setResolution] =
     useState<(typeof RESOLUTIONS)[number]["id"]>("1080");
   const [fps, setFps] = useState(60);
+  const [normalize, setNormalize] = useState(true);
   const [progress, setProgress] = useState(0);
   const abort = useRef<AbortController | null>(null);
   const source = useSession((s) => s.source);
@@ -51,8 +54,10 @@ export function ExportDialog({
       player.pause();
       setProgress(0);
       abort.current = new AbortController();
+      const edit = useEdit.getState().edit;
+      const voice = await voiceRangesOf(edit, micUrl !== null, videoPath);
       return exportVideo({
-        edit: useEdit.getState().edit,
+        edit,
         timeline,
         videoUrl,
         videoPath,
@@ -65,6 +70,8 @@ export function ExportDialog({
         fps,
         signal: abort.current.signal,
         onProgress: setProgress,
+        voice,
+        normalize,
       });
     },
     onSuccess: (r) => {
@@ -73,11 +80,16 @@ export function ExportDialog({
         return;
       }
       const path = r.file;
+      const notes = [
+        r.chunks.reused > 0
+          ? `${r.chunks.reused} of ${r.chunks.total} chunks came from the render cache.`
+          : null,
+        r.loudness
+          ? `Master ${r.loudness.integrated.toFixed(1)} LUFS, peak ${r.loudness.truePeak.toFixed(1)} dBTP.`
+          : null,
+      ].filter((n): n is string => n !== null);
       toast.success("Video exported", {
-        description:
-          r.chunks.reused > 0
-            ? `${r.chunks.reused} of ${r.chunks.total} chunks came from the render cache.`
-            : undefined,
+        description: notes.length ? notes.join(" ") : undefined,
         action: { label: "Show", onClick: () => revealItemInDir(path) },
       });
     },
@@ -150,6 +162,22 @@ export function ExportDialog({
                   60 fps
                 </ToggleGroupItem>
               </ToggleGroup>
+            </Option>
+            <Option label="Loudness">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span
+                  id="export-normalize-label"
+                  className="text-muted-foreground"
+                >
+                  Normalise to -14 LUFS (peaks at -1 dBTP), music ducked under
+                  the voice
+                </span>
+                <Switch
+                  aria-labelledby="export-normalize-label"
+                  checked={normalize}
+                  onCheckedChange={setNormalize}
+                />
+              </div>
             </Option>
             {run.isPending ? (
               <div className="flex flex-col gap-1.5">
