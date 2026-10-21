@@ -139,14 +139,22 @@ open it.
    eight proposals with their reasons; `pick` applies one; objective,
    channels, tone, offer and cta refine it). Start there for a product
    spot, then polish.
-   To check a result without exporting, `edit_frame` draws one frame at a
-   timeline time and returns it as an image: look at a scene's opening
-   (t just after its start) and its middle before asking for an export.
+   **Look before you export** (stills cost seconds, drafts a minute,
+   exports several): `edit_stills` draws a contact sheet of the whole
+   montage (one frame every 2 s, 4 columns; or `times`, or `every` with
+   `from`/`to`) with a timecode and the card or scene under each cell. Read
+   it, fix what is wrong (`edit_save`, `edit_animate`...), ask for stills
+   again, and only then draft the scene that matters with `edit_preview`
+   (`from`, `to`, a small silent MP4 at half size and 12 fps) or look at one
+   exact instant with `edit_frame`. Export last.
 7. **Export**: `export_video` (1080, 30 fps by default) when the person
    agrees, or `export_variants` for several formats at once (9:16 for
-   stories, 16:9 for web, 1:1 and 4:5 for feeds). The goScreen window must
-   be visible while exporting; if an export "does not move", ask the person
-   to bring it to the front.
+   stories, 16:9 for web, 1:1 and 4:5 for feeds). The export is cut into
+   5 s chunks kept in a render cache: after a local fix, only the chunks it
+   touched are rendered again (`chunks.reused` in the answer says how many
+   were kept). The goScreen window must be visible while exporting or
+   drafting; if a render "does not move", ask the person to bring it to
+   the front.
 
 ## Good VSLs
 

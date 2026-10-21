@@ -371,6 +371,44 @@ données ; la personne voit tout et garde la main (⌘Z annule une modification 
   export qui n'avance plus pendant 30 s s'arrête avec un message clair (macOS ne charge pas la vidéo d'une
   fenêtre cachée).
 
+### Boucle visuelle et export par morceaux
+
+L'IA vérifie son travail vite et à bas coût (« stills cost seconds, renders cost minutes », méthode
+video-agent-skills), et l'export d'une correction ne recommence pas tout. Commandes dans
+`modules/control/visual.ts` ; tout passe par le moteur d'export (`openFrames`, `exportVideo.ts` : médias
+décodés, stills de transition, flou de mouvement, un `draw(i)` par image).
+
+- **Planche-contact** (`edit.stills {video, times?, every?, from?, to?, columns?, width?}`) : UN JPEG en
+  grille, par défaut une image toutes les 2 s, 4 colonnes, 1600 px de large, au plus 48 cases (le pas
+  s'élargit sinon). Chaque case porte son timecode `HH:MM:SS:FF` et ce qui joue (titre du carton, légende de
+  la scène d'après les chapitres, sinon « Clip n »). Pur et testé dans render-engine (`contact.ts` :
+  `stillTimes`, `contactSheet`, `playingAt`) ; dessin dans `editor/contactSheet.ts`, chaque image à la
+  taille de sa case.
+- **Brouillon** (`edit.preview {video, from, to, scale 0,25–0,5, fps 10–15}`) : petit MP4 muet de
+  `from..to` dans `<stem>.previews/` (x264 `veryfast`, CRF 24, même rendu que l'export, résolution = `scale`
+  × 1080p). Même garde-fou que l'export (une exportation à la fois, fenêtre visible : arrêt après 30 s sans
+  progrès, message `STALL_MESSAGE` cité dans la description de la commande).
+- **Export par morceaux** : `chunkPlan(edit, {fps, longSide, source})` (pur, testé, `render-engine/chunks.ts`)
+  découpe la séquence en morceaux de 5 s (`CHUNK_SECONDS`, comptés en images) et donne à chacun une empreinte
+  FNV-1a 64 bits (`fnv64(stableJson(...))`) du sous-ensemble de l'EditState qui atteint ses images, à 1 s de
+  marge : réglages globaux (format, fond, coque, touches, curseur, calques, caméra, look d'écran, film,
+  résolution, i/s), clips qui le recouvrent avec leur position relative, le clip précédent si une transition
+  l'affiche, la scène (`sceneTimeAt`), les zooms qui touchent les temps source montrés, les overlays visibles
+  (pistes masquées exclues). Changer un texte à 30 s ne change que les morceaux qui le voient ; allonger un
+  clip décale tous les suivants (leurs images changent vraiment). `RENDER_VERSION` à incrémenter quand le
+  rendu change pour un même état.
+  Rust (`export/chunks.rs`, commandes fines) : `render_cache_list`, `chunk_begin` / `export_frame` /
+  `chunk_finish` (`<stem>.render-cache/<hash>.mp4`, écrit en `.part.mp4` puis renommé ; hash validé
+  `[0-9a-f]{16}`), `export_assemble` (liste `concat` FFmpeg, `-c copy` : même codec et paramètres, image
+  clé en tête de chaque morceau, puis la bande-son mixée en une passe comme avant, `mix`), `preview_begin` /
+  `preview_finish`. Les morceaux utilisés sont « touchés » (mtime) puis le cache est taillé à 200 morceaux ou
+  2 Go (`prune_plan`, pur et testé : les moins récemment utilisés partent). `export.video` et le dialogue
+  d'export rendent `chunks: { total, reused, rendered }`.
+- Déroulé conseillé à l'IA (skill) : stills → corriger → stills → preview d'une scène → export.
+- Limites : la planche-contact et le brouillon exigent la fenêtre visible comme l'export ; le cache ne sert
+  que pour la même résolution et le même nombre d'i/s ; une empreinte ignore le contenu des fichiers
+  d'assets (même id = même image) ; pas de GIF.
+
 ### Animation par le temps (méthode Remotion, sans dépendance)
 
 Remotion n'est pas sous MIT : on reprend sa méthode, pas sa bibliothèque. Chaque valeur animée est une
