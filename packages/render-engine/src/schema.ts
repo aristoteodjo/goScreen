@@ -493,6 +493,11 @@ const assetSchema = z.object({
   duration: z.number().positive().nullable().catch(null),
 });
 
+const mainClipSchema = z.discriminatedUnion("kind", [
+  recordingClipSchema,
+  slideClipSchema,
+]);
+
 const editSchema = z.object({
   film: z
     .object({
@@ -514,9 +519,7 @@ const editSchema = z.object({
     .object({ start: z.number().min(0), end: z.number().positive().nullable() })
     .optional()
     .catch(undefined),
-  clips: lenient(
-    z.discriminatedUnion("kind", [recordingClipSchema, slideClipSchema]),
-  ).optional(),
+  clips: lenient(mainClipSchema).optional(),
   overlays: lenient(overlaySchema).optional(),
   audio: lenient(audioClipSchema).optional(),
   assets: lenient(assetSchema).optional(),
@@ -588,10 +591,64 @@ const editSchema = z.object({
     .catch(DEFAULT_LOOK),
 });
 
+/** An item the lenient parse left out, and why. */
+export type Rejected = { path: string; reason: string };
+
+const ITEM_SCHEMAS: [string, z.ZodType][] = [
+  ["clips", mainClipSchema],
+  ["overlays", overlaySchema],
+  ["audio", audioClipSchema],
+  ["assets", assetSchema],
+];
+
+/** Items the lenient lists dropped: "overlays.3: text: expected string". */
+function rejectedItems(json: unknown): Rejected[] {
+  if (typeof json !== "object" || json === null) return [];
+  const raw = json as Record<string, unknown>;
+  const out: Rejected[] = [];
+  for (const [key, schema] of ITEM_SCHEMAS) {
+    const list = raw[key];
+    if (!Array.isArray(list)) {
+      if (list !== undefined)
+        out.push({ path: key, reason: "expected an array" });
+      continue;
+    }
+    list.forEach((item, i) => {
+      const r = schema.safeParse(item);
+      if (r.success) return;
+      const reason = r.error.issues
+        .slice(0, 3)
+        .map((is) => `${is.path.join(".") || "(item)"}: ${is.message}`)
+        .join("; ");
+      out.push({ path: `${key}.${i}`, reason });
+    });
+  }
+  return out;
+}
+
 /** Saved edits, field by field: one bad field falls back alone. v1 files are upgraded. */
 export function parseEditState(json: unknown): EditState | null {
+  return parseEditReport(json).edit;
+}
+
+/**
+ * Same parse, with the list of what was left out (bad items, media whose
+ * asset is gone) so a caller can say so instead of dropping in silence.
+ */
+export function parseEditReport(json: unknown): {
+  edit: EditState | null;
+  rejected: Rejected[];
+} {
   const parsed = editSchema.safeParse(json);
-  if (!parsed.success) return null;
+  if (!parsed.success)
+    return {
+      edit: null,
+      rejected: parsed.error.issues.slice(0, 5).map((is) => ({
+        path: is.path.join(".") || "(edit)",
+        reason: is.message,
+      })),
+    };
+  const rejected = rejectedItems(json);
   const {
     trim,
     clips,
@@ -602,20 +659,32 @@ export function parseEditState(json: unknown): EditState | null {
     ...rest
   } = parsed.data;
   const assetIds = new Set((assets ?? []).map((a) => a.id));
-  return {
+  // Media whose file entry is gone cannot be drawn.
+  const hasAsset = (kind: string, id: string, asset: string) => {
+    const ok = assetIds.has(asset);
+    if (!ok)
+      rejected.push({
+        path: `${kind} ${id}`,
+        reason: `asset ${asset} is not in assets`,
+      });
+    return ok;
+  };
+  const edit: EditState = {
     ...rest,
     version: 2,
     clips:
       clips && clips.length > 0
         ? clips
         : [fullClip("clip-1", trim?.start ?? 0, trim?.end ?? SOURCE_END)],
-    // Media whose file entry is gone cannot be drawn.
     overlays: (overlays ?? []).filter((o) =>
-      o.kind === "image" || o.kind === "video" ? assetIds.has(o.asset) : true,
+      o.kind === "image" || o.kind === "video"
+        ? hasAsset("overlays", o.id, o.asset)
+        : true,
     ),
     audio: (audio ?? []).filter(
-      (a) => a.asset === MIC_ASSET || assetIds.has(a.asset),
+      (a) => a.asset === MIC_ASSET || hasAsset("audio", a.id, a.asset),
     ),
     assets: assets ?? [],
   };
+  return { edit, rejected };
 }
