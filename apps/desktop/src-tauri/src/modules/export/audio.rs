@@ -55,6 +55,107 @@ pub struct Piece {
     pub volume: f64,
     pub fade_in: f64,
     pub fade_out: f64,
+    /// Gain under the voice, piecewise linear from the piece's start
+    /// (seconds, gain): empty when nothing ducks it.
+    pub duck: Vec<(f64, f64)>,
+}
+
+/// The `volume` filter expression of a piecewise-linear gain curve in `t`
+/// (seconds from the piece's start): nested `if`s, one per segment, so
+/// FFmpeg evaluates it frame by frame. Commas are escaped for the graph.
+pub fn volume_expr(points: &[(f64, f64)]) -> String {
+    let points: Vec<(f64, f64)> = points
+        .iter()
+        .filter(|(t, g)| t.is_finite() && g.is_finite())
+        .map(|(t, g)| (t.max(0.0), g.clamp(0.0, 1.0)))
+        .collect();
+    match points.as_slice() {
+        [] => "1".into(),
+        [(_, g)] => format!("{g:.4}"),
+        all => {
+            let mut expr = format!("{:.4}", all[all.len() - 1].1);
+            for w in all.windows(2).rev() {
+                let (t0, g0) = w[0];
+                let (t1, g1) = w[1];
+                let seg = if t1 - t0 < 1e-6 || (g1 - g0).abs() < 1e-6 {
+                    format!("{g0:.4}")
+                } else {
+                    format!("({g0:.4}+{:.4}*(t-{t0:.3}))", (g1 - g0) / (t1 - t0))
+                };
+                expr = format!("if(lt(t\\,{t1:.3})\\,{seg}\\,{expr})");
+            }
+            expr
+        }
+    }
+}
+
+/// The master's loudness as `ebur128` measures it.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Loudness {
+    /// Integrated loudness, LUFS.
+    pub integrated: f64,
+    /// True peak, dBTP.
+    pub true_peak: f64,
+}
+
+/// The summary `ebur128=peak=true` prints at the end: `I: -17.0 LUFS`
+/// and `Peak: -3.1 dBFS` (the last ones: the summary follows the log).
+pub fn parse_ebur128(stderr: &str) -> Option<Loudness> {
+    let mut integrated = None;
+    let mut peak = None;
+    for line in stderr.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("I:") {
+            integrated = rest.split_whitespace().next().and_then(|v| v.parse::<f64>().ok()).or(integrated);
+        } else if let Some(rest) = line.strip_prefix("Peak:") {
+            peak = rest.split_whitespace().next().and_then(|v| v.parse::<f64>().ok()).or(peak);
+        }
+    }
+    Some(Loudness { integrated: integrated?, true_peak: peak? })
+}
+
+/// Targets of the master: -14 LUFS integrated, -1 dBTP (streaming platforms).
+pub const MASTER_I: f64 = -14.0;
+pub const MASTER_TP: f64 = -1.0;
+pub const MASTER_LRA: f64 = 11.0;
+
+/// What `loudnorm` measured in its first pass (`print_format=json`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Measured {
+    pub input_i: f64,
+    pub input_tp: f64,
+    pub input_lra: f64,
+    pub input_thresh: f64,
+    pub target_offset: f64,
+}
+
+/// The JSON block loudnorm prints at the end of its measuring pass.
+pub fn parse_loudnorm(stderr: &str) -> Option<Measured> {
+    let start = stderr.rfind('{')?;
+    let end = stderr[start..].find('}')? + start;
+    let json: serde_json::Value = serde_json::from_str(&stderr[start..=end]).ok()?;
+    let num = |key: &str| json.get(key)?.as_str()?.parse::<f64>().ok().filter(|v| v.is_finite());
+    Some(Measured {
+        input_i: num("input_i")?,
+        input_tp: num("input_tp")?,
+        input_lra: num("input_lra")?,
+        input_thresh: num("input_thresh")?,
+        target_offset: num("target_offset")?,
+    })
+}
+
+/// First pass: measure only.
+pub fn loudnorm_measure_filter() -> String {
+    format!("loudnorm=I={MASTER_I}:TP={MASTER_TP}:LRA={MASTER_LRA}:print_format=json")
+}
+
+/// Second pass: linear normalisation from the measurements (the whole mix
+/// moves by one gain, peaks limited), back at 48 kHz (loudnorm works at 192 kHz).
+pub fn loudnorm_apply_filter(m: &Measured) -> String {
+    format!(
+        "loudnorm=I={MASTER_I}:TP={MASTER_TP}:LRA={MASTER_LRA}:measured_I={:.2}:measured_TP={:.2}:measured_LRA={:.2}:measured_thresh={:.2}:offset={:.2}:linear=true,aresample=48000",
+        m.input_i, m.input_tp, m.input_lra, m.input_thresh, m.target_offset
+    )
 }
 
 /// A stretch requested in source time, moved onto a file that starts
@@ -102,7 +203,13 @@ fn piece_filter(p: &Piece, label: &str) -> String {
         f.push_str(&format!(",afade=t=out:st={:.3}:d={d:.3}", (length - d).max(0.0)));
     }
     let at = p.at_ms;
-    f.push_str(&format!(",volume={:.3},adelay={at}|{at}{label}", p.volume.clamp(0.0, 2.0)));
+    let volume = p.volume.clamp(0.0, 2.0);
+    if p.duck.is_empty() {
+        f.push_str(&format!(",volume={volume:.3}"));
+    } else {
+        f.push_str(&format!(",volume='{volume:.3}*{}':eval=frame", volume_expr(&p.duck)));
+    }
+    f.push_str(&format!(",adelay={at}|{at}{label}"));
     f
 }
 
@@ -181,15 +288,44 @@ mod tests {
 
     #[test]
     fn places_pieces_with_speed_fades_and_delay() {
-        let mic = Piece { input: 1, from: 2.0, duration: 3.0, at_ms: 500, speed: 1.0, volume: 1.0, fade_in: 0.0, fade_out: 0.0 };
+        let mic = Piece { input: 1, from: 2.0, duration: 3.0, at_ms: 500, speed: 1.0, volume: 1.0, fade_in: 0.0, fade_out: 0.0, duck: vec![] };
         assert_eq!(
             mix_filter(&[], 1.0, &[mic]).unwrap(),
             "[1:a]atrim=start=2.000:duration=3.000,asetpts=PTS-STARTPTS,volume=1.000,adelay=500|500[p0];[p0]apad[aout]"
         );
-        let fast = Piece { input: 2, from: 0.0, duration: 4.0, at_ms: 0, speed: 4.0, volume: 0.5, fade_in: 0.2, fade_out: 0.5 };
+        let fast = Piece { input: 2, from: 0.0, duration: 4.0, at_ms: 0, speed: 4.0, volume: 0.5, fade_in: 0.2, fade_out: 0.5, duck: vec![] };
         let f = mix_filter(&[100], 1.0, &[fast]).unwrap();
         assert!(f.contains("asetpts=PTS-STARTPTS,atempo=2,atempo=2.0000,afade=t=in:st=0:d=0.200,afade=t=out:st=0.500:d=0.500"));
         assert!(f.ends_with("[clk][p0]amix=inputs=2:normalize=0:dropout_transition=0,apad[aout]"));
+    }
+
+    #[test]
+    fn ducks_with_a_frame_evaluated_volume_expression() {
+        assert_eq!(volume_expr(&[]), "1");
+        assert_eq!(volume_expr(&[(0.0, 0.5)]), "0.5000");
+        let expr = volume_expr(&[(0.0, 1.0), (1.0, 1.0), (1.08, 0.1), (2.0, 0.1), (2.6, 1.0)]);
+        assert_eq!(
+            expr,
+            "if(lt(t\\,1.000)\\,1.0000\\,if(lt(t\\,1.080)\\,(1.0000+-11.2500*(t-1.000))\\,if(lt(t\\,2.000)\\,0.1000\\,if(lt(t\\,2.600)\\,(0.1000+1.5000*(t-2.000))\\,1.0000))))"
+        );
+        let bed = Piece { input: 2, from: 0.0, duration: 4.0, at_ms: 0, speed: 1.0, volume: 0.3, fade_in: 0.0, fade_out: 0.0, duck: vec![(0.0, 1.0), (2.0, 0.1)] };
+        let f = mix_filter(&[], 1.0, &[bed]).unwrap();
+        assert!(f.contains(",volume='0.300*if(lt(t\\,2.000)\\,(1.0000+-0.4500*(t-0.000))\\,0.1000)':eval=frame,adelay=0|0[p0]"), "{f}");
+    }
+
+    #[test]
+    fn reads_the_loudness_summary_and_the_measuring_pass() {
+        let log = "[Parsed_ebur128_0 @ 0x1] t: 1.0  TARGET:-23 LUFS    M: -20.1 S: -21.0     I: -19.0 LUFS       LRA:   0.0 LU\n\
+  Integrated loudness:\n    I:         -17.0 LUFS\n    Threshold: -27.8 LUFS\n\n  Loudness range:\n    LRA:         3.6 LU\n\n  True peak:\n    Peak:       -3.1 dBFS\n";
+        assert_eq!(parse_ebur128(log), Some(Loudness { integrated: -17.0, true_peak: -3.1 }));
+        assert_eq!(parse_ebur128("nothing"), None);
+        let json = "size=N/A\n[Parsed_loudnorm_0 @ 0x1]\n{\n\t\"input_i\" : \"-19.50\",\n\t\"input_tp\" : \"-2.10\",\n\t\"input_lra\" : \"6.30\",\n\t\"input_thresh\" : \"-29.80\",\n\t\"output_i\" : \"-14.02\",\n\t\"target_offset\" : \"0.12\"\n}\n";
+        let m = parse_loudnorm(json).unwrap();
+        assert_eq!(m.input_i, -19.5);
+        assert_eq!(m.target_offset, 0.12);
+        let f = loudnorm_apply_filter(&m);
+        assert!(f.starts_with("loudnorm=I=-14:TP=-1:LRA=11:measured_I=-19.50:measured_TP=-2.10:measured_LRA=6.30:measured_thresh=-29.80:offset=0.12:linear=true,aresample=48000"), "{f}");
+        assert_eq!(loudnorm_measure_filter(), "loudnorm=I=-14:TP=-1:LRA=11:print_format=json");
     }
 
     #[test]

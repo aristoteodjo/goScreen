@@ -2,7 +2,9 @@
 pub mod dev_privacy;
 pub mod modules;
 
-use modules::{android, compositions, control, export, inspiration, local_ai, media, motion, projects, proxy, recording, scenario};
+use modules::{
+    android, compositions, control, export, inspiration, local_ai, media, motion, projects, proxy, recording, scenario, sound,
+};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -87,6 +89,8 @@ pub fn run() {
             export::chunks::export_assemble,
             export::chunks::preview_begin,
             export::chunks::preview_finish,
+            sound::sound_render,
+            sound::audio_loudness,
             scenario::scenario_run,
             scenario::scenario_cancel,
             control::control_reply,

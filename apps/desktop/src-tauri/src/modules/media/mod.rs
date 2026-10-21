@@ -265,11 +265,11 @@ pub fn asset_file(video: &Path, name: &str) -> Option<PathBuf> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportedAsset {
-    id: String,
-    name: String,
-    kind: &'static str,
-    file: String,
-    url: String,
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) kind: &'static str,
+    pub(crate) file: String,
+    pub(crate) url: String,
 }
 
 /// Copies a picked file next to the recording, so the edit never depends on

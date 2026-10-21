@@ -4,7 +4,7 @@
 //! cached chunks of an incremental export and the small drafts the AI asks
 //! for (`chunks.rs`).
 
-mod audio;
+pub mod audio;
 pub mod chunks;
 
 use std::{
@@ -214,6 +214,67 @@ pub struct PieceRequest {
     volume: f64,
     fade_in: f64,
     fade_out: f64,
+    /// Gain under the voice: points (seconds from the piece's start, gain).
+    #[serde(default)]
+    duck: Vec<DuckPoint>,
+}
+
+#[derive(serde::Deserialize, Clone, Copy)]
+pub struct DuckPoint {
+    at: f64,
+    gain: f64,
+}
+
+/// What an export ends with: the file, and the loudness of its master
+/// when it has a soundtrack.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportOutput {
+    pub file: String,
+    pub loudness: Option<audio::Loudness>,
+}
+
+/// The integrated loudness and true peak of a file's sound (`ebur128`).
+pub(crate) fn measure_loudness(bin: &Path, file: &Path) -> Option<audio::Loudness> {
+    let out = Command::new(bin)
+        .args(["-hide_banner", "-nostats", "-i"])
+        .arg(file)
+        .args(["-vn", "-af", "ebur128=peak=true", "-f", "null", "-"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .output()
+        .ok()?;
+    audio::parse_ebur128(&String::from_utf8_lossy(&out.stderr))
+}
+
+/// Two-pass `loudnorm` to -14 LUFS / -1 dBTP on `file`'s sound (video
+/// copied); the file is replaced in place. A failure leaves it untouched.
+fn normalize_master(bin: &Path, file: &Path) -> Result<(), String> {
+    let measure = Command::new(bin)
+        .args(["-hide_banner", "-nostats", "-i"])
+        .arg(file)
+        .args(["-vn", "-af", &audio::loudnorm_measure_filter(), "-f", "null", "-"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .output()
+        .map_err(|e| format!("ffmpeg: {e}"))?;
+    let measured = audio::parse_loudnorm(&String::from_utf8_lossy(&measure.stderr))
+        .ok_or("loudnorm did not report its measurements")?;
+    let part = file.with_extension("loud.mp4");
+    let out = Command::new(bin)
+        .args(["-hide_banner", "-y", "-i"])
+        .arg(file)
+        .args(["-map", "0:v", "-map", "0:a", "-c:v", "copy", "-af", &audio::loudnorm_apply_filter(&measured)])
+        .args(["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"])
+        .arg(&part)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("ffmpeg: {e}"))?;
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&part);
+        return Err(String::from_utf8_lossy(&out.stderr).lines().rev().take(5).collect::<Vec<_>>().join("\n"));
+    }
+    std::fs::rename(&part, file).map_err(|e| e.to_string())
 }
 
 /// The microphone file and its offset (seconds) from the first screen frame.
@@ -242,13 +303,16 @@ pub fn export_finish(
     clicks: Vec<f64>,
     volume: f64,
     pieces: Vec<PieceRequest>,
-) -> Result<String, String> {
+    normalize: Option<bool>,
+) -> Result<ExportOutput, String> {
     let session = finish(&state)?;
-    mix(&session.video, &session.output, &video_path, &clicks, volume, &pieces)
+    mix(&session.video, &session.output, &video_path, &clicks, volume, &pieces, normalize.unwrap_or(true))
 }
 
 /// Mixes the soundtrack under the silent `video` into `output` (which then
 /// owns the file; `video` is removed), or just moves it when there is no sound.
+/// With `normalize`, the master is brought to -14 LUFS / -1 dBTP; its
+/// loudness is measured either way.
 pub(super) fn mix(
     video: &Path,
     output: &Path,
@@ -256,7 +320,8 @@ pub(super) fn mix(
     clicks: &[f64],
     volume: f64,
     pieces: &[PieceRequest],
-) -> Result<String, String> {
+    normalize: bool,
+) -> Result<ExportOutput, String> {
     let bin = ffmpeg::locate().ok_or("FFmpeg disappeared during export.")?;
 
     let clicks_ms: Vec<u64> = clicks
@@ -302,17 +367,18 @@ pub(super) fn mix(
             volume: p.volume,
             fade_in: p.fade_in,
             fade_out: p.fade_out,
+            duck: p.duck.iter().map(|d| (d.at, d.gain)).collect(),
         });
         files.push(file);
     }
 
     let Some(filter) = audio::mix_filter(&clicks_ms, volume, &placed) else {
         std::fs::rename(video, output).map_err(|e| e.to_string())?;
-        return Ok(output.to_string_lossy().into_owned());
+        return Ok(ExportOutput { file: output.to_string_lossy().into_owned(), loudness: None });
     };
 
     let click = video.with_extension("click.wav");
-    let mut cmd = Command::new(bin);
+    let mut cmd = Command::new(&bin);
     cmd.args(["-hide_banner", "-y", "-i"]).arg(video);
     if !clicks_ms.is_empty() {
         std::fs::write(&click, audio::wav(&audio::click_samples())).map_err(|e| e.to_string())?;
@@ -332,10 +398,16 @@ pub(super) fn mix(
         // Keep the silent video rather than lose the export.
         std::fs::rename(video, output).map_err(|e| e.to_string())?;
         log::warn!("audio mix failed: {}", String::from_utf8_lossy(&out.stderr));
-        return Ok(output.to_string_lossy().into_owned());
+        return Ok(ExportOutput { file: output.to_string_lossy().into_owned(), loudness: None });
     }
     let _ = std::fs::remove_file(video);
-    Ok(output.to_string_lossy().into_owned())
+    if normalize {
+        if let Err(e) = normalize_master(&bin, output) {
+            log::warn!("loudness normalisation skipped: {e}");
+        }
+    }
+    let loudness = measure_loudness(&bin, output);
+    Ok(ExportOutput { file: output.to_string_lossy().into_owned(), loudness })
 }
 
 #[tauri::command]
