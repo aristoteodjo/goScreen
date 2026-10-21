@@ -146,6 +146,27 @@ Use: a spoken number → `stat-counter`; a command → `prompt-input`; a tool �
   of its phrase; scene changes land on the attack of each sentence.
 - The person records a voice-over in the editor (mic button on an audio
   track): suggest it, do not wait for it.
+- `sound.styles` lists the six generated beds (calm, warm, pulse, rise,
+  focus, bright) and the effects. `sound.music`: `{ "video", "tone":
+  "playful" }` or `{ "video", "style": "rise", "seed": 3, "payoff": 6.5 }`
+  renders a bed for the whole montage (synthesised in code: nothing to
+  license, the same file for the same inputs) and lays it on a free track at
+  `volume` 0.28, ducked under the voice, ending on the last spoken word when
+  the take has words. Returns the clip and `offset` (where in the bed the
+  film starts, so its full section lands on the payoff).
+- `edit.addSfx`: `{ "video", "kind": "pop", "t": 4.2 }`; the answer carries
+  `count` and a `warning` past 4 effects.
+- A sound's `duck` (default true for anything that is not a voice) lowers it
+  by 20 dB while a voice speaks; set `"duck": false` through `edit.save` for
+  a sound that must stay (a product's own audio).
+- `edit.captions`: `{ "video" }` (or `from`/`to`, `style.accent`) reads
+  `<stem>.words.json` (`edit.transcribe` writes it) and replaces the
+  captions `caption-word-*`: text overlays with `words` timed from their
+  start, drawn word by word. `edit.subtitles`: `{ "video" }` writes
+  `<stem>.srt`. Without a transcription both say to run `edit.transcribe`.
+- `export.video` returns `loudness` (`integrated` LUFS, `truePeak` dBTP) of
+  the master, normalised to -14 / -1 by default; `sound.measure`
+  `{ "file" }` measures any file.
 
 ## Inspirations
 

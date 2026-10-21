@@ -103,13 +103,27 @@ height as a fraction of the output height). Pixel figures are for 1080p.
 
 ## Sound
 
-- Targets for the mix the person hears: -14 LUFS integrated, peaks ≤ -1 dBTP.
-  Voice leads; music under it at `volume` 0.15 to 0.3 with `fadeOut` 1 to 2 s.
-- 2 to 4 sound effects per film besides the music. Tap sounds
-  (`sound.clicks`) count: off in a short ad, or at `volume` ≤ 0.4 under a
-  voice.
+- The export brings the master to -14 LUFS integrated, peaks at -1 dBTP
+  (two-pass `loudnorm`, on by default) and returns what it measured
+  (`loudness`); `sound.measure` reads any file. Do not chase the target by
+  hand with `volume`: set the balance, the export sets the level.
+- Voice leads. Music is a generated bed (`sound.music`: style by `tone` or
+  `genre`, `seed` to vary, `payoff` to open its full section on the product
+  moment), laid at `volume` 0.28 (about 18 to 22 dB under a cleaned voice),
+  fading in 0.4 s and out 1.2 s, ending on the last spoken word when the take
+  has words. Any sound that is not a voice is ducked -20 dB while someone
+  speaks (80 ms down, 600 ms back) unless its `duck` is false.
+- 2 to 4 sound effects per film besides the music (`edit.addSfx`: tap, pop,
+  thud, tick, riser; never a whoosh). Beyond 4 the command warns: take one
+  out. Tap sounds (`sound.clicks`) count: off in a short ad, or at
+  `volume` ≤ 0.4 under a voice.
 - Clean a voice before cutting to it: `edit.cleanSilences` (`trim`, then
   `strip` if it drags), then `edit.alignToVoice`.
+- Captions follow the words (`edit.captions`, needs `edit.transcribe`): 1 to
+  4 words at a time, each shown as it is said, the spoken one in the accent,
+  80 ms fades, bottom centre inside the format's safe zone, never over a
+  face. `edit.subtitles` writes the `.srt` (≤ 7 words a cue) for platforms
+  that take one.
 
 ## Talking-head takes
 

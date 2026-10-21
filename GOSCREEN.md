@@ -33,6 +33,8 @@ packages/
                       rendu HTML, comparaison, relecture par une IA, exemples d'apprentissage du modèle local
   inspiration/        Bibliothèque de prompts partagés (pur, zod) : direction créative lue dans chaque prompt,
                       recherche, réglages de film, brief pour l'IA
+  music/              Musique et effets synthétisés en code (pur, zod) : styles, plan déterministe, rendu PCM,
+                      `render.mjs` pour Node
 ```
 
 ## Règles
@@ -706,6 +708,61 @@ fonctions pures du temps ; les notes détaillées (chiffres, timecodes) sont ran
   3D (pièces, logos extrudés) ; voix de synthèse (le cours utilise ElevenLabs : voix « Advertisement »,
   stability 40) ; mots-clés de la voix (ASR) pour déclencher les entrées de texte sur le mot, pas seulement
   la scène ; vérification visuelle du look premium sur une prise longue (l'export exige la fenêtre visible).
+
+### Son : musique générée, ducking, -14 LUFS, légendes par mot
+
+Relevé sur `video-agent-skills` (beds synthétisés, choisis par l'émotion, calés sur le payoff, -14 LUFS / -1 dBTP)
+et le guide « Edit a video 100% with Claude Code » (musique 18-22 dB sous la voix, duckée, finissant sur le dernier
+mot ; légendes 2-4 mots, mot actif en accent, fondu 80 ms, bas-centre en zone sûre). Rien ne dépend d'un fichier
+audio embarqué : tout est synthétisé en code.
+
+- **Contrat des mots** (`@goscreen/scenario` `words.ts`, partagé avec la transcription) : `<stem>.words.json` =
+  `{ language, source: "whisper" | "manual", words: [{ text, start, end, p }] }`, secondes **source** de la prise.
+  `parseWordsFile` lit mot par mot (un mot invalide est écarté seul). Rust `words_read` le rend tel quel ; cette
+  tranche ne transcrit pas : sans fichier, `edit.captions` et `edit.subtitles` renvoient vers `edit.transcribe`.
+- **Musique générée** (`packages/music`, pur, zod, testé) : 6 styles (`calm`, `warm`, `pulse`, `rise`, `focus`,
+  `bright`), `pickStyle(tone, genre)` (ton de campagne d'abord, genre ensuite, `focus` sinon). `musicPlan(style,
+  seed, durée)` est déterministe (mulberry32) : tempo, tonalité, un accord par mesure, sections `intro | build |
+  full | break | outro` en mesures entières (un `break` au milieu des pièces longues). `alignToPayoff(plan, t)`
+  donne l'`offset` pour que la première section `full` tombe sur le payoff. `renderMusic(plan, durée, sr, offset)`
+  : pad à trois harmoniques qui respire avec la mesure, basse pincée, arpège, kick doux, passe-bas un pôle, délai
+  en croche pointée, sidechain interne sur le temps ; crête fixée à -3 dBFS (le bed sort vers -17 LUFS, donc le
+  `volume` 0,28 du clip le pose ~11 dB sous une voix nettoyée à -16, et le ducking fait le reste). `sfx.ts` :
+  `tap`, `pop`, `thud`, `tick`, `riser` (jamais de whoosh), `MAX_SFX = 4`. `render.mjs <job.json> <out.wav>`
+  (Node ≥ 22.6, sources TS dépouillées des types). Rust `sound_render(video_path, job)` (`modules/sound/`) :
+  `music-<style>-<seed>-<s>s[-p<payoff>].wav` ou `sfx-<kind>.wav` dans `<stem>.assets/`, rendu une fois, servi
+  comme un asset importé (`offset`, `seconds` en plus). Le studio n'envoie jamais de chemin.
+- **Ducking** (`render-engine/soundtrack.ts`, pur, testé) : `duckEnvelope(plages de voix, { depthDb: -20, attack:
+  0.08, release: 0.6 })` → courbe de gain linéaire par morceaux (deux phrases proches restent duckées entre elles) ;
+  `duckFor` en découpe la part d'un clip ; `AudioClip.duck` (défaut : oui pour tout ce qui n'est pas une voix,
+  `isVoiceClip` : mic ou « Voice-over ») ; panneau du son « Duck under voice ». Preview : second `GainNode` dans
+  `voices.ts`, sur les plages des clips (`voiceSpans`). Export : `voiceRangesOf` (`editor/sound.ts`) affine avec
+  les plages sonores de FFmpeg (`silencedetect`, repli sur les clips), chaque `AudioPiece` porte `duck` et Rust
+  l'écrit en `volume='v*if(lt(t,…),…)':eval=frame` (`volume_expr`, testé).
+- **Master -14 LUFS** : après `amix`, `loudnorm` en deux passes (mesure `print_format=json`, puis application
+  `linear=true` + `aresample=48000`, vidéo copiée) ; option « Normalise to -14 LUFS » du dialogue d'export (défaut
+  oui, `normalize`), puis `ebur128=peak=true` **mesure** toujours : `export_finish` / `export_assemble` rendent
+  `{ file, loudness: { integrated, truePeak } | null }`, affiché dans le toast et renvoyé par `export.video` ;
+  `audio_loudness` / `sound.measure` mesurent n'importe quel fichier. Les brouillons (`edit.preview`) sont muets,
+  donc sans mesure.
+- **Musique dans le montage** (`withMusic`, pur, testé) : piste libre, de 0 à la fin du dernier mot (+0,3 s, le
+  fondu de 1,2 s finit juste après lui) ou à la fin du montage, jamais au-delà du fichier, `fadeIn` 0,4 s,
+  `duck: true`. `withSfx` compte les effets du film ; au-delà de 4, la commande avertit.
+- **Légendes par mot** (`render-engine/captions.ts`, pur, testé) : `captionsFromWords(mots, { maxWords: 4,
+  maxSeconds: 2.2, gap: 0.35 })` coupe aussi sur la fin de phrase ; un groupe tient 0,4 s après son dernier mot
+  sans mordre le suivant. `TextOverlay.words` (`{ text, start, end }` depuis le début du calque) : le calque est
+  un texte ordinaire (déplaçable, stylable), dessiné par `drawCaption` : mots posés une fois (rien ne bouge),
+  chacun apparaît en 80 ms quand il est dit, le mot en cours prend l'accent et pop sur une courbe `sharp`, le
+  groupe s'efface 80 ms avant sa fin (`captionStateAt`). `CAPTION_PLACE` par format (9:16 : y 0,70, taille
+  0,044, largeur 0,74 ; 16:9 : y 0,86, 0,05…) respecte les zones sûres de `rules.md`. Ids `caption-word-N`,
+  remplacés à chaque passage ; `timelineWords` suit les coupes et la vitesse (un mot coupé disparaît). Couleurs :
+  accent et police du film, sinon la couleur des touches. `srtOf` (≤ 7 mots par cue) → `<stem>.srt`
+  (`srt_write`). Bouton « Captions from words » / « Write .srt » dans le panneau d'une voix.
+- IA (`modules/control/sound.ts`) : `sound.styles`, `sound.music`, `edit.addSfx`, `edit.captions`,
+  `edit.subtitles`, `sound.measure`.
+- Limites : la preview ducke sur les plages des clips, pas sur les phrases ; le bed reste sobre (synthèse
+  additive, pas de calage sur le tempo du montage) ; `render.mjs` exige Node ≥ 22.6 ; la transcription vient
+  d'une autre tranche (`edit.transcribe`).
 
 ### Capture native
 
