@@ -51,6 +51,23 @@ export {
   type Timeline,
   timelineOf,
 } from "./compose";
+export {
+  type Chunk,
+  type ChunkSettings,
+  CHUNK_SECONDS,
+  chunkFingerprint,
+  chunkPlan,
+  fnv64,
+  stableJson,
+} from "./chunks";
+export {
+  type ContactSheet,
+  contactSheet,
+  playingAt,
+  SHEET,
+  type SheetCell,
+  stillTimes,
+} from "./contact";
 export { type CursorMark, cursorAt } from "./cursor";
 export { type Quad, quadMapper } from "./homography";
 export {
