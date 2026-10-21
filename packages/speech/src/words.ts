@@ -96,9 +96,9 @@ export function normalizeWord(text: string): string {
       .normalize("NFD")
       .replace(/\p{M}/gu, "")
       .toLowerCase()
-      // An apostrophe or a hyphen inside a word joins it ("essayez-le",
-      // "aujourd'hui"): speech-to-text gives such a word in one piece.
-      .replace(/(?<=\p{L})['’-](?=\p{L})/gu, "")
+      // An apostrophe or a hyphen splits a word ("essayez-le", "aujourd'hui"):
+      // speech-to-text cuts such words one way or the other, so both sides
+      // are compared piece by piece.
       .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim()
   );

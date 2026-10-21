@@ -37,13 +37,17 @@ describe("words file", () => {
   it("normalizes accents, case and punctuation", () => {
     expect(normalizeWord("Élève,")).toBe("eleve");
     expect(tokensOf("L'appli — c'est  Génial !")).toEqual([
-      "lappli",
-      "cest",
+      "l",
+      "appli",
+      "c",
+      "est",
       "genial",
     ]);
     expect(tokensOf("Essayez-le aujourd'hui - vite")).toEqual([
-      "essayezle",
-      "aujourdhui",
+      "essayez",
+      "le",
+      "aujourd",
+      "hui",
       "vite",
     ]);
   });

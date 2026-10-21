@@ -104,15 +104,31 @@ export function matchTakes(
   words: Word[],
   { tolerance = 0.34 }: MatchOptions = {},
 ): LineMatches[] {
-  const tokens = words.map((w) => tokensOf(w.text).join("") || "·");
+  // A transcribed word may hold several tokens ("aujourd'hui"); windows are
+  // found over tokens, then mapped back to the words that own them.
+  const tokens: string[] = [];
+  const ownerWord: number[] = [];
+  words.forEach((w, i) => {
+    const parts = tokensOf(w.text);
+    for (const t of parts.length > 0 ? parts : ["·"]) {
+      tokens.push(t);
+      ownerWord.push(i);
+    }
+  });
+  const toWords = (c: Candidate): Candidate => ({
+    ...c,
+    from: ownerWord[c.from],
+    to: ownerWord[c.to - 1] + 1,
+  });
   const matched = lines.map((text) => {
     const line = tokensOf(text);
     if (line.length === 0) return { text, line, windows: [] as Candidate[] };
     // A take may start on any word: its first one may have been misheard.
     const candidates: Candidate[] = [];
     for (let from = 0; from < tokens.length; from++) {
+      if (from > 0 && ownerWord[from] === ownerWord[from - 1]) continue;
       const c = bestWindowAt(tokens, line, from, tolerance);
-      if (c) candidates.push(c);
+      if (c) candidates.push(toWords(c));
     }
     return { text, line, windows: pickWindows(candidates) };
   });
@@ -145,6 +161,8 @@ export function matchTakes(
     return { line, text: m.text, takes, restarts: [] };
   });
   // Restarts: the line's opening said again in the gap before one of its takes.
+  // Per word, for the restart search (word indices).
+  const wordTokens = words.map((w) => tokensOf(w.text).join("") || "·");
   const taken = (i: number) =>
     result.some((r) => r.takes.some((t) => i >= t.from && i < t.to));
   const allEnds = result.flatMap((o) => o.takes.map((t) => t.to));
@@ -155,8 +173,16 @@ export function matchTakes(
     const opensAt = (i: number, limit: number) => {
       const length = Math.min(head.length, limit - i);
       if (length < minimum || taken(i)) return false;
-      const slice = tokens.slice(i, i + length);
-      return levenshtein(slice, head.slice(0, length)) <= (length >= 3 ? 1 : 0);
+      // Words may carry several tokens: compare the joined text of the
+      // opening against the joined text of as many words.
+      const want = head.slice(0, length).join("");
+      let got = "";
+      let k = i;
+      while (k < limit && got.length < want.length) got += wordTokens[k++];
+      return (
+        levenshtein([...got], [...want]) <=
+        Math.max(0, Math.floor(want.length * 0.15))
+      );
     };
     for (const take of r.takes) {
       const previous = Math.max(0, ...allEnds.filter((to) => to <= take.from));
@@ -339,16 +365,35 @@ export function takesReport(
 
 export type Range = { in: number; out: number };
 
-/** The clips of the chosen takes, in script order, with a small handle each side. */
-export function clipsFromTakes(picked: Picked[], handle = 0.07): Range[] {
+/**
+ * The clips of the chosen takes, in script order, with a small handle each
+ * side. A handle never reaches into a neighbouring word (the restart or the
+ * take before): the cut stays in the silence between words.
+ */
+export function clipsFromTakes(
+  picked: Picked[],
+  handle = 0.07,
+  words: Word[] = [],
+): Range[] {
   const takes = picked.flatMap((p) => (p.take ? [p.take] : []));
   return takes.map((t, i) => {
     const before = takes[i - 1];
     const after = takes[i + 1];
-    const inAt = Math.max(0, t.start - handle, before ? before.end : 0);
+    const wordBefore = words.filter((w) => w.end <= t.start + 1e-6).at(-1);
+    const wordAfter = words.find((w) => w.start >= t.end - 1e-6);
+    const inAt = Math.max(
+      0,
+      t.start - handle,
+      before ? before.end : 0,
+      wordBefore ? wordBefore.end : 0,
+    );
     const outAt = Math.max(
       inAt + 0.05,
-      Math.min(t.end + handle, after ? after.start : Number.POSITIVE_INFINITY),
+      Math.min(
+        t.end + handle,
+        after ? after.start : Number.POSITIVE_INFINITY,
+        wordAfter ? wordAfter.start : Number.POSITIVE_INFINITY,
+      ),
     );
     return { in: inAt, out: outAt };
   });

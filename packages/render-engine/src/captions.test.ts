@@ -27,8 +27,9 @@ describe("captionsFromWords", () => {
       w("late", 3.5, 3.8),
     ];
     const groups = captionsFromWords(words);
+    // The full stop still ends the group, but is not shown.
     expect(groups.map((g) => g.words.map((x) => x.text).join(" "))).toEqual([
-      "We ship faster.",
+      "We ship faster",
       "Every single day now",
       "really",
       "late",

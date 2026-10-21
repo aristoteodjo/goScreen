@@ -161,6 +161,13 @@ describe("takesReport and clips", () => {
 
     const clips = clipsFromTakes(picked, 0.05);
     expect(clips).toHaveLength(3);
+    // With the words, a handle stops at the neighbouring word's edge.
+    const tight = clipsFromTakes(picked, 0.5, words);
+    const firstTake = picked[0].take ?? { from: 0, to: 0, start: 0, end: 0 };
+    const previous = words[firstTake.from - 1];
+    if (previous) expect(tight[0].in).toBeGreaterThanOrEqual(previous.end);
+    const following = words[firstTake.to];
+    if (following) expect(tight[0].out).toBeLessThanOrEqual(following.start);
     const first = picked[0].take ?? { start: Number.NaN, end: Number.NaN };
     expect(clips[0].in).toBeCloseTo(first.start - 0.05);
     expect(clips[0].out).toBeCloseTo(first.end + 0.05);

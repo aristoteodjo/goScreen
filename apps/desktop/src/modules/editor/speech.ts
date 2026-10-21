@@ -95,6 +95,7 @@ function withClips(edit: EditState, clips: MainClip[]): EditState {
 
 export type TakesProposal = {
   script: string[];
+  words: Word[];
   picked: Picked[];
   stats: TakesStats;
   markdown: string;
@@ -113,7 +114,7 @@ export async function proposeTakes(
   const envelope = await loadEnvelope(videoPath);
   const picked = pickTakes(matchTakes(lines, words), words, { envelope });
   const { markdown, stats } = takesReport(picked, words);
-  return { script: lines, picked, stats, markdown };
+  return { script: lines, words, picked, stats, markdown };
 }
 
 /** The montage with one clip per chosen take, in script order; writes takes.md. */
@@ -122,7 +123,7 @@ export async function applyTakes(
   edit: EditState,
   proposal: TakesProposal,
 ): Promise<{ edit: EditState; clips: number; report: string }> {
-  const ranges = clipsFromTakes(proposal.picked, 2 / FPS);
+  const ranges = clipsFromTakes(proposal.picked, 2 / FPS, proposal.words);
   if (ranges.length === 0) throw new Error("No line was found in the words.");
   const like = clipLike(edit);
   const clips: MainClip[] = ranges.map((r) => ({

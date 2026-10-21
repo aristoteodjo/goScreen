@@ -45,9 +45,18 @@ export function captionsFromWords(
   const opt = { ...CAPTION_DEFAULTS, ...o };
   const sorted = [...words]
     .filter((w) => w.text.trim().length > 0 && w.end >= w.start)
+    // Captions carry words, not punctuation: a trailing comma or full stop
+    // goes (a question or exclamation mark is part of the word's meaning),
+    // but a sentence still ends where it ended.
+    .map((w) => ({
+      ...w,
+      text: w.text.replace(/[,.;:…]+$/u, ""),
+      ends: endsSentence(w.text),
+    }))
+    .filter((w) => w.text.length > 0)
     .sort((a, b) => a.start - b.start);
   const groups: TimedWord[][] = [];
-  let current: TimedWord[] = [];
+  let current: (TimedWord & { ends: boolean })[] = [];
   for (const w of sorted) {
     const last = current[current.length - 1];
     const breaks =
@@ -55,14 +64,15 @@ export function captionsFromWords(
       (current.length >= opt.maxWords ||
         w.end - current[0].start > opt.maxSeconds ||
         (last ? w.start - last.end > opt.gap : false) ||
-        (last ? endsSentence(last.text) : false));
+        (last ? last.ends : false));
     if (breaks) {
-      groups.push(current);
+      groups.push(current.map(({ ends: _ends, ...word }) => word));
       current = [];
     }
     current.push(w);
   }
-  if (current.length) groups.push(current);
+  if (current.length)
+    groups.push(current.map(({ ends: _ends, ...word }) => word));
   return groups.map((g, i) => {
     const last = g[g.length - 1];
     const next = groups[i + 1]?.[0];
