@@ -156,6 +156,31 @@ const videoEntrySchema = z.object({
 });
 export type VideoEntry = z.infer<typeof videoEntrySchema>;
 
+/** Compositions of a montage (`<stem>.assets/compositions/`) and of its project library. */
+export const compositionsIpc = {
+  list: async (videoPath: string) =>
+    z
+      .object({
+        video: z.array(z.unknown()),
+        library: z.array(z.unknown()),
+        project: z.boolean(),
+      })
+      .parse(await invoke("composition_list", { videoPath })),
+  load: async (videoPath: string, id: string) =>
+    invoke("composition_load", { videoPath, id }) as Promise<unknown>,
+  save: async (
+    videoPath: string,
+    id: string,
+    doc: unknown,
+    library = false,
+  ) => {
+    await invoke("composition_save", { videoPath, id, doc, library });
+  },
+  delete: async (videoPath: string, id: string, library = false) => {
+    await invoke("composition_delete", { videoPath, id, library });
+  },
+};
+
 export const projectsIpc = {
   list: async () => z.array(projectSchema).parse(await invoke("projects_list")),
   create: async (name: string) =>
@@ -343,6 +368,18 @@ export const ipc = {
       .string()
       .min(1)
       .parse(await invoke("block_render", job)),
+  /** One still of a block or composition at t seconds, as base64 JPEG. */
+  blockFrame: async (job: {
+    html: string;
+    width: number;
+    height: number;
+    t: number;
+    transparent: boolean;
+  }) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("block_frame", job)),
   /** Describes a page (after optional steps) for an AI. */
   siteInspect: async (job: unknown) =>
     scenarioOutcomeSchema.parse(await invoke("site_inspect", { job })),

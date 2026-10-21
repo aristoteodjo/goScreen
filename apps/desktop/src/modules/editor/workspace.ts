@@ -5,7 +5,12 @@ import { type Panel, usePlayback } from "./store";
 // and focused for one job. Each keeps its own panel sizes.
 
 export type WorkspaceId = "edit" | "animation" | "film" | "audio";
-export type LeftTab = "project" | "blocks" | "effects" | "scenes";
+export type LeftTab =
+  | "project"
+  | "blocks"
+  | "compositions"
+  | "effects"
+  | "scenes";
 
 export const WORKSPACES: {
   id: WorkspaceId;

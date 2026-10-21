@@ -278,14 +278,18 @@ export type ImageOverlay = OverlayBase & {
   asset: string;
   radius: number;
 };
+export type LayerSource =
+  | { block: string; props: Record<string, string | number> }
+  | { composition: string; props: Record<string, string | number> };
 export type VideoOverlay = OverlayBase & {
   kind: "video";
   asset: string;
   in: number;
   volume: number;
   radius: number;
-  // A rendered block (HTML composition): what to render it again from.
-  source?: { block: string; props: Record<string, string | number> };
+  // A rendered block of the catalogue, or a composition (an HTML page kept
+  // with the montage or in the project library): what to render it again from.
+  source?: LayerSource;
 };
 export type ShapeKind = "arrow" | "rect" | "ellipse" | "highlight";
 export type ShapeOverlay = OverlayBase & {

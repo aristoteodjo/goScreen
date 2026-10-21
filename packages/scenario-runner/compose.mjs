@@ -7,9 +7,12 @@
 // transparent, out, ffmpeg, assets? }. With `assets` (a folder), the page may
 // load the pictures and clips of that folder, by name only, from
 // http://goscreen.assets/<name>; nothing else. Progress on stdout, one JSON per line.
+// With `frame` (seconds), a single still is written to `out` instead (JPEG,
+// or PNG with `format`; on `background` when the page is transparent): a
+// look without a render.
 
 import { spawn } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { assetName, byteRange, composeArgs, framesFor } from "./lib.mjs";
@@ -74,6 +77,20 @@ async function main() {
     await page.evaluate(() => document.fonts?.ready);
     // A page that builds its animations from script says when it is done.
     await page.evaluate(() => window.__goscreenReady);
+    if (typeof job.frame === "number") {
+      await page.evaluate(seek, job.frame);
+      if (job.transparent)
+        await page.evaluate((bg) => {
+          document.documentElement.style.backgroundColor = bg;
+        }, job.background || "#808080");
+      const still =
+        job.format === "png"
+          ? await page.screenshot({ type: "png" })
+          : await page.screenshot({ type: "jpeg", quality: 90 });
+      writeFileSync(job.out, still);
+      emit({ type: "done", file: job.out, frames: 1 });
+      return;
+    }
     const frames = framesFor(job.duration, job.fps);
     ffmpeg = spawn(job.ffmpeg, composeArgs(job), {
       stdio: ["pipe", "ignore", "pipe"],

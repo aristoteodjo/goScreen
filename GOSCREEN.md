@@ -299,6 +299,47 @@ code lu dans un bloc masqué, et les noms `remember` se remplissent pendant la p
   direct ; ajout au curseur en une modification annulable.
 - IA : `blocks.list`, `edit.addBlock`, `edit.updateBlock`.
 
+### Compositions : pages HTML écrites par l'IA (vocabulaire ouvert)
+
+- Une **composition** (`@goscreen/blocks` `composition.ts`, pur et testé) est une page HTML/CSS/JS autonome écrite
+  par une IA ou une personne, rendue comme un bloc : `{ id [a-z0-9-], label, description?, box {width, height} px,
+  duration, transparent, props: PropSpec[] (mêmes types que les blocs), html }` (schéma zod `compositionSchema`).
+  Les réglages sont injectés **avant** les scripts de la page comme `window.__props` et substitués dans le HTML
+  en `{{name}}` (échappés ; `{{width}}` et `{{height}}` aussi). La page anime en CSS/WAAPI, ou expose
+  `window.setT(t)` (secondes), relié à `__goscreenSeek` par le prélude (`prepareCompositionHtml`).
+- **Déterminisme** : le prélude pose `window.random(seed)` (mulberry32, graine tirée du HTML), remplace
+  `Math.random`, neutralise `requestAnimationFrame`, `setTimeout` et `setInterval` (le rendu est par seek) et
+  résout `__goscreenReady`. `compositionIssues` refuse, avec le chemin zod de chaque faute : HTML > 256 Ko, toute
+  URL `http(s)://` ou `//` dans `src`/`href`/`url()`/`@import` (hors `data:`), `fetch`/`XMLHttpRequest`/`WebSocket`,
+  `Math.random`, doublon ou défaut invalide d'un réglage. En aperçu (`preview: true`), un pilote en temps réel
+  appelle `setT` en boucle pour que la page joue dans une iframe `sandbox="allow-scripts"`.
+- **Rendu** : `block_render` et `compose.mjs` tels quels, plus un **cache par empreinte** (`render_key`, FNV-1a 64
+  bits du HTML final, taille, durée, i/s, alpha) dans `<cache>/goScreen/blocks/<empreinte>.<ext>` : même entrée,
+  même fichier, pas de nouveau rendu ; dans une session, le même rendu réutilise aussi l'asset déjà importé.
+  `compose.mjs` accepte `frame: t` (une image JPEG, ou PNG, sur gris si transparent) ; commande `block_frame`
+  (base64). Testé de bout en bout (`compose.test.mjs` : le pixel d'une image à t = 1,5 s vaut bien 150).
+- **Stockage** (Rust `modules/compositions/`, ids `[a-z0-9-]`, jamais de chemin) : celles d'un montage dans
+  `<stem>.assets/compositions/<id>.json`, la **bibliothèque du projet** dans `<projet>/compositions/<id>.json`
+  (le dossier parent de la vidéo qui porte `project.json`). `composition_list` (montage, bibliothèque, `project`),
+  `composition_load` (montage d'abord), `composition_save` (`library`), `composition_delete` ; écriture atomique,
+  fichiers invalides ignorés.
+- **Calque** : `VideoOverlay.source = { composition: id, props }` (union avec `{ block, props }`). « Edit
+  composition… » (panneau du calque) ouvre réglages + éditeur du HTML avec aperçu vivant et fautes listées, puis
+  re-rend à la même place ; la copie du montage est mise à jour. Un bloc du catalogue devient une composition
+  par « Convert to composition » (`compositionFromBlock` : son HTML à la taille du calque, réglages inclus dans
+  le code, donc éditable).
+- **Galerie** : onglet Compositions du panneau Projet (celles du montage, puis la bibliothèque), dialogue
+  Compositions (« New composition » part de `EXAMPLE_COMPOSITION`, un badge qui orbite dessiné par `setT` ;
+  « Save to project library ») ; clic droit sur l'aperçu « Add a composition here… » ; ajout au curseur en une
+  modification annulable ; les couleurs du film remplissent les réglages `color` de même nom (`accent`, `ink`).
+- IA (`modules/control/compositions.ts`) : `compositions.list`, `compositions.get`, `compositions.preview`
+  (une image JPEG de la composition seule à t, sans la poser), `edit.addComposition` (schéma complet ou id déjà
+  gardé, rend puis pose), `edit.updateComposition` (props, `html` ou champs de la composition), `compositions.save`
+  (vers la bibliothèque du projet). Les fautes de validation reviennent avec leur chemin zod.
+- Limites : la galerie et l'aperçu vivant rejouent les animations CSS en rechargeant l'iframe (pas de boucle
+  native) ; une composition convertie depuis un bloc n'a plus de réglages (tout est dans le HTML) ; le cache de
+  rendu n'est jamais purgé.
+
 ### Inspirations : prompts partagés dans le processus créatif
 
 - Source : la liste communautaire `yihui-dev/awesome-opus5-5-videos` (MIT, ~700 vidéos faites en code, chacune avec
