@@ -11,6 +11,7 @@ import {
   type TextOverlay,
   TRANSITION_KINDS,
   type TransitionKind,
+  type VideoOverlay,
 } from "@goscreen/render-engine";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -35,7 +36,11 @@ import {
   editActions,
   type SilenceMode,
 } from "./actions";
+import { blockById } from "@goscreen/blocks";
 import { useBlocksDialog } from "./BlocksDialog";
+import { useCompositionsDialog } from "./CompositionsDialog";
+import { convertBlockLayer } from "./compositions";
+import { useSession } from "./session";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
 import { SILENCE_DEFAULTS } from "./silences";
@@ -580,26 +585,88 @@ export function OverlayPanel() {
           onReset={() => set({ rotation: 0 })}
         />
       </Section>
-      {overlay.kind === "video" && overlay.source ? (
+      {overlay.kind === "video" && overlay.source && "block" in overlay.source ? (
+        <BlockSection overlay={overlay} source={overlay.source} />
+      ) : null}
+      {overlay.kind === "video" &&
+      overlay.source &&
+      "composition" in overlay.source ? (
         <Section
-          title="Block"
-          hint={`${overlay.source.block}: change its texts or colours and render it again.`}
+          title="Composition"
+          hint={`${overlay.source.composition}: change its settings or its HTML and render it again.`}
         >
           <Button
             size="sm"
             variant="secondary"
             className="self-start"
             onClick={() =>
-              useBlocksDialog.getState().show({ editing: overlay.id })
+              useCompositionsDialog.getState().show({ editing: overlay.id })
             }
           >
-            Edit block…
+            Edit composition…
           </Button>
         </Section>
       ) : null}
       <AnimatePanel overlay={overlay} set={set} />
       <DeleteButton label="Delete overlay" />
     </>
+  );
+}
+
+/** A block layer: edit its props, or make its page an editable composition. */
+function BlockSection({
+  overlay,
+  source,
+}: {
+  overlay: VideoOverlay;
+  source: { block: string; props: Record<string, string | number> };
+}) {
+  const convert = useMutation({
+    mutationFn: async () => {
+      const block = blockById(source.block);
+      if (!block) throw new Error(`Unknown block "${source.block}".`);
+      const r = await convertBlockLayer(
+        useSession.getState().videoPath,
+        useEdit.getState().edit,
+        overlay.id,
+        block,
+      );
+      useEdit.getState().change(() => r.edit, "composition");
+      return r.composition;
+    },
+    onSuccess: (c) => {
+      if (!c?.id) return;
+      toast.success("Block converted: its HTML is now editable");
+      useCompositionsDialog.getState().show({ editing: overlay.id });
+    },
+    onError: (e) =>
+      toast.error("Could not convert the block", {
+        description: e instanceof Error ? e.message : String(e),
+      }),
+  });
+  return (
+    <Section
+      title="Block"
+      hint={`${source.block}: change its texts or colours and render it again, or convert it to a composition to edit its HTML.`}
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => useBlocksDialog.getState().show({ editing: overlay.id })}
+        >
+          Edit block…
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={convert.isPending}
+          onClick={() => convert.mutate()}
+        >
+          Convert to composition
+        </Button>
+      </div>
+    </Section>
   );
 }
 

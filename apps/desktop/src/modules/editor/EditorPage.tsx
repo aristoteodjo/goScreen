@@ -60,6 +60,7 @@ import { VIEW_ZOOMS } from "./commands";
 import { initialLayers } from "./devices";
 import { EditorPalette } from "./EditorPalette";
 import { BlocksDialog } from "./BlocksDialog";
+import { CompositionsDialog } from "./CompositionsDialog";
 import { ExportDialog } from "./ExportDialog";
 import { cn } from "@/lib/utils";
 import { editActions } from "./actions";
@@ -242,6 +243,7 @@ export function EditorPage({ video }: { video: string }) {
       )}
       <ExportDialog open={exporting} onOpenChange={setExporting} />
       <BlocksDialog />
+      <CompositionsDialog />
       <InspirationDialog />
       <EditorPalette openExport={openExport} />
     </div>

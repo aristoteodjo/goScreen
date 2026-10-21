@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { editActions, TEXT_PRESETS } from "./actions";
 import { BlockThumb, useBlocksDialog } from "./BlocksDialog";
+import { CompositionThumb, useCompositionsDialog } from "./CompositionsDialog";
+import { useCompositions } from "./compositions";
 import { PanelFrame } from "./PanelFrame";
 import { player, useSession } from "./session";
 import { useEdit, usePlayback } from "./store";
@@ -36,6 +38,7 @@ export const ASSET_DRAG = "application/x-goscreen-asset";
 const TABS: { id: LeftTab; label: string }[] = [
   { id: "project", label: "Project" },
   { id: "blocks", label: "Blocks" },
+  { id: "compositions", label: "Compositions" },
   { id: "effects", label: "Effects" },
   { id: "scenes", label: "Scenes" },
 ];
@@ -52,6 +55,7 @@ export function ProjectPanel() {
     >
       {left === "project" ? <MediaBin /> : null}
       {left === "blocks" ? <BlocksBin /> : null}
+      {left === "compositions" ? <CompositionsBin /> : null}
       {left === "effects" ? <EffectsBin /> : null}
       {left === "scenes" ? <ScenesBin /> : null}
     </PanelFrame>
@@ -226,6 +230,50 @@ function BlocksBin() {
           <span className="truncate text-[11.5px] font-medium">{b.label}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Compositions of this video and of its project library, playing live. */
+function CompositionsBin() {
+  const videoPath = useSession((s) => s.videoPath);
+  const list = useCompositions(videoPath);
+  const all = [
+    ...(list.data?.video ?? []).map((c) => ({ c, from: "video" })),
+    ...(list.data?.library ?? []).map((c) => ({ c, from: "library" })),
+  ];
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex items-center justify-between px-3 pt-2 text-[11px] text-muted-foreground">
+        <span>{all.length === 0 ? "No composition yet" : "Click to add"}</span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-[11px]"
+          onClick={() => useCompositionsDialog.getState().show()}
+        >
+          Open gallery…
+        </Button>
+      </div>
+      <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 p-3">
+        {all.map(({ c, from }) => (
+          <button
+            key={`${from}-${c.id}`}
+            type="button"
+            title={c.description ?? c.label}
+            onClick={() => useCompositionsDialog.getState().show({ pick: c })}
+            className="flex min-w-0 flex-col gap-1.5 rounded-md p-1.5 text-left hover:bg-white/5"
+          >
+            <CompositionThumb composition={c} width={140} />
+            <span className="truncate text-[11.5px] font-medium">
+              {c.label}
+            </span>
+            <span className="truncate text-[10px] text-muted-foreground">
+              {from === "library" ? "Project library" : "This video"}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

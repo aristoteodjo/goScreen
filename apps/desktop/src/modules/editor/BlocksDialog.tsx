@@ -132,7 +132,11 @@ export function BlocksDialog() {
 
   useEffect(() => {
     if (!open) return;
-    if (editingLayer?.kind === "video" && editingLayer.source) {
+    if (
+      editingLayer?.kind === "video" &&
+      editingLayer.source &&
+      "block" in editingLayer.source
+    ) {
       setPicked(editingLayer.source.block);
       setProps(editingLayer.source.props);
     } else {

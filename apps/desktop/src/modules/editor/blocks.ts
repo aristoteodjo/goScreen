@@ -133,7 +133,11 @@ export function blockOverlay(
   };
 }
 
-const freeLaneAt = (overlays: Overlay[], start: number, duration: number) => {
+export const freeLaneAt = (
+  overlays: Overlay[],
+  start: number,
+  duration: number,
+) => {
   for (let lane = 0; lane <= 20; lane++)
     if (
       !overlays.some(
@@ -195,7 +199,7 @@ export async function updateBlock(
   props: Record<string, string | number>,
 ): Promise<EditState> {
   const o = edit.overlays.find((x) => x.id === overlayId);
-  if (o?.kind !== "video" || !o.source)
+  if (o?.kind !== "video" || !o.source || !("block" in o.source))
     throw new Error("This layer is not a block.");
   const block = blockById(o.source.block);
   if (!block) throw new Error(`Unknown block "${o.source.block}".`);
