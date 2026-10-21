@@ -1,0 +1,123 @@
+{
+  "version": 2,
+  "aspect": "1:1",
+  "film": {
+    "settings": {
+      "aspect": "1:1",
+      "background": "#f6f4ef",
+      "ink": "#1a1a1a",
+      "accent": "#1f7a4d",
+      "font": "Inter",
+      "captions": "top",
+      "zoom": 1.1,
+      "look": "showcase",
+      "backdrop": "flat",
+      "screen": "framed",
+      "label": "Proof",
+      "brand": "Nimbus",
+      "intro": { "title": "The numbers, *not* the pitch", "subtitle": "", "duration": 1.5 },
+      "outro": {
+        "eyebrow": "nimbus.co",
+        "title": "See it on *your* data",
+        "subtitle": "Book a 15 min demo",
+        "duration": 2.5
+      }
+    },
+    "locale": "en-US"
+  },
+  "background": {
+    "kind": "color",
+    "value": "#f6f4ef",
+    "decor": [{ "x": 0.944, "y": 0.36, "r": 0.306, "color": "#1f7a4d", "opacity": 0.16 }]
+  },
+  "padding": 0.14,
+  "radius": 18,
+  "shadow": 0.6,
+  "clips": [
+    {
+      "id": "intro",
+      "kind": "slide",
+      "transition": { "kind": "fade", "duration": 0.35 },
+      "duration": 1.5,
+      "background": {
+        "kind": "color",
+        "value": "#f6f4ef",
+        "decor": [{ "x": 0.833, "y": 0.896, "r": 0.333, "color": "#1f7a4d", "opacity": 0.16 }]
+      },
+      "title": "The numbers, *not* the pitch",
+      "subtitle": "",
+      "color": "#1a1a1a",
+      "font": "Inter",
+      "animation": "words",
+      "layout": "left",
+      "accent": "#1f7a4d",
+      "muted": "#6e6d6b",
+      "brand": "Nimbus"
+    },
+    { "id": "scene-0", "kind": "recording", "transition": { "kind": "fade", "duration": 0.35 }, "in": 0, "out": 5, "speed": 1, "muted": true, "cameraHidden": true },
+    { "id": "scene-1", "kind": "recording", "transition": { "kind": "blur", "duration": 0.35 }, "in": 5, "out": 10, "speed": 1, "muted": true, "cameraHidden": true },
+    { "id": "scene-2", "kind": "recording", "transition": { "kind": "blur", "duration": 0.35 }, "in": 10, "out": 15, "speed": 1, "muted": true, "cameraHidden": true },
+    {
+      "id": "outro",
+      "kind": "slide",
+      "transition": { "kind": "fade", "duration": 0.35 },
+      "duration": 2.5,
+      "background": {
+        "kind": "color",
+        "value": "#f6f4ef",
+        "decor": [{ "x": 0.833, "y": 0.896, "r": 0.333, "color": "#1f7a4d", "opacity": 0.16 }]
+      },
+      "title": "See it on *your* data",
+      "subtitle": "Book a 15 min demo",
+      "color": "#1a1a1a",
+      "font": "Inter",
+      "animation": "words",
+      "layout": "left",
+      "eyebrow": "nimbus.co",
+      "accent": "#1f7a4d",
+      "muted": "#6e6d6b",
+      "brand": "Nimbus"
+    }
+  ],
+  "overlays": [
+    { "id": "caption-0", "kind": "text", "lane": 0, "start": 1.5, "duration": 5, "x": 0.5, "y": 0.165, "width": 0.867, "height": 0.1, "rotation": 0, "opacity": 1, "enter": "spring", "exit": "fade", "motion": 0.45, "text": "*12 000* teams onboard", "style": { "font": "Inter", "size": 0.066, "weight": 800, "color": "#1a1a1a", "align": "left", "background": null, "accent": "#1f7a4d", "flash": true, "sweep": true, "glow": 0.12, "shadow": 0 } },
+    { "id": "caption-1", "kind": "text", "lane": 0, "start": 6.5, "duration": 5, "x": 0.5, "y": 0.165, "width": 0.867, "height": 0.1, "rotation": 0, "opacity": 1, "enter": "spring", "exit": "fade", "motion": 0.45, "text": "Setup in *9* minutes", "style": { "font": "Inter", "size": 0.066, "weight": 800, "color": "#1a1a1a", "align": "left", "background": null, "accent": "#1f7a4d", "flash": true, "sweep": true, "glow": 0.12, "shadow": 0 } },
+    { "id": "caption-2", "kind": "text", "lane": 0, "start": 11.5, "duration": 5, "x": 0.5, "y": 0.165, "width": 0.867, "height": 0.1, "rotation": 0, "opacity": 1, "enter": "spring", "exit": "fade", "motion": 0.45, "text": "*98 %* renew each year", "style": { "font": "Inter", "size": 0.066, "weight": 800, "color": "#1a1a1a", "align": "left", "background": null, "accent": "#1f7a4d", "flash": true, "sweep": true, "glow": 0.12, "shadow": 0 } },
+    { "id": "kicker-0", "kind": "text", "lane": 1, "start": 1.5, "duration": 5, "x": 0.5, "y": 0.075, "width": 0.867, "height": 0.0432, "rotation": 0, "opacity": 1, "enter": "fade", "exit": "fade", "motion": 0.3, "text": "PROOF · 1/3", "style": { "font": "\"JetBrains Mono\"", "size": 0.027, "weight": 500, "color": "#6e6d6b", "align": "left", "background": null, "bullet": "#1f7a4d", "tracking": 0.08 } },
+    { "id": "kicker-1", "kind": "text", "lane": 1, "start": 6.5, "duration": 5, "x": 0.5, "y": 0.075, "width": 0.867, "height": 0.0432, "rotation": 0, "opacity": 1, "enter": "fade", "exit": "fade", "motion": 0.3, "text": "PROOF · 2/3", "style": { "font": "\"JetBrains Mono\"", "size": 0.027, "weight": 500, "color": "#6e6d6b", "align": "left", "background": null, "bullet": "#1f7a4d", "tracking": 0.08 } },
+    { "id": "kicker-2", "kind": "text", "lane": 1, "start": 11.5, "duration": 5, "x": 0.5, "y": 0.075, "width": 0.867, "height": 0.0432, "rotation": 0, "opacity": 1, "enter": "fade", "exit": "fade", "motion": 0.3, "text": "PROOF · 3/3", "style": { "font": "\"JetBrains Mono\"", "size": 0.027, "weight": 500, "color": "#6e6d6b", "align": "left", "background": null, "bullet": "#1f7a4d", "tracking": 0.08 } },
+    { "id": "source-0", "kind": "text", "lane": 2, "start": 3.4, "duration": 3.1, "x": 0.5, "y": 0.86, "width": 0.867, "height": 0.05, "rotation": 0, "opacity": 1, "enter": "none", "exit": "fade", "motion": 0.3, "text": "Teams active in Q3 2026", "style": { "font": "Inter", "size": 0.034, "weight": 600, "color": "#6e6d6b", "align": "left", "background": null }, "animator": { "unit": "word", "order": "forward", "stagger": 0.05, "duration": 0.45, "ease": "out", "from": { "opacity": 0, "dx": 0, "dy": 0.4, "scale": 1, "rotation": 0, "blur": 0 }, "exit": false } },
+    { "id": "source-1", "kind": "text", "lane": 2, "start": 8.4, "duration": 3.1, "x": 0.5, "y": 0.86, "width": 0.867, "height": 0.05, "rotation": 0, "opacity": 1, "enter": "none", "exit": "fade", "motion": 0.3, "text": "Median across workspaces", "style": { "font": "Inter", "size": 0.034, "weight": 600, "color": "#6e6d6b", "align": "left", "background": null }, "animator": { "unit": "word", "order": "forward", "stagger": 0.05, "duration": 0.45, "ease": "out", "from": { "opacity": 0, "dx": 0, "dy": 0.4, "scale": 1, "rotation": 0, "blur": 0 }, "exit": false } },
+    { "id": "source-2", "kind": "text", "lane": 2, "start": 13.4, "duration": 3.1, "x": 0.5, "y": 0.86, "width": 0.867, "height": 0.05, "rotation": 0, "opacity": 1, "enter": "none", "exit": "fade", "motion": 0.3, "text": "Annual renewals, 2025", "style": { "font": "Inter", "size": 0.034, "weight": 600, "color": "#6e6d6b", "align": "left", "background": null }, "animator": { "unit": "word", "order": "forward", "stagger": 0.05, "duration": 0.45, "ease": "out", "from": { "opacity": 0, "dx": 0, "dy": 0.4, "scale": 1, "rotation": 0, "blur": 0 }, "exit": false } }
+  ],
+  "audio": [],
+  "assets": [],
+  "zooms": [
+    { "id": "scene-0-zoom-0", "start": 1.5, "end": 4, "scale": 1.1, "focus": { "x": 0.5, "y": 0.45 } },
+    { "id": "scene-1-zoom-0", "start": 6.5, "end": 9, "scale": 1.1, "focus": { "x": 0.5, "y": 0.5 } },
+    { "id": "scene-2-zoom-0", "start": 11.5, "end": 14, "scale": 1.1, "focus": { "x": 0.5, "y": 0.4 } }
+  ],
+  "touch": { "style": "ring", "color": "#1f7a4d", "size": 44, "spotlight": 0 },
+  "cursor": { "visible": false, "size": 28 },
+  "sound": { "clicks": false, "volume": 0.4 },
+  "layers": null,
+  "camera": {
+    "visible": false,
+    "layout": "overlay",
+    "corner": 8,
+    "size": 0.22,
+    "shape": "rounded",
+    "mirror": true
+  },
+  "mic": { "volume": 1 },
+  "tracks": { "hidden": [], "muted": [], "micMuted": false },
+  "screen": {
+    "plate": 0,
+    "outline": 0,
+    "sweep": false,
+    "tilt": { "x": 0, "y": 0 },
+    "drift": 0,
+    "depth": 0,
+    "entrance": false
+  }
+}
