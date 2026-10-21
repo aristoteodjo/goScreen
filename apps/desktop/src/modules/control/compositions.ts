@@ -29,12 +29,16 @@ type EditAccess = {
 const video = z
   .string()
   .min(1)
-  .describe("Absolute path of a video (projects.videos)");
+  .describe(
+    "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, edit.new)",
+  );
 
 const props = z
   .record(z.string(), z.union([z.string(), z.number()]))
   .default({})
-  .describe("Values for the composition's props (colours default to the film's)");
+  .describe(
+    "Values for the composition's props (colours default to the film's)",
+  );
 
 // The schema is published as-is; the finer rules (network, Math.random,
 // size) are checked when the command runs, with the path of each issue.
@@ -44,7 +48,8 @@ const composition = compositionSchema.describe(
 
 function check(raw: unknown) {
   const r = parseComposition(raw);
-  if (!r.ok) throw new Error(`Invalid composition: ${describeIssues(r.issues)}`);
+  if (!r.ok)
+    throw new Error(`Invalid composition: ${describeIssues(r.issues)}`);
   return r.composition;
 }
 
@@ -83,7 +88,8 @@ export function registerCompositionCommands({
   defineCommand({
     name: "compositions.get",
     title: "Read a composition",
-    description: "One composition, with its HTML, from the video or its project library.",
+    description:
+      "One composition, with its HTML, from the video or its project library.",
     input: z.object({ video, id: z.string().min(1) }),
     run: async (i) => findComposition(i.video, i.id),
   });
@@ -160,7 +166,10 @@ export function registerCompositionCommands({
       if (o?.kind !== "video" || !o.source || !("composition" in o.source))
         throw new Error("This layer is not a composition.");
       const current = await findComposition(i.video, o.source.composition);
-      const patch = { ...(i.composition ?? {}), ...(i.html ? { html: i.html } : {}) };
+      const patch = {
+        ...(i.composition ?? {}),
+        ...(i.html ? { html: i.html } : {}),
+      };
       const next = await updateComposition(i.video, edit, i.overlay, {
         props: i.props,
         composition:

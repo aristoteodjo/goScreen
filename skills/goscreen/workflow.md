@@ -43,6 +43,12 @@ only happens when the person asks.
   gives a complete montage from a recipe; then polish.
 - From a take with scenes: `edit.rebuild` with film settings, or
   `edit.setFilm` to change the film as a whole.
+- From nothing ("a 20 s vertical video about X", no site to film, or the
+  footage comes from elsewhere): `edit.new` in the project gives a blank
+  frame of the asked format and length; then cards, texts, blocks,
+  compositions and imported media (`editing.md`, "A montage without a
+  recording"). Prefer a take when the product is a site or an app: the real
+  screen is the proof.
 - Start from the bar: `references/README.md` names a reference montage per
   kind of film. Open it, read how its timing and layers are built, and match
   it; do not copy its words.

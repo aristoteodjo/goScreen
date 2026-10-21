@@ -1,8 +1,28 @@
 # Editing a montage
 
-Every command takes `video`: the absolute path of a take (`projects.videos`).
-If the video is open in the editor, the person sees each change at once and
-can undo it; otherwise the `.edit.json` next to the video is written.
+Every command takes `video`: the absolute path of a take (`projects.videos`),
+or of a montage made without one (`edit.new`, a `.edit.json`). If the video
+is open in the editor, the person sees each change at once and can undo it;
+otherwise the `.edit.json` next to the video is written.
+
+## A montage without a recording
+
+`edit.new` `{ "project": "acme", "name": "Launch teaser", "aspect": "9:16",
+"duration": 20, "background": "#0f1115" }` starts from a blank frame: one
+card of `duration` seconds, no screen recording. It returns `video`, the
+`.edit.json` path every other command takes (`edit.addText`, `edit.addBlock`,
+`edit.addComposition`, `edit.addMedia`, `edit.animate`, `edit.setFilm`,
+`edit.stills`, `edit.preview`, `export.video`, `edit.versions`). The editor
+opens on it.
+
+- The main track holds `slide` cards only: a `recording` clip is refused
+  (`rejected` says so). There are no zooms, device layers or taps; `edit.get`
+  returns `recording: false`.
+- The montage ends with its last card or its last layer or sound, whichever
+  is later: a text placed at 18 s for 6 s on a 20 s card makes a 24 s video.
+- `edit.rebuild`, `edit.alignToVoice`, `edit.propose` and the mic in
+  `edit.cleanSilences` need a take and say so. Build the film with cards
+  (`edit.save` with `slide` clips), texts, blocks, compositions and media.
 
 ## Reading
 

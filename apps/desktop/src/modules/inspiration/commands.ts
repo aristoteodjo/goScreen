@@ -109,7 +109,9 @@ export function registerInspirationCommands({
       video: z
         .string()
         .min(1)
-        .describe("Absolute path of a video (projects.videos)"),
+        .describe(
+          "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, edit.new)",
+        ),
       slug,
     }),
     run: async ({ video, slug: s }) =>
@@ -127,7 +129,9 @@ export function registerInspirationCommands({
       video: z
         .string()
         .min(1)
-        .describe("Absolute path of a video (projects.videos)"),
+        .describe(
+          "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, edit.new)",
+        ),
       slug,
       pick: z.array(z.number().int().min(0)).optional(),
       props: z
@@ -163,7 +167,9 @@ export function registerInspirationCommands({
       video: z
         .string()
         .min(1)
-        .describe("Absolute path of a video (projects.videos)"),
+        .describe(
+          "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, edit.new)",
+        ),
       slug,
     }),
     run: async ({ video, slug: s }) => {

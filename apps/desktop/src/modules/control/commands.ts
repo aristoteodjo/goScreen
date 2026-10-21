@@ -5,6 +5,7 @@ import {
   applyPreset,
   clearAnimation,
   type EditState,
+  isBlank,
   MIC_ASSET,
   type Overlay,
   parseEditReport,
@@ -83,6 +84,7 @@ import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand, runningCommand } from "./registry";
 import { registerVersionCommands } from "./versions";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
+import { registerBlankCommands } from "./blank";
 import { registerCompositionCommands } from "./compositions";
 import { registerMotionCommands } from "@/modules/motion/commands";
 import { registerVisualCommands } from "./visual";
@@ -96,7 +98,13 @@ const vsl = id.describe("VSL id (vsl.list)");
 const video = z
   .string()
   .min(1)
-  .describe("Absolute path of a video (projects.videos)");
+  .describe(
+    "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, edit.new)",
+  );
+
+/** What a command that needs the take itself says on a montage without one. */
+const NO_RECORDING =
+  "This montage has no recording (it was made with edit.new): only cards and layers.";
 
 const refresh = () => queryClient.invalidateQueries({ queryKey: ["projects"] });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -151,6 +159,7 @@ export function registerCommands() {
   registerMotionCommands();
   registerInspirationCommands({ currentEdit, applyEdit });
   registerCompositionCommands({ currentEdit, applyEdit });
+  registerBlankCommands();
   registerVisualCommands();
   registerVersionCommands();
   defineCommand({
@@ -203,11 +212,22 @@ export function registerCommands() {
     description:
       "Puts a screen in front of the person: home, a project, a VSL flow, a video in the editor, the studio, or a reference video being reproduced (all references without `reference`).",
     input: z.object({
-      view: z.enum(["home", "project", "flow", "editor", "studio", "reproduce"]),
+      view: z.enum([
+        "home",
+        "project",
+        "flow",
+        "editor",
+        "studio",
+        "reproduce",
+      ]),
       project: project.optional(),
       vsl: vsl.optional(),
       video: video.optional(),
-      reference: z.string().min(1).optional().describe("Reference id (motion.references)"),
+      reference: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Reference id (motion.references)"),
     }),
     run: async (i) => {
       // The AI's places open in their own tabs, so the person keeps theirs.
@@ -588,6 +608,8 @@ export function registerCommands() {
       const take = parseRecordingFile(opened.interactions);
       return {
         edit: parseEditState(opened.edit),
+        // false: a montage made with edit.new (cards and layers only).
+        recording: opened.videoUrl !== null,
         scenes: take.chapters,
         taps: take.pointers.filter((p) => p.kind === "down").length,
       };
@@ -626,6 +648,7 @@ export function registerCommands() {
     run: async (i) => {
       const film = filmSchema.parse(i.film ?? {});
       const opened = await ipc.recordingOpen(i.video);
+      if (opened.videoUrl === null) throw new Error(NO_RECORDING);
       const take = parseRecordingFile(opened.interactions);
       const duration = Math.max(0, ...take.chapters.map((c) => c.end));
       const edit = buildScenarioEdit(
@@ -717,6 +740,8 @@ export function registerCommands() {
     }),
     run: async (i) => {
       let edit = await currentEdit(i.video);
+      if (isBlank(edit) && i.clip === MIC_ASSET)
+        throw new Error(`${NO_RECORDING} There is no mic track.`);
       const voices = edit.audio.filter((a) =>
         i.clip
           ? a.id === i.clip
@@ -768,6 +793,8 @@ export function registerCommands() {
     input: z.object({ video, clip: z.string().optional() }),
     run: async (i) => {
       const edit = await currentEdit(i.video);
+      if (isBlank(edit))
+        throw new Error(`${NO_RECORDING} There are no scenes to align.`);
       const clip = edit.audio.find((a) =>
         i.clip
           ? a.id === i.clip
@@ -802,7 +829,10 @@ export function registerCommands() {
         throw new Error("No phrase was heard in this sound.");
       const scenes = edit.clips.filter((c) => c.kind === "recording").length;
       await applyEdit(i.video, alignScenesToVoice(edit, phrases));
-      return { scenes: Math.min(scenes, phrases.length), phrases: phrases.length };
+      return {
+        scenes: Math.min(scenes, phrases.length),
+        phrases: phrases.length,
+      };
     },
   });
   defineCommand({
@@ -1112,18 +1142,34 @@ export function registerCommands() {
       list: z.boolean().default(false),
       pick: z.number().int().min(0).max(7).default(0),
       objective: z
-        .enum(["launch", "acquisition", "promo", "feature", "recruit-supply", "awareness"])
+        .enum([
+          "launch",
+          "acquisition",
+          "promo",
+          "feature",
+          "recruit-supply",
+          "awareness",
+        ])
         .optional(),
       channels: z.array(z.string()).optional(),
-      tone: z.enum(["energetic", "playful", "calm", "premium", "corporate"]).optional(),
+      tone: z
+        .enum(["energetic", "playful", "calm", "premium", "corporate"])
+        .optional(),
       offer: z.string().optional(),
       cta: z.string().optional(),
     }),
     run: async (i) => {
       await openForExport(i.video);
       const s = useSession.getState();
+      if (s.videoUrl === null)
+        throw new Error(
+          `${NO_RECORDING} Proposals need a take of the site: record one, or build the cards with edit.addText and edit.addBlock.`,
+        );
       const url = i.url ?? s.chapters[0]?.url;
-      if (!url) throw new Error("Give the site's url: this recording has no page of its own.");
+      if (!url)
+        throw new Error(
+          "Give the site's url: this recording has no page of its own.",
+        );
       const brand = await ipc.siteBrand(url);
       const pages = [...new Set(s.chapters.map((c) => c.url))];
       const sections = [];
@@ -1150,7 +1196,12 @@ export function registerCommands() {
         variant: p.variant,
         reasons: p.reasons,
       }));
-      if (i.list) return { brand: brand.name, sections: sections.length, proposals: view };
+      if (i.list)
+        return {
+          brand: brand.name,
+          sections: sections.length,
+          proposals: view,
+        };
       const chosen = proposals[i.pick];
       if (!chosen) throw new Error(`Only ${proposals.length} proposals.`);
       const edit = buildEdit(chosen, {
@@ -1163,7 +1214,11 @@ export function registerCommands() {
         i.video,
         placeProposal(edit, s.layers, s.source, s.cameraUrl),
       );
-      return { applied: view[i.pick], clips: edit.clips.length, overlays: edit.overlays.length };
+      return {
+        applied: view[i.pick],
+        clips: edit.clips.length,
+        overlays: edit.overlays.length,
+      };
     },
   });
   defineCommand({

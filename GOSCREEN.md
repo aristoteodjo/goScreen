@@ -795,6 +795,34 @@ n'en sait rien.
 - UI : `Timeline.tsx` (pistes), `TimelineToolbar.tsx` (ajout de contenu, split, zoom de timeline),
   `TimelineMenus.tsx` (clic droit), `SelectionPanels.tsx` (propriétés de l'élément sélectionné), `actions.ts`.
 
+### Montage sans prise
+
+- Un montage peut exister **sans vidéo source** (comme une composition Remotion ou une page blanche) :
+  `EditState.source = { kind: "none", width, height }` (`render-engine/blank.ts`, pur et testé), la taille étant
+  le cadre 1080p de son format (`blankSource`). Sa piste principale n'est faite que de **cartes** (`SlideClip`) ;
+  tout le reste est calques (texte, blocs, compositions, images, vidéos importées) et sons. `parseEditReport`
+  **refuse un `RecordingClip`** avec sa raison (`clips <id>`), vide `layers` et `zooms`, et ne laisse jamais la
+  piste vide (une carte de 5 s). `montageEnd` : un tel montage finit à sa dernière carte **ou** à son dernier
+  calque/son, le plus tard des deux (`timelineEnd` de l'éditeur, `openFrames`, contact sheet) ; un montage de
+  prise finit toujours avec sa piste principale.
+- **Fichier** : `<Vidéos>/goScreen/Projects/<id>/<nom>.edit.json`, un stem **sans MP4**. Rust
+  (`media::montage_path`) accepte une prise ou un `.edit.json` existant ; `stem_name` / `sidecar` dérivent tout
+  du stem (`launch.edit.json` -> `launch.assets/`, `launch.versions/`, `launch.render-cache/`, `launch.previews/`,
+  compositions), donc versions, assets, compositions, previews, cache d'export et duplication marchent tels
+  quels. `recording_open` rend `videoUrl: null` (rien n'est servi, ni journal ni caméra ni micro) ;
+  `edit_new(project, name, edit)` écrit le montage construit par le studio (`blankEdit`, pur) sous un id tiré du
+  nom ; `project_videos` liste ces montages (`composition: true`, un `.edit.json` sans vidéo du même stem).
+- **Éditeur** : même route `/editor?video=<chemin .edit.json>` (un seul paramètre pour `tabs`, `openPlace` et
+  les commandes ; l'onglet prend le stem). Sans prise : aucun `<video>`, la source vient de `edit.source`,
+  moniteur sur le fond, piste Video de cartes, pas de piste Zoom, Mic ni Devices, panneaux Devices, Cursor &
+  clicks et Zoom masqués. `openFrames`, `renderFrameAt`, l'export et les previews n'attendent aucun élément vidéo
+  (`videoUrl: null`, `timeline.source` donne le cadre). Accueil d'un projet : « New composition video »
+  (nom, format, durée).
+- **IA** (`modules/control/blank.ts`) : `edit.new { project, name, aspect, duration, background }` -> chemin du
+  `.edit.json`, ouvert dans l'éditeur. Toutes les commandes `edit.*`, `export.*`, `compositions.*`, `edit.versions`
+  acceptent ce chemin à la place d'un MP4 (`edit.get` rend `recording: false`). `edit.rebuild`, `edit.alignToVoice`,
+  `edit.propose` et `edit.cleanSilences` sur le micro répondent une erreur claire : il n'y a pas de prise.
+
 ### Versions du montage
 
 - Un historique façon git, lisible par une personne et par l'IA. Une **version** = `{ id, at, author: "person" | "ai",
