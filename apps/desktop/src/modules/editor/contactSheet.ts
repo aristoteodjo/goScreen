@@ -1,7 +1,7 @@
 import {
   contactSheet,
+  montageEnd,
   playingAt,
-  sequenceDuration,
   stillTimes,
 } from "@goscreen/render-engine";
 import { openFrames } from "./exportVideo";
@@ -32,10 +32,10 @@ export async function renderContactSheet(req: SheetRequest): Promise<{
 }> {
   const s = useSession.getState();
   const timeline = currentTimeline();
-  if (!s.videoUrl || !timeline) throw new Error("The video is not loaded.");
+  if (!s.videoPath || !timeline) throw new Error("The video is not loaded.");
   const edit = useEdit.getState().edit;
   const times = stillTimes({
-    duration: sequenceDuration(edit.clips),
+    duration: montageEnd(edit),
     times: req.times,
     every: req.every,
     from: req.from,

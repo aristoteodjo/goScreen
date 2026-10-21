@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { blankSlide } from "./blank";
 import { DEFAULT_LOOK } from "./look";
 import { SOURCE_END } from "./sequence";
 import { MIC_ASSET } from "./soundtrack";
@@ -513,6 +514,15 @@ const editSchema = z.object({
     .optional()
     .catch(undefined),
   version: z.union([z.literal(1), z.literal(2)]),
+  // A montage without a recording (blank.ts); absent on a take's montage.
+  source: z
+    .object({
+      kind: z.literal("none"),
+      width: z.number().positive(),
+      height: z.number().positive(),
+    })
+    .optional()
+    .catch(undefined),
   aspect: z
     .enum(["auto", "16:9", "1:1", "4:3", "9:16", "3:4", "4:5"])
     .catch(DEFAULT_EDIT.aspect),
@@ -675,13 +685,32 @@ export function parseEditReport(json: unknown): {
       });
     return ok;
   };
+  // A montage without a recording has nothing for a recording clip to show,
+  // no device layers and no zooms (they live in source time).
+  const blank = rest.source?.kind === "none";
+  let main =
+    clips && clips.length > 0
+      ? clips
+      : blank
+        ? []
+        : [fullClip("clip-1", trim?.start ?? 0, trim?.end ?? SOURCE_END)];
+  if (blank) {
+    main = main.filter((c) => {
+      if (c.kind !== "recording") return true;
+      rejected.push({
+        path: `clips ${c.id}`,
+        reason: "a recording clip needs a recording; this montage has none",
+      });
+      return false;
+    });
+    if (main.length === 0) main = [blankSlide(5)];
+  }
   const edit: EditState = {
     ...rest,
     version: 2,
-    clips:
-      clips && clips.length > 0
-        ? clips
-        : [fullClip("clip-1", trim?.start ?? 0, trim?.end ?? SOURCE_END)],
+    clips: main,
+    layers: blank ? [] : rest.layers,
+    zooms: blank ? [] : rest.zooms,
     overlays: (overlays ?? []).filter((o) =>
       o.kind === "image" || o.kind === "video"
         ? hasAsset("overlays", o.id, o.asset)

@@ -15,7 +15,9 @@ import { defineCommand } from "./registry";
 const video = z
   .string()
   .min(1)
-  .describe("Absolute path of the recording (projects.videos, tasks.wait)");
+  .describe(
+    "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, tasks.wait, edit.new)",
+  );
 
 const base64 = (dataUrl: string) =>
   dataUrl.replace(/^data:image\/jpeg;base64,/, "");
@@ -50,8 +52,7 @@ export function registerVisualCommands() {
   defineCommand({
     name: "edit.preview",
     title: "Draft a stretch of the video",
-    description:
-      `Renders a small, fast, silent MP4 of a montage between \`from\` and \`to\` seconds (scale 0.25 to 0.5 of 1080p, 10 to 15 fps) into \`<stem>.previews/\` next to the recording; returns the file. The same frames as the export, in a fraction of the time. The goScreen window must be visible: a draft that does not move for 30 s stops with "${STALL_MESSAGE}"`,
+    description: `Renders a small, fast, silent MP4 of a montage between \`from\` and \`to\` seconds (scale 0.25 to 0.5 of 1080p, 10 to 15 fps) into \`<stem>.previews/\` next to the recording; returns the file. The same frames as the export, in a fraction of the time. The goScreen window must be visible: a draft that does not move for 30 s stops with "${STALL_MESSAGE}"`,
     input: z.object({
       video,
       from: z.number().min(0),

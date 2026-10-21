@@ -3,11 +3,11 @@ import {
   chunkPlan,
   type EditState,
   frameMotion,
+  montageEnd,
   outputSize,
   type Placed,
   placeClips,
   type RecordingClip,
-  sequenceDuration,
   sourceTimeAt,
   type Timeline,
   tapTimes,
@@ -20,7 +20,8 @@ export type ExportOptions = {
   edit: EditState;
   timeline: Timeline;
   videoPath: string;
-  videoUrl: string;
+  // null: a montage without a recording; `timeline.source` gives the frame.
+  videoUrl: string | null;
   cameraUrl: string | null;
   mediaOffset: number;
   hasMic: boolean;
@@ -146,7 +147,8 @@ type FrameSource = Pick<
  * Frames walk the timeline (clips back to back), not the source.
  */
 export async function openFrames(o: FrameSource) {
-  const video = await load(o.videoUrl);
+  // No recording: nothing to decode, the frame is the montage's own size.
+  const video = o.videoUrl === null ? null : await load(o.videoUrl);
   const showCamera = o.cameraUrl !== null && o.edit.camera.visible;
   const camera =
     showCamera && o.cameraUrl
@@ -154,7 +156,9 @@ export async function openFrames(o: FrameSource) {
       : null;
   const overlayMedia = await loadOverlayMedia(o.edit, o.assetUrl);
 
-  const source = { width: video.videoWidth, height: video.videoHeight };
+  const source = video
+    ? { width: video.videoWidth, height: video.videoHeight }
+    : o.timeline.source;
   const output = outputSize(o.edit.aspect, source, o.longSide);
   const canvas = document.createElement("canvas");
   canvas.width = output.width;
@@ -164,7 +168,7 @@ export async function openFrames(o: FrameSource) {
   // A function declaration below does not keep the null check: pin the type.
   const ctx: CanvasRenderingContext2D = context;
 
-  const end = sequenceDuration(o.edit.clips);
+  const end = montageEnd(o.edit);
   const frames = Math.max(1, Math.round(end * o.fps));
   const timeline = { ...o.timeline, source };
   // Motion blur: frames where the picture moves are the average of several
@@ -179,7 +183,8 @@ export async function openFrames(o: FrameSource) {
   const placed = placeClips(o.edit.clips);
   for (let i = 1; i < placed.length; i += 1) {
     const prev = placed[i - 1];
-    if (!placed[i].clip.transition || prev.clip.kind !== "recording") continue;
+    if (!video || !placed[i].clip.transition || prev.clip.kind !== "recording")
+      continue;
     const p = prev as Placed<RecordingClip>;
     await seek(video, stillTime(p));
     if (camera) {
@@ -204,7 +209,7 @@ export async function openFrames(o: FrameSource) {
   async function draw(i: number) {
     const t = Math.min(end, i / o.fps);
     const s = sourceTimeAt(o.edit.clips, t);
-    if (s !== null) {
+    if (s !== null && video) {
       await seek(video, s);
       if (camera) {
         const local = s - o.mediaOffset;

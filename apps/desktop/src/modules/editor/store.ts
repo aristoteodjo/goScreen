@@ -1,7 +1,7 @@
 import {
   DEFAULT_EDIT,
   type EditState,
-  sequenceDuration,
+  montageEnd,
 } from "@goscreen/render-engine";
 import { create } from "zustand";
 
@@ -195,8 +195,8 @@ export const usePlayback = create<PlaybackStore>((set) => ({
     }),
 }));
 
-/** Length of the edited video, in timeline seconds. */
-export const timelineEnd = (edit: EditState) => sequenceDuration(edit.clips);
+/** Length of the edited video, in timeline seconds (its last card, or its last layer when there is no recording). */
+export const timelineEnd = (edit: EditState) => montageEnd(edit);
 
 /** A short unique id for new timeline items. */
 export const newId = (prefix: string) =>

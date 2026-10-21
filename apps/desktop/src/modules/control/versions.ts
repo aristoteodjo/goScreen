@@ -21,7 +21,9 @@ import { defineCommand } from "./registry";
 const video = z
   .string()
   .min(1)
-  .describe("Absolute path of a video (projects.videos)");
+  .describe(
+    "Absolute path of a recording, or of a .edit.json montage made without one (projects.videos, edit.new)",
+  );
 
 const versionId = z
   .string()

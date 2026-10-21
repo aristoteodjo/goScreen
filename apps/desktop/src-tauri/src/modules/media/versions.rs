@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::recording_path;
+use super::{is_blank_montage, montage_path, sidecar, stem_name, BLANK_SUFFIX};
 
 const INDEX: &str = "index.json";
 
-/// `rec.mp4` -> `rec.versions/`.
+/// `rec.mp4` -> `rec.versions/` (a blank montage's too).
 pub fn versions_dir(video: &Path) -> PathBuf {
-    video.with_extension("versions")
+    sidecar(video, "versions")
 }
 
 /// Ids are written by the studio: short, lowercase, no path characters.
@@ -194,15 +194,17 @@ pub fn slug(name: &str) -> String {
     }
 }
 
-/// `goscreen-1.mp4` + "copy" -> `goscreen-1-copy.mp4`, numbered if taken.
+/// `goscreen-1.mp4` + "copy" -> `goscreen-1-copy.mp4`, numbered if taken
+/// (by a video or by a blank montage).
 pub fn free_stem(dir: &Path, stem: &str, suffix: &str) -> String {
+    let taken = |s: &str| dir.join(format!("{s}.mp4")).exists() || dir.join(format!("{s}{BLANK_SUFFIX}")).exists();
     let base = format!("{stem}-{suffix}");
-    if !dir.join(format!("{base}.mp4")).exists() {
+    if !taken(&base) {
         return base;
     }
     (2..1000)
         .map(|n| format!("{base}-{n}"))
-        .find(|s| !dir.join(format!("{s}.mp4")).exists())
+        .find(|s| !taken(s))
         .unwrap_or_else(|| format!("{base}-{}", uuid::Uuid::new_v4().simple()))
 }
 
@@ -222,8 +224,12 @@ pub fn rename_media(interactions: &mut serde_json::Value, stem: &str, new_stem: 
 /// versions, under a new stem in the same folder. Returns the new video path.
 pub fn duplicate(video: &Path, name: Option<&str>) -> Result<PathBuf, String> {
     let dir = video.parent().ok_or("The video has no folder.")?;
-    let stem = video.file_stem().and_then(|s| s.to_str()).ok_or("The video has no name.")?;
-    let ext = video.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
+    let stem = stem_name(video);
+    if stem.is_empty() {
+        return Err("The video has no name.".into());
+    }
+    // A blank montage's "video" is its .edit.json: it is copied like the others.
+    let ext = if is_blank_montage(video) { "edit.json" } else { video.extension().and_then(|e| e.to_str()).unwrap_or("mp4") };
     let root = std::fs::canonicalize(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
     let new_stem = free_stem(dir, stem, &slug(name.unwrap_or("")));
     let target = dir.join(format!("{new_stem}.{ext}"));
@@ -264,32 +270,32 @@ pub fn duplicate(video: &Path, name: Option<&str>) -> Result<PathBuf, String> {
 
 #[tauri::command(async)]
 pub fn edit_versions_list(video_path: String) -> Result<Vec<VersionMeta>, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     Ok(list_versions(&video))
 }
 
 #[tauri::command(async)]
 pub fn edit_version_get(video_path: String, id: String) -> Result<serde_json::Value, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     get_version(&video, &id)
 }
 
 #[tauri::command(async)]
 pub fn edit_version_write(video_path: String, version: serde_json::Value) -> Result<VersionMeta, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     write_version(&video, &version)
 }
 
 #[tauri::command(async)]
 pub fn edit_version_delete(video_path: String, id: String) -> Result<(), String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     delete_version(&video, &id)
 }
 
 /// Returns the new video's path, to open in the editor.
 #[tauri::command(async)]
 pub fn edit_duplicate(video_path: String, name: Option<String>) -> Result<String, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     duplicate(&video, name.as_deref()).map(|p| p.to_string_lossy().into_owned())
 }
 
@@ -446,6 +452,27 @@ mod tests {
         assert!(copy.is_file());
         assert!(dir.join("goscreen-1-copy.assets/a/y.txt").is_file());
         assert!(!dir.join("goscreen-1-copy.assets/a/b/c/d/x.txt").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_blank_montage_duplicates_and_versions_like_a_take() {
+        let dir = std::env::temp_dir().join(format!("goscreen-blank-dup-{}", uuid::Uuid::new_v4().simple()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let blank = dir.join("launch.edit.json");
+        std::fs::write(&blank, b"{\"version\":2,\"source\":{\"kind\":\"none\"}}").unwrap();
+        std::fs::create_dir_all(dir.join("launch.assets")).unwrap();
+        std::fs::write(dir.join("launch.assets/logo.png"), b"png").unwrap();
+        write_version(&blank, &version("a", "2026-10-21T09:00:00Z", "person", None)).unwrap();
+        assert!(dir.join("launch.versions/a.json").is_file());
+
+        let copy = duplicate(&blank, Some("Variante B")).unwrap();
+        assert_eq!(copy, dir.join("launch-variante-b.edit.json"));
+        assert!(copy.is_file());
+        assert!(dir.join("launch-variante-b.assets/logo.png").is_file());
+        assert_eq!(list_versions(&copy).len(), 1);
+        // The copy's stem is taken by a montage, not a video: still numbered.
+        assert_eq!(duplicate(&blank, Some("Variante B")).unwrap(), dir.join("launch-variante-b-2.edit.json"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

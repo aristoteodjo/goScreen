@@ -335,10 +335,17 @@ export type Asset = {
   duration: number | null;
 };
 
+// A montage made without a recording (see blank.ts): cards and layers only.
+// Width and height are the frame it was laid out on (its format at 1080p),
+// what a recording's pixel size is to any other montage.
+export type BlankSource = { kind: "none"; width: number; height: number };
+
 // Everything the editor adds on top of the recording. Source files are
 // never modified, so every effect stays editable.
 export type EditState = {
   version: 2;
+  // Absent: the montage sits on a recording (the video next to it).
+  source?: BlankSource;
   aspect: AspectId;
   background: EditBackground;
   // Fraction of the output's short side left around a flat video.

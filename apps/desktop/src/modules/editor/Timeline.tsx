@@ -139,6 +139,8 @@ export function Timeline() {
   const recordedLayers = useSession((s) => s.layers);
   const pointers = useSession((s) => s.pointers);
   const micUrl = useSession((s) => s.micUrl);
+  // A montage without a recording has no source time: no zoom track.
+  const hasRecording = useSession((s) => s.videoUrl !== null);
   const mediaOffset = useSession((s) => s.mediaOffset);
   const [hover, setHover] = useState<number | null>(null);
   // Where the blade would cut, while the pointer is over the tracks.
@@ -804,83 +806,85 @@ export function Timeline() {
               : null}
 
             {/* Zoom track */}
-            <Row
-              height={ZOOM}
-              header={<TrackHeader name="Zoom" color="bg-violet-500" />}
-            >
-              <Track width={trackWidth}>
-                <div
-                  className={cn(
-                    "group/zooms absolute inset-0 rounded-md",
-                    tool === "select" && "cursor-copy",
-                  )}
-                  onPointerMove={(e) => setHover(toTime(e.clientX))}
-                  onPointerLeave={() => setHover(null)}
-                  onPointerDown={(e) => {
-                    if (toolPress(e, null) || e.button !== 0) return;
-                    selectZoom(null);
-                    addZoomAt(toTime(e.clientX));
-                  }}
-                >
-                  {edit.zooms.length === 0 && hover === null ? (
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
-                      Click to add a zoom
-                    </span>
-                  ) : null}
-                  {tool === "select" && hover !== null && canZoomAt(hover) ? (
-                    <div
-                      className="pointer-events-none absolute inset-y-1 flex w-6 -translate-x-1/2 items-center justify-center rounded-md bg-violet-500/30 text-violet-200"
-                      style={{ left: x(hover) }}
-                    >
-                      <HugeiconsIcon
-                        icon={Add01Icon}
-                        size={12}
-                        strokeWidth={2}
-                      />
-                    </div>
-                  ) : null}
-                  {zoomBlocks.map(({ zoom: z, span, start, end: zEnd }) => (
-                    <div
-                      key={`${z.id}-${span.clip.id}`}
-                      className={cn(
-                        "absolute inset-y-1 flex items-center justify-center gap-1.5 overflow-hidden rounded-sm bg-[#5b4f8f] text-[11px] text-white",
-                        tool === "select" &&
-                          "cursor-grab active:cursor-grabbing",
-                        selectedZoom === z.id &&
-                          "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
-                      )}
-                      style={{
-                        left: x(start),
-                        width: Math.max(4, x(zEnd - start)),
-                      }}
-                      onPointerDown={dragZoom(z, span, "move")}
-                      onPointerMove={(e) => e.stopPropagation()}
-                      onPointerEnter={() => setHover(null)}
-                    >
-                      <HugeiconsIcon
-                        icon={Search01Icon}
-                        size={12}
-                        strokeWidth={2}
-                      />
-                      <span className="font-mono tabular-nums">
-                        {z.scale.toFixed(1)}×
+            {hasRecording ? (
+              <Row
+                height={ZOOM}
+                header={<TrackHeader name="Zoom" color="bg-violet-500" />}
+              >
+                <Track width={trackWidth}>
+                  <div
+                    className={cn(
+                      "group/zooms absolute inset-0 rounded-md",
+                      tool === "select" && "cursor-copy",
+                    )}
+                    onPointerMove={(e) => setHover(toTime(e.clientX))}
+                    onPointerLeave={() => setHover(null)}
+                    onPointerDown={(e) => {
+                      if (toolPress(e, null) || e.button !== 0) return;
+                      selectZoom(null);
+                      addZoomAt(toTime(e.clientX));
+                    }}
+                  >
+                    {edit.zooms.length === 0 && hover === null ? (
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
+                        Click to add a zoom
                       </span>
-                      <span className="opacity-70">
-                        {z.focus ? "Manual" : "Auto"}
-                      </span>
-                      <EdgeHandle
-                        side="start"
-                        onPointerDown={dragZoom(z, span, "start")}
-                      />
-                      <EdgeHandle
-                        side="end"
-                        onPointerDown={dragZoom(z, span, "end")}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </Track>
-            </Row>
+                    ) : null}
+                    {tool === "select" && hover !== null && canZoomAt(hover) ? (
+                      <div
+                        className="pointer-events-none absolute inset-y-1 flex w-6 -translate-x-1/2 items-center justify-center rounded-md bg-violet-500/30 text-violet-200"
+                        style={{ left: x(hover) }}
+                      >
+                        <HugeiconsIcon
+                          icon={Add01Icon}
+                          size={12}
+                          strokeWidth={2}
+                        />
+                      </div>
+                    ) : null}
+                    {zoomBlocks.map(({ zoom: z, span, start, end: zEnd }) => (
+                      <div
+                        key={`${z.id}-${span.clip.id}`}
+                        className={cn(
+                          "absolute inset-y-1 flex items-center justify-center gap-1.5 overflow-hidden rounded-sm bg-[#5b4f8f] text-[11px] text-white",
+                          tool === "select" &&
+                            "cursor-grab active:cursor-grabbing",
+                          selectedZoom === z.id &&
+                            "ring-2 ring-white/80 ring-offset-1 ring-offset-background",
+                        )}
+                        style={{
+                          left: x(start),
+                          width: Math.max(4, x(zEnd - start)),
+                        }}
+                        onPointerDown={dragZoom(z, span, "move")}
+                        onPointerMove={(e) => e.stopPropagation()}
+                        onPointerEnter={() => setHover(null)}
+                      >
+                        <HugeiconsIcon
+                          icon={Search01Icon}
+                          size={12}
+                          strokeWidth={2}
+                        />
+                        <span className="font-mono tabular-nums">
+                          {z.scale.toFixed(1)}×
+                        </span>
+                        <span className="opacity-70">
+                          {z.focus ? "Manual" : "Auto"}
+                        </span>
+                        <EdgeHandle
+                          side="start"
+                          onPointerDown={dragZoom(z, span, "start")}
+                        />
+                        <EdgeHandle
+                          side="end"
+                          onPointerDown={dragZoom(z, span, "end")}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </Track>
+              </Row>
+            ) : null}
 
             {/* Mic, under each recording clip */}
             {micUrl ? (

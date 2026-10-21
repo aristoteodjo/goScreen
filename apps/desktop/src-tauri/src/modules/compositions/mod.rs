@@ -117,23 +117,23 @@ pub fn delete(video: &Path, id: &str, library: bool) -> Result<(), String> {
 
 #[tauri::command(async)]
 pub fn composition_list(video_path: String) -> Result<Compositions, String> {
-    Ok(list(&media::recording_path(&video_path)?))
+    Ok(list(&media::montage_path(&video_path)?))
 }
 
 #[tauri::command(async)]
 pub fn composition_load(video_path: String, id: String) -> Result<Value, String> {
-    load(&media::recording_path(&video_path)?, &id)
+    load(&media::montage_path(&video_path)?, &id)
 }
 
 /// Saves a composition with the montage, or (`library`) in the project library.
 #[tauri::command(async)]
 pub fn composition_save(video_path: String, id: String, doc: Value, library: bool) -> Result<(), String> {
-    save(&media::recording_path(&video_path)?, &id, &doc, library)
+    save(&media::montage_path(&video_path)?, &id, &doc, library)
 }
 
 #[tauri::command(async)]
 pub fn composition_delete(video_path: String, id: String, library: bool) -> Result<(), String> {
-    delete(&media::recording_path(&video_path)?, &id, library)
+    delete(&media::montage_path(&video_path)?, &id, library)
 }
 
 #[cfg(test)]

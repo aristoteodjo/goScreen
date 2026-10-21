@@ -38,7 +38,8 @@ export type RecordingStarted = z.infer<typeof recordingStartedSchema>;
 
 const openedRecordingSchema = z.object({
   videoPath: z.string().min(1),
-  videoUrl: z.string().url(),
+  // null: a montage without a recording (`<stem>.edit.json`).
+  videoUrl: z.string().url().nullable(),
   cameraUrl: z.string().url().nullable(),
   micUrl: z.string().url().nullable(),
   name: z.string(),
@@ -161,6 +162,8 @@ const videoEntrySchema = z.object({
   name: z.string(),
   modifiedMs: z.number(),
   export: z.boolean(),
+  // A montage without a recording (`<id>.edit.json`).
+  composition: z.boolean().catch(false),
 });
 export type VideoEntry = z.infer<typeof videoEntrySchema>;
 
@@ -214,6 +217,12 @@ export const projectsIpc = {
   removeVideo: async (project: string, path: string) => {
     await invoke("project_video_delete", { project, path });
   },
+  // A montage without a recording; returns its `.edit.json` path.
+  newEdit: async (project: string, name: string, edit: unknown) =>
+    z
+      .string()
+      .min(1)
+      .parse(await invoke("edit_new", { project, name, edit })),
   vsls: async (project: string) =>
     z.array(vslEntrySchema).parse(await invoke("vsl_list", { project })),
   createVsl: async (project: string, name: string, doc: unknown) =>

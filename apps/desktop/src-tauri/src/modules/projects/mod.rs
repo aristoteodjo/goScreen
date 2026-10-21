@@ -107,16 +107,27 @@ fn vsl_files(dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Takes, exports, and montages made without a recording (`<id>.edit.json`
+/// with no video of that stem next to it).
 fn video_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(read) = std::fs::read_dir(dir) else { return Vec::new() };
-    read.filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| media::is_raw_recording(n) || is_export(n)))
+    let names: Vec<String> = read.filter_map(Result::ok).filter_map(|e| e.file_name().to_str().map(str::to_string)).collect();
+    names
+        .iter()
+        .filter(|n| media::is_raw_recording(n) || is_export(n) || is_composition(n, |stem| names.iter().any(|m| m == stem)))
+        .map(|n| dir.join(n))
         .collect()
 }
 
 fn is_export(name: &str) -> bool {
     name.starts_with("goscreen-") && name.contains("-export-") && name.ends_with(".mp4")
+}
+
+/// `<id>.edit.json` is a composition when no `<id>.mp4` exists (`has` says
+/// which file names are present): otherwise it is a take's sidecar.
+fn is_composition(name: &str, has: impl Fn(&str) -> bool) -> bool {
+    name.strip_suffix(media::BLANK_SUFFIX)
+        .is_some_and(|stem| valid_id(stem) && !has(&format!("{stem}.mp4")) && !has(&format!("{stem}.mov")))
 }
 
 #[tauri::command(async)]
@@ -286,6 +297,8 @@ pub struct VideoEntry {
     name: String,
     modified_ms: u64,
     export: bool,
+    /// A montage without a recording (`<id>.edit.json`).
+    composition: bool,
 }
 
 #[tauri::command(async)]
@@ -294,9 +307,10 @@ pub fn project_videos(project: String) -> Result<Vec<VideoEntry>, String> {
     let mut out: Vec<VideoEntry> = video_files(&dir)
         .into_iter()
         .map(|p| VideoEntry {
-            name: p.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string(),
+            name: media::stem_name(&p).to_string(),
             modified_ms: modified_ms(&p),
-            export: is_export(&p.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string()),
+            export: is_export(p.file_name().and_then(|n| n.to_str()).unwrap_or_default()),
+            composition: media::is_blank_montage(&p),
             path: p.to_string_lossy().into_owned(),
         })
         .collect();
@@ -304,22 +318,38 @@ pub fn project_videos(project: String) -> Result<Vec<VideoEntry>, String> {
     Ok(out)
 }
 
-/// Moves a take (and its sidecars) to the trash; only inside a project.
+/// A montage without a recording: `<id>.edit.json` in the project, holding
+/// the edit the studio built (cards and layers only; the id comes from the name).
+#[tauri::command(async)]
+pub fn edit_new(project: String, name: String, edit: Value) -> Result<String, String> {
+    let name = clean_name(&name)?;
+    if !edit.is_object() {
+        return Err("Invalid montage.".into());
+    }
+    let dir = project_dir(&project)?;
+    let id = unique_id(&name, |id| {
+        dir.join(format!("{id}{}", media::BLANK_SUFFIX)).exists() || dir.join(format!("{id}.mp4")).exists() || dir.join(format!("{id}.mov")).exists()
+    });
+    let path = dir.join(format!("{id}{}", media::BLANK_SUFFIX));
+    write_json(&path, &edit)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Moves a take or a composition (and its sidecars) to the trash; only inside a project.
 #[tauri::command(async)]
 pub fn project_video_delete(project: String, path: String) -> Result<(), String> {
     let dir = project_dir(&project)?;
-    let video = media::recording_path(&path)?;
+    let video = media::montage_path(&path)?;
     if video.parent() != Some(dir.as_path()) {
         return Err("This video is not in the project.".into());
     }
-    let stem = video.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+    let stem = media::stem_name(&video).to_string();
+    let own = video.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
     let sidecars: Vec<PathBuf> = std::fs::read_dir(&dir)
         .map_err(|e| e.to_string())?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| {
-            p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&format!("{stem}.")) && n != format!("{stem}.mp4"))
-        })
+        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with(&format!("{stem}.")) && n != own))
         .collect();
     trash::delete_all(std::iter::once(&video).chain(sidecars.iter())).map_err(|e| format!("Could not move to the trash: {e}"))
 }
@@ -355,5 +385,33 @@ mod tests {
     fn exports_are_told_apart() {
         assert!(is_export("goscreen-1-export-2.mp4"));
         assert!(!is_export("goscreen-scenario-a-1.mp4"));
+    }
+
+    #[test]
+    fn compositions_are_edits_without_a_video() {
+        let files = ["goscreen-1.mp4", "goscreen-1.edit.json", "launch.edit.json", "Bad Name.edit.json"];
+        let has = |n: &str| files.contains(&n);
+        assert!(is_composition("launch.edit.json", has));
+        assert!(!is_composition("goscreen-1.edit.json", has), "a take's sidecar");
+        assert!(!is_composition("Bad Name.edit.json", has));
+        assert!(!is_composition("launch.mp4", has));
+        assert!(!is_composition(".edit.json", has));
+    }
+
+    #[test]
+    fn a_new_composition_lives_in_its_project() {
+        let root = std::env::temp_dir().join(format!("goscreen-projects-{}", uuid::Uuid::new_v4().simple()));
+        let dir = root.join("demo");
+        std::fs::create_dir_all(&dir).unwrap();
+        // The same layout as a project folder, checked by the helpers below.
+        std::fs::write(dir.join("goscreen-1.mp4"), b"x").unwrap();
+        std::fs::write(dir.join("goscreen-1.edit.json"), b"{}").unwrap();
+        std::fs::write(dir.join("launch.edit.json"), b"{}").unwrap();
+        let listed: Vec<String> =
+            video_files(&dir).iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert!(listed.contains(&"goscreen-1.mp4".to_string()));
+        assert!(listed.contains(&"launch.edit.json".to_string()));
+        assert!(!listed.contains(&"goscreen-1.edit.json".to_string()));
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

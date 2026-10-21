@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 use serde::Serialize;
 
-use super::{asset_file, recording_path};
+use super::{asset_file, montage_path};
 use crate::modules::recording::ffmpeg;
 
 /// A stretch of silence, in seconds of the file. `end` is `None` when the
@@ -56,9 +56,9 @@ pub const MIC_FILE: &str = ":mic";
 /// Where a sound of the recording is silent.
 #[tauri::command(async)]
 pub fn audio_silences(video_path: String, file: String, threshold_db: f64, min_silence: f64) -> Result<Vec<Silence>, String> {
-    let video = recording_path(&video_path)?;
+    let video = montage_path(&video_path)?;
     let path = if file == MIC_FILE {
-        Some(video.with_extension("mic.m4a")).filter(|p| p.is_file())
+        Some(super::sidecar(&video, "mic.m4a")).filter(|p| p.is_file())
     } else {
         asset_file(&video, &file)
     }

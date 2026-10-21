@@ -3,12 +3,15 @@ import { useTabTitle } from "@/modules/tabs/tabs";
 import {
   ASPECT_OPTIONS,
   type AspectId,
+  blankEdit,
+  blankSource,
   buildAutoZooms,
   clampToSource,
   clipsWithout,
   DEFAULT_EDIT,
   type EditState,
   EMPTY_RECORDING,
+  isBlank,
   outputSize,
   parseEditState,
   parseRecordingFile,
@@ -104,8 +107,37 @@ export function EditorPage({ video }: { video: string }) {
       );
     }
     const saved = data.edit ? parseEditState(data.edit) : null;
-    needsAutoZoom.current = saved === null;
     usePlayback.getState().reset();
+    if (data.videoUrl === null) {
+      // A montage without a recording: its frame is its own, known at once,
+      // and nothing waits for a video to decode.
+      const edit = saved && isBlank(saved) ? saved : blankEdit({});
+      if (edit !== saved)
+        toast.warning(
+          "This montage could not be read; starting from a blank one.",
+        );
+      needsAutoZoom.current = false;
+      const { width, height } = edit.source ?? blankSource(edit.aspect);
+      useSession.getState().open(
+        {
+          videoPath: data.videoPath,
+          name: data.name,
+          videoUrl: null,
+          cameraUrl: null,
+          micUrl: null,
+          pointers: [],
+          layers: [],
+          chapters: [],
+          mediaOffset: 0,
+          assetUrls: data.assets,
+        },
+        { width, height },
+      );
+      useEdit.getState().load(edit);
+      player.seek(0);
+      return;
+    }
+    needsAutoZoom.current = saved === null;
     useSession.getState().open({
       videoPath: data.videoPath,
       name: data.name,
@@ -196,22 +228,24 @@ export function EditorPage({ video }: { video: string }) {
         </div>
       ) : (
         <>
-          <video
-            ref={(el) => {
-              useSession.getState().setVideo(el);
-            }}
-            src={recording.data.videoUrl}
-            crossOrigin="anonymous"
-            preload="auto"
-            muted
-            playsInline
-            onLoadedMetadata={(e) => onMetadata(e.currentTarget)}
-            onLoadedData={requestPaint}
-            onSeeked={requestPaint}
-            onError={() => toast.error("The recording could not be decoded.")}
-            // Not display:none: WebKit stops decoding frames of hidden videos.
-            className="pointer-events-none fixed top-0 left-0 size-px opacity-0"
-          />
+          {recording.data.videoUrl !== null ? (
+            <video
+              ref={(el) => {
+                useSession.getState().setVideo(el);
+              }}
+              src={recording.data.videoUrl}
+              crossOrigin="anonymous"
+              preload="auto"
+              muted
+              playsInline
+              onLoadedMetadata={(e) => onMetadata(e.currentTarget)}
+              onLoadedData={requestPaint}
+              onSeeked={requestPaint}
+              onError={() => toast.error("The recording could not be decoded.")}
+              // Not display:none: WebKit stops decoding frames of hidden videos.
+              className="pointer-events-none fixed top-0 left-0 size-px opacity-0"
+            />
+          ) : null}
           {recording.data.cameraUrl ? (
             <video
               ref={(el) => {
