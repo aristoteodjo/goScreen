@@ -5,6 +5,7 @@ import {
   Cursor01Icon,
   Delete02Icon,
   FitToScreenIcon,
+  FlashIcon,
   HandGrabIcon,
   DashboardSquare01Icon,
   Image01Icon,
@@ -205,6 +206,11 @@ export function TimelineToolbar() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ToolButton
+        icon={FlashIcon}
+        label="Energize"
+        onClick={() => editActions.energize()}
+      />
 
       <div className="mx-2 h-5 w-px bg-white/10" />
 

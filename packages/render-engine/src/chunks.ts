@@ -9,7 +9,7 @@ import type { EditState, MainClip, Overlay, ZoomSegment } from "./types";
 
 export const CHUNK_SECONDS = 5;
 // Bump when the renderer changes what a frame looks like for the same state.
-const RENDER_VERSION = 1;
+const RENDER_VERSION = 2;
 // Seconds around a chunk whose state still reaches its frames (motion blur,
 // zoom ramps, transitions of the next clip).
 const MARGIN = 1;

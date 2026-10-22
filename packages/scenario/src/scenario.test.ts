@@ -449,3 +449,28 @@ describe("applyFilm", () => {
     expect(next.zooms.find((z) => z.id === "manual")?.scale).toBe(2.5);
   });
 });
+
+describe("continuous camera", () => {
+  it("drifts with the premium look and keeps a drift set by hand", () => {
+    const premium = buildScenarioEdit(
+      take,
+      filmSchema.parse({ screen: "premium", backdrop: "beam" }),
+      "en",
+    );
+    expect(premium.drift).toEqual({ scale: 0.03, pan: 0.015 });
+    expect(premium.background).toMatchObject({ kind: "mesh", style: "beam" });
+    const framed = buildScenarioEdit(
+      take,
+      filmSchema.parse({ screen: "framed", backdrop: "ring" }),
+      "en",
+    );
+    expect(framed.drift).toBeUndefined();
+    expect(framed.background).toMatchObject({ kind: "mesh", style: "ring" });
+    const kept = applyFilm(
+      { ...framed, drift: { scale: 0.1, pan: 0 } },
+      filmSchema.parse({ screen: "premium" }),
+      "en",
+    );
+    expect(kept.drift).toEqual({ scale: 0.1, pan: 0 });
+  });
+});

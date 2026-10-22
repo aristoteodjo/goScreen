@@ -1,7 +1,10 @@
 import {
   buildAutoZooms,
+  type CameraDrift,
+  DEFAULT_DRIFT,
   type EditBackground,
   type EditState,
+  hexToHsl,
   type MeshStyle,
   meshPreset,
   MIC_ASSET,
@@ -200,13 +203,23 @@ const MESHES: { style: MeshStyle; accent: string; mode: "dark" | "light" }[] = [
   { style: "circles", accent: "#3b5bdb", mode: "dark" },
   { style: "blob", accent: "#2f9e44", mode: "dark" },
   { style: "waves", accent: "#e8590c", mode: "dark" },
+  { style: "beam", accent: "#4cc2ff", mode: "dark" },
+  { style: "ring", accent: "#e9a100", mode: "dark" },
   { style: "circles", accent: "#7048e8", mode: "light" },
 ];
 const MESH_STYLES: { id: MeshStyle; label: string }[] = [
   { id: "circles", label: "Circles" },
   { id: "blob", label: "Blob" },
   { id: "waves", label: "Waves" },
+  { id: "beam", label: "Beam" },
+  { id: "ring", label: "Ring" },
 ];
+const LIT: MeshStyle[] = ["beam", "ring"];
+
+/** The brightest tone of a mesh: the accent its palette was built from. */
+function meshAccent(bg: Extract<EditBackground, { kind: "mesh" }>): string {
+  return [...bg.colors].sort((a, b) => hexToHsl(b)[2] - hexToHsl(a)[2])[0];
+}
 
 /** Style, pace, grain and vignette of an animated background. */
 function MeshControls({
@@ -241,14 +254,15 @@ function MeshControls({
       <ToggleGroup
         type="single"
         value={bg.style}
-        onValueChange={(v) =>
-          v &&
-          onChange({
-            ...meshPreset(v as MeshStyle, bg.colors[3] ?? bg.colors[0]),
-            base: bg.base,
-            colors: bg.colors,
-          })
-        }
+        onValueChange={(v) => {
+          if (!v) return;
+          const style = v as MeshStyle;
+          // Light styles (beam, ring) use the accent's light itself, so
+          // their colours are rebuilt rather than carried over.
+          const lit = LIT.includes(style) || LIT.includes(bg.style);
+          const preset = meshPreset(style, meshAccent(bg));
+          onChange(lit ? preset : { ...preset, base: bg.base, colors: bg.colors });
+        }}
         className="w-full"
       >
         {MESH_STYLES.map((s) => (
@@ -554,16 +568,19 @@ function ZoomPanel() {
 
   if (!zoom) {
     return (
-      <Section
-        title="Zoom"
-        hint={
-          count === 0
-            ? "Click the zoom track under the clip to add a zoom, or let your clicks drive them."
-            : "Select a zoom on the timeline to edit it."
-        }
-      >
-        <AutoZoomButton />
-      </Section>
+      <>
+        <Section
+          title="Zoom"
+          hint={
+            count === 0
+              ? "Click the zoom track under the clip to add a zoom, or let your clicks drive them."
+              : "Select a zoom on the timeline to edit it."
+          }
+        >
+          <AutoZoomButton />
+        </Section>
+        <DriftSection />
+      </>
     );
   }
 
@@ -639,7 +656,60 @@ function ZoomPanel() {
           Delete zoom
         </Button>
       </Section>
+      <DriftSection />
     </>
+  );
+}
+
+/** The camera's permanent drift over each scene: a slow push and a pan. */
+function DriftSection() {
+  const drift = useEdit((s) => s.edit.drift);
+  const change = useChange();
+  const on = drift !== undefined && (drift.scale > 0 || drift.pan > 0);
+  const set = (patch: Partial<CameraDrift>, key?: string) =>
+    change(
+      (ed) => ({ ...ed, drift: { ...(ed.drift ?? DEFAULT_DRIFT), ...patch } }),
+      key,
+    );
+  return (
+    <Section
+      title="Camera drift"
+      hint="The camera never stands still: a slow push-in and a pan over each scene, flipping sides from one scene to the next."
+      aside={
+        <Switch
+          checked={on}
+          onCheckedChange={(v) =>
+            change((ed) => ({
+              ...ed,
+              drift: v ? DEFAULT_DRIFT : { scale: 0, pan: 0 },
+            }))
+          }
+        />
+      }
+    >
+      {on ? (
+        <>
+          <SliderRow
+            value={drift.scale}
+            min={0}
+            max={0.15}
+            step={0.005}
+            format={(v) => `push ${(v * 100).toFixed(1)}%`}
+            onChange={(scale) => set({ scale }, "drift-scale")}
+            onReset={() => set({ scale: DEFAULT_DRIFT.scale })}
+          />
+          <SliderRow
+            value={drift.pan}
+            min={0}
+            max={0.08}
+            step={0.0025}
+            format={(v) => `pan ${(v * 100).toFixed(2)}%`}
+            onChange={(pan) => set({ pan }, "drift-pan")}
+            onReset={() => set({ pan: DEFAULT_DRIFT.pan })}
+          />
+        </>
+      ) : null}
+    </Section>
   );
 }
 

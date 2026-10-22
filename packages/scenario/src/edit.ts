@@ -2,6 +2,7 @@ import {
   buildAutoZooms,
   type Chapter,
   clipDuration,
+  DEFAULT_DRIFT,
   DEFAULT_EDIT,
   DEFAULT_LOOK,
   type EditBackground,
@@ -109,11 +110,24 @@ function sceneBackground(film: Film): EditBackground {
   return { kind: "color", value: film.background, ...decor };
 }
 
-/** The screen look and device frame a film asks for. */
+/**
+ * The screen look, device frame and camera drift a film asks for: the
+ * premium look never lets the camera stand still.
+ */
 function screenOf(film: Film) {
   return film.screen === "premium"
-    ? { screen: PREMIUM_LOOK, frame: false, touch: "ripple" as const }
-    : { screen: DEFAULT_LOOK, frame: true, touch: "ring" as const };
+    ? {
+        screen: PREMIUM_LOOK,
+        frame: false,
+        touch: "ripple" as const,
+        drift: DEFAULT_DRIFT,
+      }
+    : {
+        screen: DEFAULT_LOOK,
+        frame: true,
+        touch: "ring" as const,
+        drift: undefined,
+      };
 }
 
 /** The scenes of a take: chapters with a caption (a cut leaves a gap). */
@@ -239,6 +253,7 @@ export function buildScenarioEdit(
     })),
     camera: { ...DEFAULT_EDIT.camera, visible: false },
     screen: look.screen,
+    drift: look.drift,
     film: { settings: film, locale },
   };
 }
@@ -517,6 +532,8 @@ export function applyFilm(
       edit.layers?.map((l) => ({ ...l, x, y, scale, frame: look.frame })) ??
       null,
     screen: look.screen,
+    // A drift set by hand stays; the premium look switches it on.
+    drift: edit.drift ?? look.drift,
     film: { settings: film, locale },
   };
 }

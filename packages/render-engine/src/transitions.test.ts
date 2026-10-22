@@ -89,3 +89,40 @@ describe("transitions", () => {
     expect(push.fromOnTop).toBe(false);
   });
 });
+
+describe("zoom through", () => {
+  it("dives into the focus with all the speed at the cut and lands settled", async () => {
+    const { diveOffset, expoOut } = await import("./transitions");
+    expect(expoOut(0)).toBe(0);
+    expect(expoOut(1)).toBe(1);
+    // Half the travel is done in the first fifth.
+    expect(expoOut(0.2)).toBeGreaterThan(0.7);
+    const early = transitionMix("zoomThrough", 0.1, { x: 0.8, y: 0.3 });
+    expect(early.from.scale).toBeGreaterThan(1.4);
+    expect(early.samples).toBe(3);
+    expect(early.blur).toBeGreaterThan(0);
+    // The focus point stays where it is while the picture grows.
+    const off = diveOffset({ x: 0.8, y: 0.3 }, early.from.scale);
+    expect(early.from.dx).toBeCloseTo(off.x);
+    expect(0.5 + off.x + (0.8 - 0.5) * early.from.scale).toBeCloseTo(0.8);
+    const done = transitionMix("zoomThrough", 1);
+    expect(done.to).toEqual({ alpha: 1, dx: 0, dy: 0, scale: 1 });
+    expect(done.from.alpha).toBe(0);
+  });
+
+  it("carries the clip's focus", () => {
+    const clips: MainClip[] = [
+      slide("a", 2),
+      {
+        ...fullClip("b", 0, 4),
+        transition: { kind: "zoomThrough", duration: 0.5, focus: { x: 0.2, y: 0.7 } },
+      },
+    ];
+    expect(transitionAt(clips, 2.1)?.focus).toEqual({ x: 0.2, y: 0.7 });
+    const plain: MainClip[] = [
+      slide("a", 2),
+      { ...fullClip("b", 0, 4), transition: { kind: "fade", duration: 0.5 } },
+    ];
+    expect(transitionAt(plain, 2.1)?.focus).toEqual({ x: 0.5, y: 0.5 });
+  });
+});

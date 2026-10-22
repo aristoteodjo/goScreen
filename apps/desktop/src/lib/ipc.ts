@@ -486,6 +486,15 @@ export const ipc = {
         }),
       )
       .parse(await invoke("media_face_eyes", { videoPath, times })),
+  /** Cuts a rectangle of the frame at source time t into an image asset. */
+  recordingCrop: async (
+    videoPath: string,
+    t: number,
+    rect: { x: number; y: number; w: number; h: number },
+  ) =>
+    importedAssetSchema.parse(
+      await invoke("recording_crop", { videoPath, t, rect }),
+    ),
   assetImport: async (videoPath: string, source: string) =>
     importedAssetSchema.parse(
       await invoke("asset_import", { videoPath, source }),

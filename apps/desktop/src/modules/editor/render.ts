@@ -85,7 +85,7 @@ export function drawAt(
     } else {
       from = sources.stillOf?.(tr.prev as Placed<RecordingClip>) ?? null;
     }
-    const mix = transitionMix(tr.kind, tr.progress);
+    const mix = transitionMix(tr.kind, tr.progress, tr.focus);
     if (mix.samples <= 1) {
       mixTransition(ctx, mix, from, to);
     } else {
@@ -99,7 +99,7 @@ export function drawAt(
       actx.clearRect(0, 0, width, height);
       for (let i = 0; i < mix.samples; i += 1) {
         const p = tr.progress + (i - (mix.samples - 1) / 2) * step;
-        mixTransition(ctx, transitionMix(tr.kind, p), from, to);
+        mixTransition(ctx, transitionMix(tr.kind, p, tr.focus), from, to);
         actx.globalAlpha = 1 / (i + 1);
         actx.drawImage(ctx.canvas, 0, 0);
       }

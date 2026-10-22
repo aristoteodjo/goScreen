@@ -1,10 +1,20 @@
 // Cinematic backgrounds, after the course's three recipes: blurred discs of
 // one hue family turning slowly ("rotating"), one soft asymmetric blob that
 // breathes and smears from its centre ("blob"), and overlapping soft bands
-// that drift ("waves"). Everything is a pure function of time; the drawing
-// (blur, grain, vignette) is the shell's job.
+// that drift ("waves"); plus the two looks of the dark SaaS references: a
+// vertical beam of the brand's light that breathes on a near-black canvas
+// ("beam") and a ring-shaped halo turning slowly ("ring"). Everything is a
+// pure function of time; the drawing (blur, grain, vignette) is the shell's job.
 
-export type MeshStyle = "circles" | "blob" | "waves";
+export type MeshStyle = "circles" | "blob" | "waves" | "beam" | "ring";
+
+export const MESH_STYLES: MeshStyle[] = [
+  "circles",
+  "blob",
+  "waves",
+  "beam",
+  "ring",
+];
 
 export type MeshBackground = {
   kind: "mesh";
@@ -31,6 +41,9 @@ export type MeshShape = {
   color: string;
   // Extra blur for this shape (waves: the farther, the softer).
   soft: number;
+  // A ring: the inside of the shape is empty up to this fraction of its
+  // radius (0 or absent = a full disc).
+  hole?: number;
 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -135,6 +148,24 @@ export function meshShapes(bg: MeshBackground, seed = 1): MeshShape[] {
       { x: 0.42, y: 0.5, rx: 0.16, ry: 0.22, color: color(1), soft: 0.4 },
     ];
   }
+  if (bg.style === "beam") {
+    // A tall shaft of light from above, its wide faint halo, and the pool
+    // it leaves on the floor.
+    return [
+      { x: 0.5, y: 0.3, rx: 0.34, ry: 0.9, color: color(2), soft: 1.2 },
+      { x: 0.5, y: 0.22, rx: 0.11, ry: 0.95, color: color(1), soft: 0.3 },
+      { x: 0.5, y: 0.08, rx: 0.045, ry: 0.7, color: color(0), soft: 0 },
+      { x: 0.5, y: 1.02, rx: 0.5, ry: 0.12, color: color(1), soft: 0.8 },
+    ];
+  }
+  if (bg.style === "ring") {
+    // A tilted ring and its softer echo, with a dim glow inside.
+    return [
+      { x: 0.5, y: 0.5, rx: 0.36, ry: 0.36, color: color(2), soft: 1.4 },
+      { x: 0.5, y: 0.5, rx: 0.46, ry: 0.3, color: color(1), soft: 0.5, hole: 0.72 },
+      { x: 0.5, y: 0.5, rx: 0.4, ry: 0.26, color: color(0), soft: 0.1, hole: 0.86 },
+    ];
+  }
   return [
     { x: 0.5, y: 0.78, rx: 0.9, ry: 0.22, color: color(0), soft: 0 },
     { x: 0.5, y: 0.58, rx: 0.95, ry: 0.2, color: color(1), soft: 0.5 },
@@ -150,13 +181,42 @@ export type MeshFrame = {
 
 /**
  * The mesh at time t: circles turn at 20°/s × speed, the blob wiggles at
- * 0.5 Hz × speed by a tenth of its size, bands slide sideways at 0.1 × speed.
+ * 0.5 Hz × speed by a tenth of its size, bands slide sideways at 0.1 × speed,
+ * the beam breathes (width and reach) at 0.18 Hz, the ring turns at 6°/s.
  */
 export function meshAt(bg: MeshBackground, t: number, seed = 1): MeshFrame {
   const shapes = meshShapes(bg, seed);
   const s = bg.speed;
   if (bg.style === "circles") {
     return { rotation: ((20 * s * t) / 180) * Math.PI, shapes };
+  }
+  if (bg.style === "beam") {
+    const breath = Math.sin(t * 2 * Math.PI * 0.18 * s);
+    const sway = Math.sin(t * 2 * Math.PI * 0.05 * s + 1.3);
+    return {
+      rotation: 0,
+      shapes: shapes.map((sh, i) =>
+        i === 3
+          ? { ...sh, rx: sh.rx * (1 + 0.1 * breath) }
+          : {
+              ...sh,
+              x: sh.x + 0.012 * sway,
+              rx: sh.rx * (1 + 0.14 * breath),
+              ry: sh.ry * (1 + 0.05 * breath),
+            },
+      ),
+    };
+  }
+  if (bg.style === "ring") {
+    const breath = Math.sin(t * 2 * Math.PI * 0.12 * s);
+    return {
+      rotation: ((6 * s * t) / 180) * Math.PI,
+      shapes: shapes.map((sh, i) =>
+        sh.hole
+          ? { ...sh, rx: sh.rx * (1 + 0.03 * breath), ry: sh.ry * (1 - 0.03 * breath) }
+          : { ...sh, rx: sh.rx * (1 + 0.06 * breath * (i + 1)), ry: sh.ry * (1 + 0.06 * breath) },
+      ),
+    };
   }
   if (bg.style === "blob") {
     const w = (i: number, f: number) =>
@@ -189,16 +249,45 @@ export function meshPreset(
   mode: "dark" | "light" = "dark",
 ): MeshBackground {
   const { base, colors } = meshPalette(accent, mode);
+  const lit = style === "beam" || style === "ring";
   return {
     kind: "mesh",
     style,
-    base,
-    colors,
+    // Light styles sit on a near-black canvas of the brand's hue and use
+    // its light itself: core, glow, haze (brightest first).
+    base: lit ? lightBase(accent, mode) : base,
+    colors: lit ? lightTones(accent, mode) : colors,
     speed: 1,
     // Fractions of the short side: the course's 150 px box blur at 1080p
     // for the discs is ~0.14, but discs must never show an edge, so more.
-    blur: style === "circles" ? 0.32 : style === "blob" ? 0.12 : 0.2,
+    blur:
+      style === "circles"
+        ? 0.32
+        : style === "blob"
+          ? 0.12
+          : style === "beam"
+            ? 0.08
+            : style === "ring"
+              ? 0.05
+              : 0.2,
     grain: 0.06,
-    vignette: style === "waves" ? 0.35 : 0.25,
+    vignette: style === "waves" ? 0.35 : lit ? 0.4 : 0.25,
   };
+}
+
+/** The canvas under a beam or a ring: almost black, tinted by the accent. */
+export function lightBase(accent: string, mode: "dark" | "light" = "dark"): string {
+  const [h, s] = hexToHsl(accent);
+  return mode === "light"
+    ? hslToHex(h, 0.2, 0.96)
+    : hslToHex(h, clamp(s * 0.5, 0.15, 0.4), 0.04);
+}
+
+/** The light of a beam or a ring: core, glow and haze from the accent. */
+export function lightTones(accent: string, mode: "dark" | "light" = "dark"): string[] {
+  const [h, s] = hexToHsl(accent);
+  const sat = clamp(s * 0.8, 0.3, 0.75);
+  return mode === "light"
+    ? [hslToHex(h, sat, 0.62), hslToHex(h, sat * 0.8, 0.78), hslToHex(h, sat * 0.6, 0.9)]
+    : [hslToHex(h, sat, 0.6), hslToHex(h, sat, 0.34), hslToHex(h, sat * 0.8, 0.14)];
 }

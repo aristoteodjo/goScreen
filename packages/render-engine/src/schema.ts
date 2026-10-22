@@ -266,7 +266,7 @@ const backgroundSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("mesh"),
-    style: z.enum(["circles", "blob", "waves"]),
+    style: z.enum(["circles", "blob", "waves", "beam", "ring"]),
     base: color,
     colors: z.array(color).min(1).max(12),
     speed: z.number().min(0).max(5).catch(1),
@@ -304,8 +304,13 @@ const transitionSchema = z
       "wipe",
       "blur",
       "push",
+      "zoomThrough",
     ]),
     duration: z.number().min(0.1).max(5),
+    focus: z
+      .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
+      .optional()
+      .catch(undefined),
   })
   .nullable()
   .catch(null);
@@ -337,6 +342,7 @@ const slideClipSchema = z.object({
   brand: z.string().optional().catch(undefined),
   accent: color.optional().catch(undefined),
   muted: color.optional().catch(undefined),
+  push: z.number().min(1).max(1.5).optional().catch(undefined),
 });
 
 const easeSchema = z.union([
@@ -421,6 +427,12 @@ const overlayBase = {
     .catch(undefined),
 };
 
+// A floating picture: soft shadow and edge glow.
+const floatLook = {
+  shadow: z.number().min(0).max(1).optional().catch(undefined),
+  glow: color.nullable().optional().catch(undefined),
+};
+
 const overlaySchema = z.discriminatedUnion("kind", [
   z.object({
     ...overlayBase,
@@ -456,12 +468,14 @@ const overlaySchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     ...overlayBase,
+    ...floatLook,
     kind: z.literal("image"),
     asset: id,
     radius: z.number().min(0).catch(0),
   }),
   z.object({
     ...overlayBase,
+    ...floatLook,
     kind: z.literal("video"),
     asset: id,
     in: z.number().min(0),
@@ -632,6 +646,13 @@ const editSchema = z.object({
       entrance: z.boolean().catch(false),
     })
     .catch(DEFAULT_LOOK),
+  drift: z
+    .object({
+      scale: z.number().min(0).max(0.3),
+      pan: z.number().min(0).max(0.2),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 /** An item the lenient parse left out, and why. */

@@ -1,4 +1,4 @@
-import { activeZoom, autoFocus, cameraAt } from "./camera";
+import { activeZoom, autoFocus, cameraAt, driftState, withDrift } from "./camera";
 import { cursorAt } from "./cursor";
 import {
   layerPoint,
@@ -268,7 +268,17 @@ export function composeFrame(
       ? { x: seg.focus.x * output.width, y: seg.focus.y * output.height }
       : autoFocus(timeline.pointers, seg, t, toOutput)
     : null;
-  const camera = cameraAt(seg, t, output, focus);
+  // The permanent drift rides on top of the zooms: the camera never
+  // stands still on a scene, and two scenes in a row pan opposite ways.
+  const camera = withDrift(
+    cameraAt(seg, t, output, focus),
+    driftState(
+      edit.drift,
+      scene && scene.length > 0 ? scene.local / scene.length : 0,
+      scene && scene.index % 2 === 1 ? -1 : 1,
+    ),
+    output,
+  );
 
   const touches =
     edit.touch.style === "none"

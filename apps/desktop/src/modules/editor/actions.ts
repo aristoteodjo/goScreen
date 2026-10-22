@@ -5,6 +5,7 @@ import {
   clipAt,
   DEFAULT_EDIT,
   type EditState,
+  energize,
   type LayerEdit,
   type MainClip,
   MIC_ASSET,
@@ -154,6 +155,21 @@ export const editActions = {
     }
     change((ed) => ({ ...ed, zooms }));
     usePlayback.getState().selectZoom(null);
+  },
+
+  /** Adds a movement wherever nothing changes for 2 s (undoable). */
+  energize() {
+    const { edit: next, changes } = energize(useEdit.getState().edit);
+    if (changes.length === 0) {
+      toast.message("Nothing stands still for more than 2 s already.");
+      return;
+    }
+    change(() => next);
+    const kinds = new Map<string, number>();
+    for (const c of changes) kinds.set(c.kind, (kinds.get(c.kind) ?? 0) + 1);
+    toast.success(
+      `Energized: ${[...kinds].map(([k, n]) => `${n} ${k}`).join(", ")}.`,
+    );
   },
 
   clearZooms() {

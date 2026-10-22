@@ -18,6 +18,8 @@ import { registry } from "@/lib/registry";
 import { useBlocksDialog } from "./BlocksDialog";
 import { useCompositionsDialog } from "./CompositionsDialog";
 import { editActions, TEXT_PRESETS } from "./actions";
+import { usePopOutTool } from "./popout";
+import { useSession } from "./session";
 import { useEdit, usePlayback } from "./store";
 
 /** What sits under a right-click on the preview. `at` is a fraction of the output. */
@@ -55,6 +57,7 @@ export function PreviewMenu({
             <ContextMenuItem onClick={() => editActions.zoomHere(target.at)}>
               Zoom here
             </ContextMenuItem>
+            <PopOutItem />
             <ContextMenuSeparator />
             <LayerItems id={target.id} />
           </>
@@ -205,6 +208,17 @@ function LayerItems({ id }: { id: string }) {
   );
 }
 
+/** Arms the pop-out tool: the next drag on the preview draws the rectangle. */
+function PopOutItem() {
+  const hasRecording = useSession((s) => s.videoUrl !== null);
+  if (!hasRecording) return null;
+  return (
+    <ContextMenuItem onClick={() => usePopOutTool.getState().arm()}>
+      Pop out…
+    </ContextMenuItem>
+  );
+}
+
 function EmptyItems({ at }: { at?: { x: number; y: number } }) {
   return (
     <>
@@ -213,6 +227,7 @@ function EmptyItems({ at }: { at?: { x: number; y: number } }) {
           Zoom here
         </ContextMenuItem>
       ) : null}
+      <PopOutItem />
       <ContextMenuItem onClick={() => editActions.addText(TEXT_PRESETS[0], at)}>
         Add a title here
       </ContextMenuItem>

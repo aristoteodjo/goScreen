@@ -30,6 +30,9 @@ export {
 export {
   hexToHsl,
   hslToHex,
+  lightBase,
+  lightTones,
+  MESH_STYLES,
   type MeshBackground,
   type MeshFrame,
   type MeshShape,
@@ -44,7 +47,11 @@ export {
   applyCamera,
   autoFocus,
   cameraAt,
+  DEFAULT_DRIFT,
+  type DriftState,
+  driftState,
   easeInOut,
+  withDrift,
   ZOOM_DRIFT,
   ZOOM_IN,
   ZOOM_RAMP,
@@ -79,9 +86,23 @@ export {
   stillTimes,
 } from "./contact";
 export { type CursorMark, cursorAt } from "./cursor";
-export { type Quad, quadMapper } from "./homography";
+export {
+  changeTimes,
+  ENERGIZE_DEFAULTS,
+  type EnergizeChange,
+  type EnergizeKind,
+  type EnergizeOptions,
+  energize,
+  type GlassRect,
+  POP_DEFAULTS,
+  type PopOutSpec,
+  popBox,
+  popOutOverlay,
+} from "./dynamic";
+export { type Quad, quadInverse, quadMapper } from "./homography";
 export {
   arrangeLayers,
+  glassPoint,
   hitLayer,
   layerPoint,
   nearestCorner,
@@ -243,7 +264,10 @@ export {
 } from "./touches";
 export {
   type ActiveTransition,
+  CENTRE,
   DEFAULT_TRANSITION,
+  diveOffset,
+  expoOut,
   TRANSITION_KINDS,
   type TransitionMix,
   transitionAt,

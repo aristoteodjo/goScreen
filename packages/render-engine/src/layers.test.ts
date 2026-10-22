@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Quad } from "./homography";
 import {
   arrangeLayers,
   composeFrame,
@@ -162,6 +163,63 @@ describe("layered compose", () => {
     expect(parseRecordingFile({ ...base, camera }).camera).toEqual(camera);
     expect(
       parseRecordingFile({ ...base, camera: { corner: 42 } }).camera,
+    ).toBeNull();
+  });
+});
+
+describe("glassPoint", () => {
+  it("undoes layerPoint, on a flat and on a leaning quad", async () => {
+    const { glassPoint, layerPoint } = await import("./layers");
+    const { quadInverse, quadMapper } = await import("./homography");
+    const geometry = {
+      frame: { width: 200, height: 400 },
+      screen: { x: 10, y: 20, width: 180, height: 360 },
+    };
+    const base = {
+      instanceId: "a",
+      center: { x: 500, y: 400 },
+      scale: 1,
+      rotation: 0,
+      geometry,
+      crop: { x: 0, y: 0, width: 1, height: 1 },
+      frame: true,
+      depth: [0, 0, 0, 0] as [number, number, number, number],
+      tilt: { x: 0, y: 0 },
+      opacity: 1,
+    };
+    const flatQuad: Quad = [
+      { x: 400, y: 200 },
+      { x: 600, y: 200 },
+      { x: 600, y: 600 },
+      { x: 400, y: 600 },
+    ];
+    const leaningQuad: Quad = [
+      { x: 420, y: 230 },
+      { x: 590, y: 190 },
+      { x: 610, y: 620 },
+      { x: 390, y: 580 },
+    ];
+    for (const quad of [flatQuad, leaningQuad]) {
+      const l = { ...base, quad };
+      for (const [u, v] of [[0.1, 0.2], [0.5, 0.5], [0.9, 0.95]]) {
+        const p = layerPoint(l, u, v);
+        const back = glassPoint(l, p);
+        expect(back?.u).toBeCloseTo(u, 6);
+        expect(back?.v).toBeCloseTo(v, 6);
+      }
+      const inv = quadInverse(l.quad);
+      const fwd = quadMapper(l.quad);
+      const q = inv?.(fwd(0.3, 0.7));
+      expect(q?.u).toBeCloseTo(0.3, 6);
+      expect(q?.v).toBeCloseTo(0.7, 6);
+    }
+    expect(
+      quadInverse([
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+      ]),
     ).toBeNull();
   });
 });

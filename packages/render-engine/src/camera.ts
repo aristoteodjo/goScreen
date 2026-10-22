@@ -1,6 +1,7 @@
 import { sharp } from "./look";
 import type {
   Camera,
+  CameraDrift,
   Point,
   RecordedPointer,
   Size,
@@ -114,6 +115,63 @@ export function cameraAt(
     ),
   };
   return { scale, center };
+}
+
+/** The drift the premium look switches on: 3 % push and a 1.5 % pan. */
+export const DEFAULT_DRIFT: CameraDrift = { scale: 0.03, pan: 0.015 };
+
+/** Where the drift stands at this moment: extra scale and pan (fractions). */
+export type DriftState = { scale: number; dx: number; dy: number };
+
+/**
+ * The camera's permanent drift `k` of the way through a scene (0..1): it
+ * pushes in to `1 + drift.scale` and pans by `drift.pan` of the width,
+ * decelerating (never linear) so it never ends on a jolt. `side` flips the
+ * pan so two scenes in a row never travel the same way.
+ */
+export function driftState(
+  drift: CameraDrift | undefined,
+  k: number,
+  side = 1,
+): DriftState {
+  if (!drift || (drift.scale === 0 && drift.pan === 0))
+    return { scale: 1, dx: 0, dy: 0 };
+  const c = Math.max(0, Math.min(1, k));
+  const e = c * (2 - c);
+  return {
+    scale: 1 + drift.scale * e,
+    dx: drift.pan * (e - 0.5) * side,
+    // A touch of vertical travel, a third of the pan, the other way.
+    dy: -drift.pan * (e - 0.5) * side * 0.33,
+  };
+}
+
+/**
+ * A camera with a drift folded in: the push multiplies the scale, the pan
+ * moves the centre; the window still never shows outside the frame.
+ */
+export function withDrift(
+  camera: Camera,
+  drift: DriftState,
+  output: Size,
+): Camera {
+  if (drift.scale === 1 && drift.dx === 0 && drift.dy === 0) return camera;
+  const scale = camera.scale * drift.scale;
+  const halfW = output.width / (2 * scale);
+  const halfH = output.height / (2 * scale);
+  return {
+    scale,
+    center: {
+      x: Math.min(
+        output.width - halfW,
+        Math.max(halfW, camera.center.x + drift.dx * output.width),
+      ),
+      y: Math.min(
+        output.height - halfH,
+        Math.max(halfH, camera.center.y + drift.dy * output.height),
+      ),
+    },
+  };
 }
 
 /** Output pixel -> screen pixel under a camera. */

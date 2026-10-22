@@ -263,8 +263,13 @@ For changes no command covers (styles, transitions, zooms, touch, cursor,
 background, screen look). `edit.get` first, change the object, send it back
 whole; it is validated field by field. Useful fields:
 
-- clip `transition`: `{ "kind": "push" | "blur" | "fade" | "dip" |
-  "slide-left" | "slide-up" | "zoom" | "wipe", "duration": 0.4 }`.
+- clip `transition`: `{ "kind": "zoomThrough" | "push" | "blur" | "fade" |
+  "dip" | "slide-left" | "slide-up" | "zoom" | "wipe", "duration": 0.4 }`;
+  `zoomThrough` takes an optional `focus` `{ "x", "y" }` (fractions of the
+  frame) the camera dives into.
+- `drift`: `{ "scale": 0.03, "pan": 0.015 }`, the camera's slow push and pan
+  over every scene (the premium look sets it; `{ "scale": 0, "pan": 0 }`
+  for a still camera).
 - `zooms[]`: `{ "id", "start", "end" (source s), "scale": 1.15, "focus": {
   "x": 0.5, "y": 0.4 } }`.
 - `touch`: `{ "style": "ripple", "color": accent, "size": 44, "spotlight":
@@ -272,8 +277,12 @@ whole; it is validated field by field. Useful fields:
   "clicks": false, "volume": 0.6 }`.
 - `background`: `{ "kind": "color", "value" }`, `{ "kind": "gradient",
   "from", "to", "angle" }` or `{ "kind": "mesh", "style": "circles" | "blob"
-  | "waves", "base", "colors": [...], "speed": 1, "blur": 0.32, "grain":
-  0.06, "vignette": 0.25 }`, each with optional `decor` discs.
+  | "waves" | "beam" | "ring", "base", "colors": [...], "speed": 1, "blur":
+  0.32, "grain": 0.06, "vignette": 0.25 }`, each with optional `decor` discs
+  (`beam`: a vertical shaft of the accent's light that breathes on a
+  near-black canvas; `ring`: a halo ring turning slowly).
+- image and video layers: `shadow` (0..1, a soft drop shadow) and `glow`
+  (`#rrggbb` or null, a thin light along the edge) make them float.
 - `screen` (premium look): `{ "plate": 0.035, "outline": 3, "sweep": true,
   "tilt": { "x": 8, "y": -10 }, "drift": 3, "depth": 0.25, "entrance":
   true }`; flat: all zero and false.
@@ -335,27 +344,57 @@ backdrops); never depend on them. The reference
 }
 ```
 
-- **Pop-out**: a rectangle of the take becomes a floating 3D layer.
-
-```json
-{ "video": "…/take.mp4", "t": 9.2, "rect": { "u": 0.55, "v": 0.3, "w": 0.4, "h": 0.22 }, "duration": 2.5, "lift": 0.08 }
-```
-
-- **Transition `zoomThrough`** on a clip (`edit.save`): `{ "kind":
-  "zoomThrough", "duration": 0.5 }`; the camera goes through the outgoing
-  frame into the next. `push` when the catalogue does not list it.
-- **Backdrops `beam` and `ring`** (`edit.setFilm { "backdrop": "beam" }` or
-  `background: { "kind": "mesh", "style": "beam", ... }`): the brand hue as
-  a light from the top edge, or an arc behind the product. `circles`
-  otherwise.
-- **Energy**: `edit.energize { "video", "every": 2 }` adds the permanent
-  camera drift and a pop-out or move in every `every` seconds window that
-  has none.
 - **Sound design**: `edit.soundDesign { "video", "density": "full" }` (a
   tick or hit on every entrance; `"sparse"` for the four biggest) and
   `film.sound: "full" | "sparse" | "none"` through `edit.setFilm`.
   `edit.snapToBeats { "video" }` moves scene and card starts onto the beats
   of the music bed (`sound.music` first).
+
+## Floating elements and a continuous camera: `edit.popOut`, `edit.energize`
+
+The dark SaaS references never cut: the camera travels through one element
+to reach the next, UI elements leave the capture and float in front with a
+shadow and a glow, and everything drifts. Three tools, same as the buttons:
+
+- `edit.popOut` cuts a rectangle of the recorded screen at source time `t`
+  and places it as a floating image layer exactly over that rectangle, in
+  timeline time. `rect` is in fractions of the glass (`u`, `v`, `w`, `h`);
+  `layer` is the device's instance id when the take has several. Read the
+  rectangle off `site.inspect` or a still, never guess it.
+
+```json
+{
+  "video": "…/take.mp4",
+  "t": 12.4,
+  "rect": { "u": 0.08, "v": 0.31, "w": 0.84, "h": 0.22 },
+  "duration": 2.4,
+  "lift": 0.08
+}
+```
+
+  Returns `{ overlay, asset, start, duration, box }`. The layer rises off the
+  screen (scale 1 -> 1.08 on the sharp curve, a touch up and towards the
+  centre, then a slow drift), carries `shadow` 0.75 and `glow` = the film's
+  accent, and fades out. Move or retime it like any layer; its keyframes
+  are ordinary (`edit.animate`).
+
+- `edit.energize` walks the timeline and adds one movement wherever nothing
+  changes for more than `every` seconds (default 2): a gentle 1.12× zoom on
+  the recording, a 4 % pop of a text already on screen, a slow push on a
+  card (`push` 1.06). Every hard cut becomes a 0.5 s `zoomThrough` and the
+  camera `drift` is switched on. Added effects never sit closer than 0.2 s;
+  what is already animated is left alone.
+
+```json
+{ "video": "…/take.mp4", "every": 2 }
+```
+
+  Returns `{ changes: [{ t, kind, target, detail }], count }`. Run it after
+  the structure is set and before the stills check; undo is one step.
+
+- A `zoomThrough` transition by hand: `edit.save` with `"transition": {
+  "kind": "zoomThrough", "duration": 0.5, "focus": { "x": 0.5, "y": 0.42 } }`
+  on the incoming clip, the focus on the element the next scene is about.
 
 ## Compositions: HTML pages written by you
 

@@ -120,12 +120,21 @@ export type TransitionKind =
   | "blur"
   // Momentum: the outgoing scene keeps pushing in, the next one lands from
   // further out with the sharp curve.
-  | "push";
+  | "push"
+  // Continuous camera: it dives through the outgoing picture (towards
+  // `focus`, expo-out, motion blurred) while the next one lands from further
+  // away and settles; no cut is ever seen.
+  | "zoomThrough";
 
 // How a clip comes in over the end of the one before it. It overlaps the
 // start of the clip (the sequence keeps its length); the outgoing side is
-// the last frame of the previous clip.
-export type Transition = { kind: TransitionKind; duration: number };
+// the last frame of the previous clip. `focus`: where the camera dives on
+// the outgoing side (fractions of the output; centre when absent).
+export type Transition = {
+  kind: TransitionKind;
+  duration: number;
+  focus?: Point;
+};
 
 // A stretch of the screen recording on the main track, in source seconds.
 // Camera, mic, zooms and touches follow it: they live in source time.
@@ -171,6 +180,8 @@ export type SlideClip = {
   accent?: string;
   // Secondary text (eyebrow, subtitle) in the left layout.
   muted?: string;
+  // A slow push-in over the card (scale reached at its end; 1 = still).
+  push?: number;
 };
 
 export type MainClip = RecordingClip | SlideClip;
@@ -282,17 +293,23 @@ export type TextOverlay = OverlayBase & {
   // being said in the accent colour. `text` holds them joined.
   words?: CaptionWord[] | null;
 };
-export type ImageOverlay = OverlayBase & {
-  kind: "image";
-  asset: string;
-  radius: number;
-};
+// Picture layers can float: a soft drop shadow (0..1) and a thin glow of
+// this colour along the edge (a UI element popped out of the screen).
+export type FloatLook = { shadow?: number; glow?: string | null };
+
+export type ImageOverlay = OverlayBase &
+  FloatLook & {
+    kind: "image";
+    asset: string;
+    radius: number;
+  };
 export type LayerSource =
   | { block: string; props: Record<string, string | number> }
   | { composition: string; props: Record<string, string | number> };
-export type VideoOverlay = OverlayBase & {
-  kind: "video";
-  asset: string;
+export type VideoOverlay = OverlayBase &
+  FloatLook & {
+    kind: "video";
+    asset: string;
   in: number;
   volume: number;
   radius: number;
@@ -388,12 +405,20 @@ export type EditState = {
   tracks: { hidden: number[]; muted: number[]; micMuted: boolean };
   // How recorded screens are presented (plate, outline, perspective, entrance).
   screen: ScreenLook;
+  // The camera never stands still on a scene: a slow push-in and pan over
+  // each scene (see camera.ts). Absent: a still camera.
+  drift?: CameraDrift;
   // A scenario take's film settings (format, colours, cards...), kept so they
   // can be changed after the montage was built. Read by @goscreen/scenario.
   film?: { settings: Record<string, unknown>; locale: string };
 };
 
 export type Camera = { scale: number; center: Point };
+
+// Permanent camera drift over a scene: `scale` is the push reached at the
+// end of the scene (0.03 = 1 -> 1.03), `pan` the sideways travel as a
+// fraction of the output width.
+export type CameraDrift = { scale: number; pan: number };
 
 export type TouchMark = {
   x: number;

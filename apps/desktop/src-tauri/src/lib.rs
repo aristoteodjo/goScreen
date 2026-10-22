@@ -72,6 +72,7 @@ pub fn run() {
             media::envelope::media_envelope,
             media::envelope::media_envelope_load,
             media::face::media_face_eyes,
+            media::crop::recording_crop,
             media::voiceover::microphone_level,
             media::voiceover::voiceover_start,
             media::voiceover::voiceover_stop,
