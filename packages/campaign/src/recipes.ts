@@ -23,6 +23,11 @@ export interface Recipe {
   duration: [min: number, max: number];
   /** Order of scenes, after the genre of the reference videos. */
   structure: Beat[];
+  /**
+   * The dynamic look (SaaS motion references): scene compositions, the camera
+   * through each element, a beam of the brand hue, a sound per movement.
+   */
+  dynamic?: boolean;
 }
 
 const card = (
@@ -42,6 +47,12 @@ const shots = (
   captions: true,
   ...extra,
 });
+
+const scene = (
+  composition: string,
+  fill: Extract<Beat, { kind: "scene" }>["fill"],
+  seconds: number,
+): Beat => ({ kind: "scene", composition, fill, seconds });
 
 const ALL: Format[] = ["16:9", "9:16", "1:1", "4:5"];
 const SOCIAL: Format[] = ["9:16", "1:1", "4:5"];
@@ -63,6 +74,58 @@ export const RECIPES: Recipe[] = [
       shots(["features", "how-it-works", "listing", "pricing"], 3, 3),
       shots(["stats", "testimonials"], 1, 1),
       card("cta", 3.5),
+    ],
+  },
+  {
+    // References Zelios (NeuraFlow, Doks.AI): wordmark and hook on a beam, the
+    // product as a 3D object, features as scenes with the real take between
+    // them, a figure counting up, the call to action. Never a still 2 s.
+    id: "dynamic-launch",
+    label: "Dynamic launch",
+    objectives: ["launch", "awareness", "feature"],
+    formats: ["16:9", "1:1"],
+    needs: ["hero"],
+    needsAny: [],
+    wants: ["features", "stats"],
+    duration: [18, 30],
+    dynamic: true,
+    structure: [
+      scene("glow-stage", "hook", 1.5),
+      scene("device-3d", "product", 3),
+      shots(["hero", "features"], 1, 1, { speed: 1.25, captions: false }),
+      scene("floating-cards", "benefits", 3),
+      shots(["features", "how-it-works", "listing", "pricing"], 1, 1, {
+        speed: 1.25,
+      }),
+      scene("chat-typing", "hook", 2.5),
+      shots(["stats", "pricing", "listing", "testimonials"], 1, 1, {
+        speed: 1.25,
+      }),
+      scene("kinetic-counter", "figure", 2),
+      card("cta", 2.5),
+    ],
+  },
+  {
+    // Reference AfterRender (9:16): the same look cut to a reel.
+    id: "dynamic-teaser",
+    label: "Dynamic teaser",
+    objectives: ["launch", "awareness", "promo"],
+    formats: ["9:16", "4:5"],
+    needs: ["hero"],
+    needsAny: [],
+    wants: ["features", "stats"],
+    duration: [12, 20],
+    dynamic: true,
+    structure: [
+      scene("glow-stage", "hook", 1.5),
+      scene("device-3d", "product", 2.5),
+      shots(["hero", "features", "listing"], 1, 1, {
+        speed: 1.5,
+        captions: false,
+      }),
+      scene("cards-stack-3d", "benefits", 2.5),
+      scene("kinetic-counter", "figure", 2),
+      card("cta", 2),
     ],
   },
   {
