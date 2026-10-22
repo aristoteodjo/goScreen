@@ -783,6 +783,59 @@ audio embarqué : tout est synthétisé en code.
   additive, pas de calage sur le tempo du montage) ; `render.mjs` exige Node ≥ 22.6 ; la transcription vient
   d'une autre tranche (`edit.transcribe`).
 
+### Look dynamique (références Zelios / AfterRender, relevé 2026-10-21)
+
+Un film produit fait par l'IA avec goScreen a été jugé « pas du tout dynamique » face à trois pubs SaaS en motion
+design : NeuraFlow et Doks.AI (Zelios, 16:9, 20 s) et AfterRender (9:16, 17 s). Relevé image par image dans
+`skills/goscreen/references/dynamic-analysis.md` (planches à 2 i/s, détection de coupes FFmpeg, attaques sonores) :
+
+- **Aucune coupe franche** (0, 1, 0 sur 57 s) : la caméra traverse un élément pour arriver au suivant, ou l'élément
+  suivant remplace le précédent sur place ; rien n'est immobile plus de 2 s.
+- **Le produit est un objet** : mockup en perspective, cartes qui en sortent, téléphones inclinés, pile de cartes,
+  carrousel, grille d'icônes traversée. Jamais une capture à plat.
+- **Typographie cinétique** : compteur 15 % → 40 %, phrase avec l'icône en ligne, marque géante floutée derrière.
+- **Interactions mimées** : curseur qui clique, champ qui se tape, chat qui répond, poignées de sélection.
+- **Une teinte de marque sur fond quasi noir** : faisceau, arc ou anneau de lumière, glow sur chaque bord.
+- **Un son par mouvement** : Doks.AI 39 attaques et AfterRender 28 (≈ 2 par seconde), NeuraFlow des nappes par
+  section ; musique rythmée, changements sur ses temps.
+
+Ce que cette tranche livre (les scènes, pop-outs, `zoomThrough`, fonds `beam`/`ring`, `energize`, `soundDesign`,
+`film.sound`, `snapToBeats` viennent d'autres branches et sont cités « if available ») :
+
+- **Skill** : `rules.md` section « Dynamic look » (quand, structure 20-30 s : logo + accroche → produit en 3D → 2-3
+  fonctions en scènes et éléments flottants → preuve chiffrée → CTA ; jamais 2 s immobiles ; pas de coupe sèche ;
+  3D et glow ; `sound: "full"` ; musique calée ; une teinte sur fond très sombre) et checklist étendue (13-18) ;
+  `workflow.md` « Dynamic product ad » (prise courte 3-4 écrans → `edit.propose` ou `edit.new` → scènes, pop-outs,
+  energize → sound design, snap → stills → export) ; `SKILL.md` (route) ; `editing.md` « If available » (ids des
+  13 scènes et leurs props, contrat d'une scène non rendue, `edit.popOut`, `zoomThrough`, `beam`/`ring`,
+  `edit.energize`, `edit.soundDesign`, `edit.snapToBeats`).
+- **Recettes** `dynamic-launch` (16:9, 1:1, 18-30 s) et `dynamic-teaser` (9:16, 4:5, 12-20 s) dans
+  `@goscreen/campaign` : un beat `scene` (`composition`, `fill` : `hook`, `product`, `benefits`, `figure`,
+  `brand`, rempli depuis la marque et les sections : `sceneOf`, `benefitsOf`, `siteFigure`/`figureOf`) à côté des
+  `card` et `shots`. `buildEdit` émet pour chaque scène une carte du fond (la piste principale continue dessous) et
+  un calque `video` plein cadre **non rendu** : `source: { composition, props }`, `asset: "composition:<id>"` et une
+  entrée d'asset `<id>.pending` (sans elle, `parseEditState` écarte le calque). **Contrat** : l'app rend à l'ouverture
+  tout calque vidéo dont l'asset finit en `.pending` (même composition, props, boîte et durée que
+  `edit.addComposition`) et remplace le fichier ; `device-3d` reçoit `screen: "recording"`, `screenAt` (secondes
+  source). Un site sans chiffre saute la scène compteur ; une scène que l'app n'a pas (`available.compositions`)
+  met ses mots sur une carte. `BuildContext.available` (`transitions`, `backdrops`, `compositions`, `sound`) dit ce
+  que l'app sait dessiner : `zoomThrough` sinon `push`, `beam` sinon `circles`, `film.sound: "full"` seulement si le
+  schéma du film le connaît. Le film (`film.settings`) est posé : `plain`, `premium`, légendes `none`, zoom 1,12.
+  `longestStill` (pur) mesure le plus long passage sans changement (une composition ou un zoom couvrent leur durée).
+  Tests : sortie acceptée telle quelle par `parseEditState`, jamais plus de 2 s immobiles, transition sur chaque
+  frontière, repli sans `available`.
+- **Référence** `skills/goscreen/references/dynamic-16x9.edit.json` (20 s, 8 clips, 5 scènes en attente de rendu,
+  3 plans de la prise à 1,25×, musique et 14 effets, `push` partout) et son entrée dans le README (ce qui attend
+  l'app, replis). `references.test.ts` la parse sans perdre un calque ni un son.
+- **Évals** (`score.mjs`, option `dynamic: true`, scénario `dynamic-ad`) : `dyn-still` (rien d'immobile > 2 s),
+  `dyn-scenes` (≥ `scenes` calques de scène, 3 par défaut), `dyn-3d` (une scène 3D ou un `popOut`), `dyn-cuts`
+  (une transition sur chaque frontière de clip), `dyn-music` (un bed ≥ 5 s sur ≥ 80 % du film), `dyn-sfx`
+  (`film.sound: "full"` et ≥ 1 effet par 2 s). La référence passe ; chaque règle a son test de rupture.
+- **À faire** : morph entre scènes (un élément qui devient le suivant sur place, comme le carrousel qui devient le
+  logo) ; ombres portées projetées par les objets 3D sur le fond ; particules et poussière lumineuse dans le
+  faisceau ; les scènes elles-mêmes, `edit.popOut`, `zoomThrough`, `beam`/`ring`, `energize`, `soundDesign`,
+  `snapToBeats` (branches parallèles) ; rendre les calques `.pending` à l'ouverture dans l'app.
+
 ### Capture native
 
 Les iframes cross-origin ne se dessinent pas dans un `<canvas>`, donc la capture est native :
