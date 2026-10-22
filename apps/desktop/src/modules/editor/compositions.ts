@@ -17,13 +17,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { compositionsIpc, ipc } from "@/lib/ipc";
 import { queryClient } from "@/lib/queryClient";
-import {
-  brandProps,
-  freeLaneAt,
-  given,
-  pixelSize,
-  sourceOf,
-} from "./blocks";
+import { brandProps, freeLaneAt, given, pixelSize, sourceOf } from "./blocks";
 import { useSession } from "./session";
 import { newId, useEdit, usePlayback } from "./store";
 
@@ -101,7 +95,8 @@ export async function findComposition(
 /** Checks a composition; throws with every issue and its path. */
 export function checkComposition(raw: unknown): Composition {
   const r = parseComposition(raw);
-  if (!r.ok) throw new Error(`Invalid composition: ${describeIssues(r.issues)}`);
+  if (!r.ok)
+    throw new Error(`Invalid composition: ${describeIssues(r.issues)}`);
   return r.composition;
 }
 
@@ -208,7 +203,11 @@ export async function previewComposition(
     height: Math.min(1920, c.box.height),
   };
   return ipc.blockFrame({
-    html: prepareCompositionHtml(c, { ...compositionBrand(edit, c), ...props }, size),
+    html: prepareCompositionHtml(
+      c,
+      { ...compositionBrand(edit, c), ...props },
+      size,
+    ),
     width: size.width,
     height: size.height,
     t: Math.min(Math.max(0, t), c.duration),
@@ -246,10 +245,7 @@ function compositionOverlay(
   };
 }
 
-const withAsset = (
-  edit: EditState,
-  asset: EditState["assets"][number],
-) =>
+const withAsset = (edit: EditState, asset: EditState["assets"][number]) =>
   edit.assets.some((a) => a.id === asset.id)
     ? edit.assets
     : [...edit.assets, asset];
@@ -308,7 +304,10 @@ export async function updateComposition(
   videoPath: string,
   edit: EditState,
   overlayId: string,
-  change: { props?: Record<string, string | number>; composition?: Composition },
+  change: {
+    props?: Record<string, string | number>;
+    composition?: Composition;
+  },
 ): Promise<EditState> {
   const o = edit.overlays.find((x) => x.id === overlayId);
   if (o?.kind !== "video" || !o.source || !("composition" in o.source))
@@ -388,7 +387,8 @@ export async function addCompositionHere(
 ) {
   const { videoPath } = useSession.getState();
   const t = usePlayback.getState().time;
-  const place = at && composition.transparent ? { x: at.x, y: at.y } : undefined;
+  const place =
+    at && composition.transparent ? { x: at.x, y: at.y } : undefined;
   const result = await addComposition(
     videoPath,
     useEdit.getState().edit,

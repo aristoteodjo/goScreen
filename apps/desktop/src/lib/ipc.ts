@@ -1,11 +1,7 @@
 import { brandSchema, sectionSchema } from "@goscreen/campaign";
 import type { AudioPiece } from "@goscreen/render-engine";
+import { type WordsFile, wordSchema, wordsFileSchema } from "@goscreen/speech";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  type WordsFile,
-  wordSchema,
-  wordsFileSchema,
-} from "@goscreen/speech";
 import { z } from "zod";
 
 const proxyTargetSchema = z.object({
