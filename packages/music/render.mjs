@@ -3,7 +3,7 @@
 //   node render.mjs <job.json> <out.wav>
 // job = { "kind": "music", "style", "seed", "duration", "payoff"? }  (a plan is built)
 //     | { "kind": "music", "plan", "duration", "offset"? }             (a plan is given)
-//     | { "kind": "sfx", "sfx": "pop" }
+//     | { "kind": "sfx", "sfx": "pop", "level"?: "soft" | "full" }
 // Prints one JSON line: {"type":"done","offset":…,"plan":…} or {"type":"error","message":…}.
 // Needs Node 22.6 or later (TypeScript sources are stripped of their types).
 
@@ -14,19 +14,19 @@ import {
   musicPlan,
   musicPlanSchema,
   musicStyleSchema,
+  PLAN_SLACK,
   renderMusic,
   renderSfx,
   SAMPLE_RATE,
   sfxKindSchema,
+  sfxLevelSchema,
 } from "./src/index.ts";
-
-/** Plan slack beyond the film, so an offset towards the payoff never runs out of music. */
-const SLACK = 24;
 
 function run(job) {
   if (job.kind === "sfx") {
     const kind = sfxKindSchema.parse(job.sfx);
-    return { samples: renderSfx(kind, SAMPLE_RATE), offset: 0, plan: null };
+    const level = sfxLevelSchema.parse(job.level ?? "full");
+    return { samples: renderSfx(kind, SAMPLE_RATE, level), offset: 0, plan: null };
   }
   const duration = Number(job.duration);
   if (!(duration > 0 && duration <= 1800)) throw new Error("duration must be 0..1800 s");
@@ -38,7 +38,7 @@ function run(job) {
   } else {
     const style = musicStyleSchema.parse(job.style);
     const seed = Math.max(0, Math.floor(Number(job.seed) || 0));
-    plan = musicPlan(style, seed, duration + SLACK);
+    plan = musicPlan(style, seed, duration + PLAN_SLACK);
     if (job.payoff !== undefined && job.payoff !== null)
       offset = alignToPayoff(plan, Number(job.payoff) || 0);
   }

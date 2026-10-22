@@ -131,6 +131,13 @@ export function musicPlan(
   };
 }
 
+/**
+ * Plan seconds rendered beyond the film, so an offset towards the payoff
+ * never runs out of music. The renderer and the editor (which rebuilds the
+ * plan to read its beats) must agree on it.
+ */
+export const PLAN_SLACK = 24;
+
 /** The section playing at plan time t. */
 export function sectionAt(plan: MusicPlan, t: number): Section {
   return (

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   alignToPayoff,
   encodeWav,
-  MAX_SFX,
   musicPlan,
   musicPlanSchema,
   pickStyle,
@@ -110,7 +109,6 @@ describe("rendering", () => {
       expect(peak).toBeLessThan(1);
       expect(peak).toBeGreaterThan(0.5);
     }
-    expect(MAX_SFX).toBe(4);
   });
 
   it("encodes a WAV header", () => {
