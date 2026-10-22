@@ -157,6 +157,50 @@ the same work by hand.
 - Loop when the film is announced as one: the last frame matches frame 0
   (same card or same shot, same layers).
 
+## Dynamic look
+
+For a product ad, a launch or a teaser of 15 to 30 s that must feel like the
+SaaS motion references (`references/dynamic-analysis.md`: NeuraFlow and
+Doks.AI by Zelios, AfterRender). Not for an explainer, a proof clip or a
+talking head: those keep the rules above.
+
+- **Structure in 20–30 s**: wordmark + hook together (1–1.5 s, `glow-stage`
+  or `brand-blur`) → the product as a 3D object (`device-3d` on a frame of
+  the take, 3 s) → two or three features, each a scene (`chat-typing`,
+  `search-focus`, `floating-cards`, `icon-grid-3d`, `carousel-3d`,
+  `cards-stack-3d`, 2–3 s each) with pop-outs of the real screen between
+  them → one figure or claim in kinetic type (`kinetic-counter`,
+  `text-inline-icon`, 2 s) → wordmark + call to action (3 s). The take
+  itself appears 2 or 3 times, 2–3 s each, at 1.25× or faster.
+- **Nothing still for 2 s.** Every 2 s window has a change: a scene starts
+  or ends, a layer enters, a counter counts, the camera moves. A
+  composition counts as moving for its whole length; a card with no words
+  animation does not.
+- **No dry cut.** Every clip boundary carries a transition: `zoomThrough`
+  when the catalogue has it (the camera goes through the outgoing element),
+  else `push`. `fade` only into the closing card. `edit.energize` (if
+  available) adds the permanent camera drift and pop-outs on the take.
+- **3D and glow.** The product leans (`screen: "premium"`), cards come out of
+  it (`edit.popOut`, `floating-cards`), phones and grids are seen in
+  perspective. Glow lives in the scenes and the backdrop (`beam` or `ring`
+  built from the brand colour, else `circles`); text `style.glow` stays
+  ≤ 0.12 and there is still no neon on type.
+- **One sound per movement.** `film.sound: "full"` and `edit.soundDesign
+  { density: "full" }` (if available): a tick or hit on every entrance,
+  about one per second, never fewer than one per 2 s. The 4-effect cap of
+  the Sound section does not apply to this look; the music does: one
+  rhythmic bed (`sound.music`, `pulse` or `bright`), and `edit.snapToBeats`
+  (if available) moves scene starts onto its beats.
+- **Colours**: one brand hue on a near-black field (`#05070c` to `#0b1220`,
+  never `#000000`), white or off-white type, the hue as light (beam, ring,
+  arc), not as a flat fill.
+- **Kinetic type**: a figure counts up on screen (never pasted), a sentence
+  may carry the product icon inline, the brand name may sit giant and
+  blurred behind the product. Still ≤ 6 words a line, one accent.
+- **Mimed interaction**: a cursor that clicks (`cursor-click`), a field that
+  types (`search-focus`), a chat that answers (`chat-typing`). Show the
+  product used even when the take has no click there.
+
 ## Banned
 
 Pulse, bounce, elastic, overshoot (`elastic`, `back` eases; the `pulse`,
@@ -187,3 +231,14 @@ fix to make before showing the person, and before any export.
 10. The call to action is on the last frames, short, and readable for ≥ 2 s.
 11. Length is in the format's range (`script.md`) and no scene is a still.
 12. Nothing the person placed was moved or rewritten without asking.
+
+Dynamic look only (add these lines):
+
+13. No 2 s window without a change (scene, layer, counter, camera, cut).
+14. At least three scenes (compositions) and one 3D element or pop-out.
+15. Every clip boundary has a transition; no dry cut anywhere.
+16. The product appears as an object (lean, perspective, cards out of it),
+    and the real take is seen at least twice.
+17. A sound on every entrance (`sound: "full"`, ≥ 1 per 2 s) and a music
+    bed under the whole film, scene starts on its beats.
+18. One brand hue as light on a near-black field; type white, glow ≤ 0.12.

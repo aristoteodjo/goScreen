@@ -27,6 +27,7 @@ Load only what the task needs, in this order:
 | Filming a site: project, VSL flow, scenes, steps, targets, simulate, record | `vsl.md` |
 | Changing a montage: `edit.*`, blocks, animation, film, inspirations, media | `editing.md` |
 | Starting a montage from scratch, or checking the bar | `references/README.md`, then the matching `.edit.json` |
+| A product ad, launch or teaser that must move like a SaaS motion reference | `rules.md` "Dynamic look", `workflow.md` "Dynamic product ad", `references/dynamic-analysis.md`, `references/dynamic-16x9.edit.json` |
 
 Two rules apply everywhere:
 
@@ -43,3 +44,12 @@ lists them; never depend on them: for talking-head takes,
 `edit.transcribe`, `edit.pickTakes`, `edit.tightCut`, `edit.syncMap`,
 `edit.faceZooms`, `edit.captions`, `edit.qc` (`rules.md`, "Talking-head
 takes"; `workflow.md`, "Revisions and QC"). Without them, `edit.cleanSilences` plus `edit.alignToVoice` are the cut.
+For the dynamic look: scene compositions (`glow-stage`, `device-3d`,
+`floating-cards`, `cards-stack-3d`, `icon-grid-3d`, `carousel-3d`,
+`kinetic-counter`, `text-inline-icon`, `brand-blur`, `orbit-updates`,
+`chat-typing`, `search-focus`, `cursor-click` through
+`edit.addComposition`), `edit.popOut`, the `zoomThrough` transition, the
+`beam` and `ring` backdrops, `edit.energize`, `edit.soundDesign`,
+`film.sound` and `edit.snapToBeats` (`editing.md`, "If available"). Without
+them: `push` transitions, `circles` backdrop, blocks for the scenes,
+`edit.addSfx` for the sounds.
