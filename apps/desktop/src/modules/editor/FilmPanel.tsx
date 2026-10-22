@@ -18,6 +18,7 @@ import { useInspirations } from "@/modules/inspiration/library";
 import { FILM_FONTS } from "./filmFonts";
 import { exportVariants, type Resolution, type Variant } from "./exportCurrent";
 import { Section, SliderRow, useChange } from "./PanelKit";
+import { designSound } from "./sound";
 import { useEdit } from "./store";
 
 // The film's settings, like a Remotion composition's props: change one and
@@ -96,6 +97,34 @@ export function FilmPanel() {
           <ToggleGroupItem value="premium" className="flex-1 text-[11px]">
             Premium
           </ToggleGroupItem>
+        </ToggleGroup>
+      </Section>
+      <Section
+        title="Sound design"
+        hint="Full: a synthesised effect on every movement (whoosh, swish, pop, click, tick, sparkle, impact, riser), like the reference product ads. Sparse: only cards, clicks and the payoff, for a spoken piece."
+      >
+        <ToggleGroup
+          type="single"
+          value={film.sound}
+          onValueChange={(v) => {
+            if (!v) return;
+            const sound = v as Film["sound"];
+            set({ sound }, "sound");
+            if (sound === "none") return;
+            designSound(sound)
+              .then((r) => {
+                toast.success(`${r.count} sounds laid`);
+                if (r.warning) toast.warning(r.warning);
+              })
+              .catch((e: Error) => toast.error(e.message));
+          }}
+          className="w-full"
+        >
+          {(["none", "sparse", "full"] as const).map((b) => (
+            <ToggleGroupItem key={b} value={b} className="flex-1 text-[11px]">
+              {b[0].toUpperCase() + b.slice(1)}
+            </ToggleGroupItem>
+          ))}
         </ToggleGroup>
       </Section>
       <Section

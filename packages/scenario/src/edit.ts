@@ -498,6 +498,12 @@ export function applyFilm(
     padding: framePadding(film),
     clips: [...(intro ? [intro] : []), ...scenes, ...(outro ? [outro] : [])],
     overlays: [...overlays, ...kickers(overlays, film)],
+    // The automatic sound design's clips go with "none"; the shell lays them
+    // again for the other densities (they need rendered files).
+    audio:
+      film.sound === "none"
+        ? edit.audio.filter((a) => !a.id.startsWith("sfx-auto-"))
+        : edit.audio,
     zooms: edit.zooms.map((z) =>
       z.id.startsWith("scene-") ? { ...z, scale: Math.max(1, film.zoom) } : z,
     ),

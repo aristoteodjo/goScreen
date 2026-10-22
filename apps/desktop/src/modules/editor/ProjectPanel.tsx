@@ -1,4 +1,4 @@
-import { BLOCKS } from "@goscreen/blocks";
+import { BLOCKS, SCENES, sceneFor } from "@goscreen/blocks";
 import {
   ANIMATION_PRESETS,
   applyPreset,
@@ -244,15 +244,18 @@ function BlocksBin() {
 /** Compositions of this video and of its project library, playing live. */
 function CompositionsBin() {
   const videoPath = useSession((s) => s.videoPath);
+  const aspect = useEdit((s) => s.edit.aspect);
   const list = useCompositions(videoPath);
   const all = [
     ...(list.data?.video ?? []).map((c) => ({ c, from: "video" })),
     ...(list.data?.library ?? []).map((c) => ({ c, from: "library" })),
+    // Built-in scenes, each fitted to the montage's format.
+    ...SCENES.map((s) => ({ c: sceneFor(s.id, aspect) ?? s, from: "scene" })),
   ];
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="flex items-center justify-between px-3 pt-2 text-[11px] text-muted-foreground">
-        <span>{all.length === 0 ? "No composition yet" : "Click to add"}</span>
+        <span>Click to add</span>
         <Button
           size="sm"
           variant="ghost"
@@ -276,7 +279,11 @@ function CompositionsBin() {
               {c.label}
             </span>
             <span className="truncate text-[10px] text-muted-foreground">
-              {from === "library" ? "Project library" : "This video"}
+              {from === "library"
+                ? "Project library"
+                : from === "scene"
+                  ? "Scene"
+                  : "This video"}
             </span>
           </button>
         ))}

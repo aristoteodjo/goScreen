@@ -336,6 +336,9 @@ export type AudioClip = {
   // Lowered while a voice speaks (music under narration). Unset: yes for
   // any sound that is not itself a voice.
   duck?: boolean;
+  // A generated bed keeps what made it, so its beat grid can be rebuilt:
+  // the style and seed of its plan, the plan second its file starts from.
+  music?: { style: string; seed: number; offset: number };
 };
 
 // A file added to the edit, copied next to the recording (`<stem>.assets/`).

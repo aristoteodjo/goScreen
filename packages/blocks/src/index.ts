@@ -1,2 +1,3 @@
-export * from "./blocks";
-export * from "./composition";
+export * from "./blocks.ts";
+export * from "./composition.ts";
+export * from "./scenes.ts";

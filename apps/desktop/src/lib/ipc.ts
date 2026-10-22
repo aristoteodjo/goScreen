@@ -92,7 +92,7 @@ export type SoundJob =
       duration: number;
       payoff: number | null;
     }
-  | { kind: "sfx"; sfx: string };
+  | { kind: "sfx"; sfx: string; level?: "soft" | "full" };
 export type OpenedRecording = z.infer<typeof openedRecordingSchema>;
 
 const recordingEntrySchema = z.object({
@@ -519,6 +519,8 @@ export const ipc = {
     fps: number;
     duration: number;
     transparent: boolean;
+    /** The montage whose assets the page may show (http://goscreen.assets/<file>). */
+    video?: string;
   }) =>
     z
       .string()
@@ -531,6 +533,7 @@ export const ipc = {
     height: number;
     t: number;
     transparent: boolean;
+    video?: string;
   }) =>
     z
       .string()

@@ -6,6 +6,7 @@ import {
   prepareCompositionHtml,
   renderFingerprint,
   resolveCompositionProps,
+  sceneFor,
 } from "@goscreen/blocks";
 import {
   type EditState,
@@ -76,17 +77,23 @@ export function useCompositions(videoPath: string) {
 export const refreshCompositions = (videoPath: string) =>
   queryClient.invalidateQueries({ queryKey: compositionsKey(videoPath) });
 
-/** A composition by id: the montage's copy first, then the project library. */
+/**
+ * A composition by id: the montage's copy first, then the project library,
+ * then a built-in scene (fitted to the montage's format).
+ */
 export async function findComposition(
   videoPath: string,
   id: string,
+  aspect: EditState["aspect"] = "16:9",
 ): Promise<Composition> {
   const all = await loadCompositions(videoPath);
   const found =
-    all.video.find((c) => c.id === id) ?? all.library.find((c) => c.id === id);
+    all.video.find((c) => c.id === id) ??
+    all.library.find((c) => c.id === id) ??
+    sceneFor(id, aspect);
   if (!found)
     throw new Error(
-      `No composition "${id}" in this video or its project (compositions.list).`,
+      `No composition "${id}" in this video, its project or the scenes (compositions.list).`,
     );
   return found;
 }
@@ -171,7 +178,8 @@ export async function renderComposition(
   const known = imported.get(key);
   const existing = known && edit.assets.find((a) => a.id === known);
   if (existing) return { asset: existing };
-  const file = await ipc.blockRender(job);
+  // The page may show the montage's own assets, by name.
+  const file = await ipc.blockRender({ ...job, video: videoPath });
   const asset = await ipc.assetImport(videoPath, file);
   if (useSession.getState().videoPath === videoPath)
     useSession.getState().addAssetUrl(asset.file, asset.url);
@@ -193,6 +201,7 @@ export async function previewComposition(
   c: Composition,
   props: Record<string, string | number>,
   t: number,
+  videoPath?: string,
 ): Promise<string> {
   const size = {
     width: Math.min(1920, c.box.width),
@@ -204,6 +213,7 @@ export async function previewComposition(
     height: size.height,
     t: Math.min(Math.max(0, t), c.duration),
     transparent: c.transparent,
+    video: videoPath,
   });
 }
 
@@ -305,7 +315,7 @@ export async function updateComposition(
     throw new Error("This layer is not a composition.");
   let c = change.composition
     ? checkComposition(change.composition)
-    : await findComposition(videoPath, o.source.composition);
+    : await findComposition(videoPath, o.source.composition, edit.aspect);
   if (change.composition) {
     c = { ...c, id: o.source.composition };
     await saveComposition(videoPath, c);

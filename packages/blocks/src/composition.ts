@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Block, type BlockSize, escapeHtml, resolveProps } from "./blocks";
+import { type Block, type BlockSize, escapeHtml, resolveProps } from "./blocks.ts";
 
 // Compositions: HTML pages written by an AI or a person (the video-agent /
 // Remotion way) that goScreen renders frame by frame like a block. The page
@@ -44,11 +44,22 @@ export const compositionSourceSchema = z.object({
   props: z.record(z.string(), z.union([z.string(), z.number()])),
 });
 
-// Remote references in markup and CSS. `data:` and `blob:` stay local.
-const REMOTE_ATTR =
-  /\b(?:src|href|poster|srcset)\s*=\s*["']?\s*(?:https?:)?\/\//i;
-const REMOTE_URL = /url\(\s*["']?\s*(?:https?:)?\/\//i;
-const REMOTE_IMPORT = /@import\s+["']?\s*(?:https?:)?\/\//i;
+// Remote references in markup and CSS. `data:` and `blob:` stay local, and
+// so do the montage's own assets, which the renderer serves by name.
+export const ASSETS_ORIGIN = "http://goscreen.assets/";
+const NOT_ASSETS = "(?!goscreen\\.assets/)";
+const REMOTE_ATTR = new RegExp(
+  `\\b(?:src|href|poster|srcset)\\s*=\\s*["']?\\s*(?:https?:)?//${NOT_ASSETS}`,
+  "i",
+);
+const REMOTE_URL = new RegExp(
+  `url\\(\\s*["']?\\s*(?:https?:)?//${NOT_ASSETS}`,
+  "i",
+);
+const REMOTE_IMPORT = new RegExp(
+  `@import\\s+["']?\\s*(?:https?:)?//${NOT_ASSETS}`,
+  "i",
+);
 const REMOTE_FETCH = /\b(?:fetch|XMLHttpRequest|WebSocket|importScripts)\s*\(/;
 const RANDOM = /\bMath\s*\.\s*random\b/;
 
@@ -76,7 +87,7 @@ export function compositionIssues(raw: unknown): CompositionIssue[] {
     out.push({
       path: "html",
       message:
-        "The page loads something over the network (http(s):// or //). The renderer has no network: inline fonts, pictures and scripts as data: URLs.",
+        "The page loads something over the network (http(s):// or //). The renderer has no network: inline fonts, pictures and scripts as data: URLs, or use a montage asset by name (http://goscreen.assets/<file>).",
     });
   if (REMOTE_FETCH.test(c.html))
     out.push({
