@@ -175,6 +175,14 @@ export {
   trimClip,
 } from "./sequence";
 export {
+  type Beat,
+  type BeatMove,
+  nearestBeatAt,
+  SNAP_TOLERANCE,
+  snapToBeats,
+} from "./beats";
+export { type MotionEvent, type MotionKind, motionEvents } from "./events";
+export {
   type AudioPiece,
   type AudioSource,
   audioPieces,

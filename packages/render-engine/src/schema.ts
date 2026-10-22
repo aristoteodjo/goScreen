@@ -508,6 +508,14 @@ const audioClipSchema = z.object({
   fadeIn: z.number().min(0).catch(0),
   fadeOut: z.number().min(0).catch(0),
   duck: z.boolean().optional().catch(undefined),
+  music: z
+    .object({
+      style: z.string().min(1),
+      seed: z.number().int().min(0),
+      offset: z.number().min(0),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 const assetSchema = z.object({
