@@ -11,8 +11,11 @@ import {
   buildProposals,
   type Campaign,
   defaultCampaign,
+  figureOf,
+  longestStill,
   type Proposal,
   RECIPES,
+  SCENES_3D,
   scenesFrom,
   targetDuration,
   toHex,
@@ -218,4 +221,239 @@ it("never captions the hero with the hook again", () => {
   const hook = slides(edit)[0].title;
   for (const o of edit.overlays)
     expect(o.kind === "text" && o.text).not.toBe(hook);
+});
+
+describe("dynamic look", () => {
+  const withFigure = {
+    ...oeufsdor,
+    sections: [
+      ...oeufsdor.sections,
+      {
+        role: "stats" as const,
+        title: "Le marché en chiffres",
+        text: "12 000 plateaux livrés chaque semaine à Cotonou.",
+      },
+    ],
+  };
+  const launch = (
+    available?: Parameters<typeof buildEdit>[1]["available"],
+    site = withFigure,
+  ) =>
+    buildEdit(proposal("dynamic-launch", "16:9"), {
+      site,
+      campaign: defaultCampaign(site),
+      duration: DURATION,
+      chapters: [],
+      available,
+    });
+  const sceneLayers = (e: ReturnType<typeof build>) =>
+    e.overlays.flatMap((o) =>
+      o.kind === "video" && o.source && "composition" in o.source ? [o] : [],
+    );
+
+  it("lays scenes out as unrendered composition layers that parse as they are", () => {
+    const edit = launch();
+    const parsed = parseEditState(edit);
+    expect(parsed?.overlays).toEqual(edit.overlays);
+    const scenes = sceneLayers(edit);
+    expect(
+      scenes.map(
+        (o) => o.source && "composition" in o.source && o.source.composition,
+      ),
+    ).toEqual([
+      "glow-stage",
+      "device-3d",
+      "floating-cards",
+      "chat-typing",
+      "kinetic-counter",
+    ]);
+    for (const o of scenes) {
+      expect(o.asset).toBe(`composition:${o.id}`);
+      expect(edit.assets.find((a) => a.id === o.asset)).toMatchObject({
+        kind: "video",
+        file: `${o.id}.pending`,
+        duration: o.duration,
+      });
+      expect([o.x, o.y, o.width, o.height]).toEqual([0.5, 0.5, 1, 1]);
+    }
+    expect(
+      scenes.some(
+        (o) =>
+          o.source &&
+          "composition" in o.source &&
+          SCENES_3D.has(o.source.composition),
+      ),
+    ).toBe(true);
+    // Each scene sits on a card of the backdrop, so the main track runs under it.
+    const under = edit.clips.filter(
+      (c) => c.kind === "slide" && c.title === "",
+    );
+    expect(under).toHaveLength(scenes.length);
+    expect(under[0].kind === "slide" && under[0].background.kind).toBe("mesh");
+    const [glow, device, cards, chat, counter] = scenes.map(
+      (o) => o.source?.props ?? {},
+    );
+    expect(glow).toEqual({
+      title: "Consultez les disponibilités dans votre zone",
+      brand: "OEUF D'OR",
+    });
+    expect(device).toEqual({ screen: "recording", screenAt: 0, tilt: 12 });
+    expect(cards).toEqual({
+      a: "Comment ça marche",
+      b: "Disponible maintenant",
+      c: "Classement des producteurs",
+    });
+    expect(chat.title).toBe(glow.title);
+    expect(counter).toEqual({
+      from: 0,
+      to: 12000,
+      suffix: "",
+      label: "plateaux livrés chaque semaine",
+    });
+  });
+
+  it("never holds a frame for 2 s, and every clip boundary carries a transition", () => {
+    const edit = launch();
+    const still = longestStill(edit);
+    expect(still.to - still.from, JSON.stringify(still)).toBeLessThanOrEqual(2);
+    for (const c of edit.clips.slice(1))
+      expect(c.transition?.kind, c.id).toBe("push");
+    expect(edit.clips.filter((c) => c.kind === "recording")).toHaveLength(3);
+    expect(edit.clips.at(-1)).toMatchObject({
+      kind: "slide",
+      title: "Découvrir",
+      animation: "pop",
+    });
+    for (const z of edit.zooms) expect(z.scale).toBeLessThanOrEqual(1.15);
+    expect(edit.background).toMatchObject({
+      kind: "mesh",
+      style: "circles",
+      base: "#070a10",
+    });
+    expect(edit.film?.settings).toMatchObject({
+      screen: "premium",
+      backdrop: "circles",
+      brand: "OEUF D'OR",
+      captions: "none",
+    });
+    expect(edit.film?.settings.sound).toBeUndefined();
+  });
+
+  it("uses zoomThrough, the beam and film.sound only when the app offers them", () => {
+    const edit = launch({
+      transitions: ["push", "zoomThrough"],
+      backdrops: ["circles", "beam"],
+      sound: true,
+    });
+    for (const c of edit.clips.slice(1))
+      expect(c.transition?.kind).toBe("zoomThrough");
+    expect(edit.background).toMatchObject({ kind: "mesh", style: "beam" });
+    expect(edit.film?.settings).toMatchObject({
+      backdrop: "beam",
+      sound: "full",
+    });
+  });
+
+  it("skips a figure the site does not state, and puts a missing scene's words on a card", () => {
+    const plain = launch(undefined, oeufsdor);
+    expect(
+      sceneLayers(plain).map(
+        (o) => o.source && "composition" in o.source && o.source.composition,
+      ),
+    ).not.toContain("kinetic-counter");
+    const partial = launch({ compositions: ["glow-stage", "device-3d"] });
+    expect(sceneLayers(partial)).toHaveLength(2);
+    expect(slides(partial).map((c) => c.title)).toContain(
+      "Comment ça marche · Disponible maintenant · Classement des producteurs",
+    );
+    const [min, max] = recipe("dynamic-launch").duration;
+    for (const e of [plain, partial]) {
+      expect(sequenceDuration(e.clips)).toBeGreaterThanOrEqual(min);
+      expect(sequenceDuration(e.clips)).toBeLessThanOrEqual(max);
+    }
+  });
+
+  it("the teaser is the same look for 9:16", () => {
+    const edit = buildEdit(proposal("dynamic-teaser", "9:16"), {
+      site: withFigure,
+      campaign: defaultCampaign(withFigure),
+      duration: DURATION,
+      chapters: [],
+    });
+    expect(parseEditState(edit)).not.toBeNull();
+    expect(
+      sceneLayers(edit).map(
+        (o) => o.source && "composition" in o.source && o.source.composition,
+      ),
+    ).toEqual(["glow-stage", "device-3d", "cards-stack-3d", "kinetic-counter"]);
+    const still = longestStill(edit);
+    expect(still.to - still.from).toBeLessThanOrEqual(2);
+  });
+
+  it("reads a figure and its label from a sentence", () => {
+    expect(figureOf("12 000 plateaux livrés chaque semaine")).toEqual({
+      value: 12000,
+      suffix: "",
+      label: "plateaux livrés chaque semaine",
+    });
+    expect(figureOf("Setup in 9 minutes, 98 % renew")).toEqual({
+      value: 9,
+      suffix: "",
+      label: "minutes",
+    });
+    expect(figureOf("1,500 teams")).toEqual({
+      value: 1500,
+      suffix: "",
+      label: "teams",
+    });
+    expect(figureOf("9,5 sur 10")).toMatchObject({ value: 9.5 });
+    expect(figureOf("Loved by teams")).toBeNull();
+  });
+
+  it("longestStill sees a composition as moving and a bare card as still", () => {
+    const edit = build(proposal("product-launch", "16:9"));
+    const still = longestStill(edit);
+    expect(still.to).toBeGreaterThan(still.from);
+    const frozen = {
+      ...edit,
+      clips: [
+        {
+          ...edit.clips[0],
+          kind: "slide" as const,
+          duration: 9,
+          animation: "none" as const,
+        },
+      ],
+      overlays: [],
+      zooms: [],
+    };
+    expect(longestStill(frozen as typeof edit)).toEqual({ from: 0, to: 9 });
+    const covered = {
+      ...frozen,
+      overlays: [
+        {
+          id: "s",
+          kind: "video" as const,
+          lane: 1,
+          start: 1,
+          duration: 7,
+          x: 0.5,
+          y: 0.5,
+          width: 1,
+          height: 1,
+          rotation: 0,
+          opacity: 1,
+          enter: "none" as const,
+          exit: "none" as const,
+          motion: 0.4,
+          asset: "composition:s",
+          in: 0,
+          volume: 0,
+          radius: 0,
+          source: { composition: "glow-stage", props: {} },
+        },
+      ],
+    };
+    expect(longestStill(covered as typeof edit)).toEqual({ from: 0, to: 1 });
+  });
 });

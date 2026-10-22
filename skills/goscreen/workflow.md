@@ -123,6 +123,39 @@ every change is one undoable step. In this order:
 6. `edit.stills`, then `edit.qc` `{ "video" }`: fix every failed line (the
    detail names the item), run it again, and only then `export.video`.
 
+## Dynamic product ad: the SaaS motion look
+
+For an ad, a launch or a teaser that must move like the references in
+`references/dynamic-analysis.md` (rules in `rules.md`, "Dynamic look"; the
+bar is `references/dynamic-16x9.edit.json`). Every step is one command the
+person can undo; commands marked "if available" are used only when
+`control.catalog` lists them.
+
+1. **A short take of the site**: 3 or 4 screens, 2–3 s each (`vsl.md`: a
+   VSL with three scenes, or a scenario with `scene` steps), on the device
+   the format wants. The take is the proof; the scenes around it are built.
+2. **The montage**: from the take, `edit.propose` with `pick` on
+   `dynamic-launch` (16:9) or `dynamic-teaser` (9:16), or `edit.rebuild` on
+   the take; from nothing, `edit.new` with the format and 20 s. The recipe
+   lays out the structure (hook, product in 3D, scenes, figure, CTA) with
+   every scene as a composition layer that is not rendered yet
+   (`source.composition`); the app renders them on open, or you place them
+   one by one with `edit.addComposition` (`editing.md`, "If available").
+3. **Scenes, pop-outs, energy**: one scene per feature (`chat-typing`,
+   `floating-cards`, `icon-grid-3d`…) filled with the site's words;
+   `edit.popOut` on the element of the take that matters in each shot;
+   `edit.energize { every: 2 }` for the camera drift and the pop-outs it
+   adds; every clip boundary a `zoomThrough` (else `push`) through
+   `edit.save`.
+4. **Sound**: `sound.music` (`pulse` or `bright`, `payoff` on the product
+   scene), then `edit.soundDesign { density: "full" }` and
+   `edit.snapToBeats` (if available); else `edit.addSfx` on the four
+   biggest entrances and say the rest is missing.
+5. **Stills**: `edit.stills` every 1 s (the look changes faster than the
+   default 2 s), the 18-line checklist of `rules.md`, fix, stills again.
+6. **Export** on request: `export.video`, `export.variants` for the other
+   formats.
+
 ## 6. Export only on request
 
 - Preview is the deliverable of a working session: `app.show` the editor so

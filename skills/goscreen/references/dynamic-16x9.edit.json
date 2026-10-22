@@ -1,0 +1,808 @@
+{
+  "version": 2,
+  "aspect": "16:9",
+  "film": {
+    "settings": {
+      "aspect": "16:9",
+      "background": "#070a10",
+      "ink": "#f4f6fa",
+      "accent": "#5b8cff",
+      "font": "Inter",
+      "captions": "none",
+      "zoom": 1.12,
+      "look": "plain",
+      "backdrop": "circles",
+      "screen": "premium",
+      "label": "",
+      "brand": "Nova",
+      "intro": {
+        "title": "Your roadmap, *without* spreadsheets",
+        "subtitle": "",
+        "duration": 1.5
+      },
+      "outro": {
+        "eyebrow": "nova.app",
+        "title": "Plan your *first* sprint",
+        "subtitle": "nova.app",
+        "duration": 2.5
+      },
+      "sound": "full"
+    },
+    "locale": "en-US"
+  },
+  "background": {
+    "kind": "mesh",
+    "style": "circles",
+    "base": "#070a10",
+    "colors": [
+      "#0c1222",
+      "#101a33",
+      "#152347",
+      "#0f1a30",
+      "#0a0f1c"
+    ],
+    "speed": 1.2,
+    "blur": 0.32,
+    "grain": 0.06,
+    "vignette": 0.3,
+    "decor": [
+      {
+        "x": 0.5,
+        "y": -0.1,
+        "r": 0.45,
+        "color": "#5b8cff",
+        "opacity": 0.14
+      }
+    ]
+  },
+  "padding": 0.12,
+  "radius": 18,
+  "shadow": 0.6,
+  "clips": [
+    {
+      "id": "intro",
+      "kind": "slide",
+      "transition": null,
+      "duration": 1.5,
+      "background": {
+        "kind": "mesh",
+        "style": "circles",
+        "base": "#070a10",
+        "colors": [
+          "#0c1222",
+          "#101a33",
+          "#152347",
+          "#0f1a30",
+          "#0a0f1c"
+        ],
+        "speed": 1.2,
+        "blur": 0.32,
+        "grain": 0.06,
+        "vignette": 0.3,
+        "decor": [
+          {
+            "x": 0.5,
+            "y": -0.1,
+            "r": 0.45,
+            "color": "#5b8cff",
+            "opacity": 0.14
+          }
+        ]
+      },
+      "title": "",
+      "subtitle": "",
+      "color": "#f4f6fa",
+      "font": "Inter",
+      "animation": "none"
+    },
+    {
+      "id": "scene-product",
+      "kind": "slide",
+      "transition": {
+        "kind": "push",
+        "duration": 0.5
+      },
+      "duration": 3,
+      "background": {
+        "kind": "mesh",
+        "style": "circles",
+        "base": "#070a10",
+        "colors": [
+          "#0c1222",
+          "#101a33",
+          "#152347",
+          "#0f1a30",
+          "#0a0f1c"
+        ],
+        "speed": 1.2,
+        "blur": 0.32,
+        "grain": 0.06,
+        "vignette": 0.3,
+        "decor": [
+          {
+            "x": 0.5,
+            "y": -0.1,
+            "r": 0.45,
+            "color": "#5b8cff",
+            "opacity": 0.14
+          }
+        ]
+      },
+      "title": "",
+      "subtitle": "",
+      "color": "#f4f6fa",
+      "font": "Inter",
+      "animation": "none"
+    },
+    {
+      "id": "scene-0",
+      "kind": "recording",
+      "transition": {
+        "kind": "push",
+        "duration": 0.5
+      },
+      "in": 0,
+      "out": 3.75,
+      "speed": 1.25,
+      "muted": true,
+      "cameraHidden": true
+    },
+    {
+      "id": "scene-cards",
+      "kind": "slide",
+      "transition": {
+        "kind": "push",
+        "duration": 0.5
+      },
+      "duration": 3,
+      "background": {
+        "kind": "mesh",
+        "style": "circles",
+        "base": "#070a10",
+        "colors": [
+          "#0c1222",
+          "#101a33",
+          "#152347",
+          "#0f1a30",
+          "#0a0f1c"
+        ],
+        "speed": 1.2,
+        "blur": 0.32,
+        "grain": 0.06,
+        "vignette": 0.3,
+        "decor": [
+          {
+            "x": 0.5,
+            "y": -0.1,
+            "r": 0.45,
+            "color": "#5b8cff",
+            "opacity": 0.14
+          }
+        ]
+      },
+      "title": "",
+      "subtitle": "",
+      "color": "#f4f6fa",
+      "font": "Inter",
+      "animation": "none"
+    },
+    {
+      "id": "scene-1",
+      "kind": "recording",
+      "transition": {
+        "kind": "push",
+        "duration": 0.5
+      },
+      "in": 4,
+      "out": 7.125,
+      "speed": 1.25,
+      "muted": true,
+      "cameraHidden": true
+    },
+    {
+      "id": "scene-chat",
+      "kind": "slide",
+      "transition": {
+        "kind": "push",
+        "duration": 0.5
+      },
+      "duration": 2.5,
+      "background": {
+        "kind": "mesh",
+        "style": "circles",
+        "base": "#070a10",
+        "colors": [
+          "#0c1222",
+          "#101a33",
+          "#152347",
+          "#0f1a30",
+          "#0a0f1c"
+        ],
+        "speed": 1.2,
+        "blur": 0.32,
+        "grain": 0.06,
+        "vignette": 0.3,
+        "decor": [
+          {
+            "x": 0.5,
+            "y": -0.1,
+            "r": 0.45,
+            "color": "#5b8cff",
+            "opacity": 0.14
+          }
+        ]
+      },
+      "title": "",
+      "subtitle": "",
+      "color": "#f4f6fa",
+      "font": "Inter",
+      "animation": "none"
+    },
+    {
+      "id": "scene-counter",
+      "kind": "slide",
+      "transition": {
+        "kind": "push",
+        "duration": 0.5
+      },
+      "duration": 2,
+      "background": {
+        "kind": "mesh",
+        "style": "circles",
+        "base": "#070a10",
+        "colors": [
+          "#0c1222",
+          "#101a33",
+          "#152347",
+          "#0f1a30",
+          "#0a0f1c"
+        ],
+        "speed": 1.2,
+        "blur": 0.32,
+        "grain": 0.06,
+        "vignette": 0.3,
+        "decor": [
+          {
+            "x": 0.5,
+            "y": -0.1,
+            "r": 0.45,
+            "color": "#5b8cff",
+            "opacity": 0.14
+          }
+        ]
+      },
+      "title": "",
+      "subtitle": "",
+      "color": "#f4f6fa",
+      "font": "Inter",
+      "animation": "none"
+    },
+    {
+      "id": "outro",
+      "kind": "slide",
+      "transition": {
+        "kind": "fade",
+        "duration": 0.35
+      },
+      "duration": 2.5,
+      "background": {
+        "kind": "mesh",
+        "style": "circles",
+        "base": "#070a10",
+        "colors": [
+          "#0c1222",
+          "#101a33",
+          "#152347",
+          "#0f1a30",
+          "#0a0f1c"
+        ],
+        "speed": 1.2,
+        "blur": 0.32,
+        "grain": 0.06,
+        "vignette": 0.3,
+        "decor": [
+          {
+            "x": 0.5,
+            "y": -0.1,
+            "r": 0.45,
+            "color": "#5b8cff",
+            "opacity": 0.14
+          }
+        ]
+      },
+      "title": "Plan your *first* sprint",
+      "subtitle": "nova.app",
+      "color": "#f4f6fa",
+      "font": "Inter",
+      "animation": "pop",
+      "layout": "left",
+      "eyebrow": "nova.app",
+      "accent": "#5b8cff",
+      "muted": "#8b93a6",
+      "brand": "Nova"
+    }
+  ],
+  "overlays": [
+    {
+      "id": "scene-glow-stage",
+      "kind": "video",
+      "lane": 1,
+      "start": 0.0,
+      "duration": 1.5,
+      "x": 0.5,
+      "y": 0.5,
+      "width": 1,
+      "height": 1,
+      "rotation": 0,
+      "opacity": 1,
+      "enter": "none",
+      "exit": "none",
+      "motion": 0.4,
+      "asset": "composition:scene-glow-stage",
+      "in": 0,
+      "volume": 0,
+      "radius": 0,
+      "source": {
+        "composition": "glow-stage",
+        "props": {
+          "title": "Your roadmap, *without* spreadsheets",
+          "brand": "Nova"
+        }
+      }
+    },
+    {
+      "id": "scene-device-3d",
+      "kind": "video",
+      "lane": 1,
+      "start": 1.5,
+      "duration": 3,
+      "x": 0.5,
+      "y": 0.5,
+      "width": 1,
+      "height": 1,
+      "rotation": 0,
+      "opacity": 1,
+      "enter": "none",
+      "exit": "none",
+      "motion": 0.4,
+      "asset": "composition:scene-device-3d",
+      "in": 0,
+      "volume": 0,
+      "radius": 0,
+      "source": {
+        "composition": "device-3d",
+        "props": {
+          "screen": "recording",
+          "screenAt": 0,
+          "tilt": 12
+        }
+      }
+    },
+    {
+      "id": "scene-floating-cards",
+      "kind": "video",
+      "lane": 1,
+      "start": 7.5,
+      "duration": 3,
+      "x": 0.5,
+      "y": 0.5,
+      "width": 1,
+      "height": 1,
+      "rotation": 0,
+      "opacity": 1,
+      "enter": "none",
+      "exit": "none",
+      "motion": 0.4,
+      "asset": "composition:scene-floating-cards",
+      "in": 0,
+      "volume": 0,
+      "radius": 0,
+      "source": {
+        "composition": "floating-cards",
+        "props": {
+          "a": "One board, every team",
+          "b": "Drag, drop, done",
+          "c": "Sprints that plan themselves"
+        }
+      }
+    },
+    {
+      "id": "caption-0",
+      "kind": "text",
+      "lane": 0,
+      "start": 10.8,
+      "duration": 1.9,
+      "x": 0.5,
+      "y": 0.86,
+      "width": 0.7,
+      "height": 0.09,
+      "rotation": 0,
+      "opacity": 1,
+      "enter": "words",
+      "exit": "fade",
+      "motion": 0.35,
+      "text": "Drag, drop, *done*",
+      "style": {
+        "font": "Inter",
+        "size": 0.062,
+        "weight": 800,
+        "color": "#f4f6fa",
+        "align": "center",
+        "background": null,
+        "accent": "#5b8cff",
+        "flash": true,
+        "sweep": true,
+        "glow": 0.1,
+        "shadow": 0
+      }
+    },
+    {
+      "id": "scene-chat-typing",
+      "kind": "video",
+      "lane": 1,
+      "start": 13.0,
+      "duration": 2.5,
+      "x": 0.5,
+      "y": 0.5,
+      "width": 1,
+      "height": 1,
+      "rotation": 0,
+      "opacity": 1,
+      "enter": "none",
+      "exit": "none",
+      "motion": 0.4,
+      "asset": "composition:scene-chat-typing",
+      "in": 0,
+      "volume": 0,
+      "radius": 0,
+      "source": {
+        "composition": "chat-typing",
+        "props": {
+          "question": "When does the API ship?",
+          "answer": "Sprint 12, *two* weeks early."
+        }
+      }
+    },
+    {
+      "id": "scene-kinetic-counter",
+      "kind": "video",
+      "lane": 1,
+      "start": 15.5,
+      "duration": 2,
+      "x": 0.5,
+      "y": 0.5,
+      "width": 1,
+      "height": 1,
+      "rotation": 0,
+      "opacity": 1,
+      "enter": "none",
+      "exit": "none",
+      "motion": 0.4,
+      "asset": "composition:scene-kinetic-counter",
+      "in": 0,
+      "volume": 0,
+      "radius": 0,
+      "source": {
+        "composition": "kinetic-counter",
+        "props": {
+          "from": 0,
+          "to": 3,
+          "suffix": " days",
+          "label": "faster per sprint"
+        }
+      }
+    }
+  ],
+  "audio": [
+    {
+      "id": "music",
+      "lane": 0,
+      "start": 0,
+      "duration": 20,
+      "asset": "music-pulse-1-20s",
+      "in": 0,
+      "volume": 0.28,
+      "fadeIn": 0.4,
+      "fadeOut": 1.2,
+      "duck": true
+    },
+    {
+      "id": "sfx-0",
+      "lane": 1,
+      "start": 0.1,
+      "duration": 0.4,
+      "asset": "sfx-thud",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-1",
+      "lane": 1,
+      "start": 1.5,
+      "duration": 0.4,
+      "asset": "sfx-pop",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-2",
+      "lane": 1,
+      "start": 4.5,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-3",
+      "lane": 1,
+      "start": 7.5,
+      "duration": 0.4,
+      "asset": "sfx-pop",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-4",
+      "lane": 1,
+      "start": 7.9,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-5",
+      "lane": 1,
+      "start": 8.3,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-6",
+      "lane": 1,
+      "start": 10.5,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-7",
+      "lane": 1,
+      "start": 13.0,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-8",
+      "lane": 1,
+      "start": 13.9,
+      "duration": 0.4,
+      "asset": "sfx-pop",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-9",
+      "lane": 1,
+      "start": 15.5,
+      "duration": 0.4,
+      "asset": "sfx-thud",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-10",
+      "lane": 1,
+      "start": 16.1,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-11",
+      "lane": 1,
+      "start": 16.7,
+      "duration": 0.4,
+      "asset": "sfx-tick",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-12",
+      "lane": 1,
+      "start": 17.5,
+      "duration": 0.4,
+      "asset": "sfx-thud",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    },
+    {
+      "id": "sfx-13",
+      "lane": 1,
+      "start": 18.0,
+      "duration": 0.4,
+      "asset": "sfx-pop",
+      "in": 0,
+      "volume": 0.5,
+      "fadeIn": 0,
+      "fadeOut": 0.1,
+      "duck": false
+    }
+  ],
+  "assets": [
+    {
+      "id": "composition:scene-glow-stage",
+      "name": "glow-stage",
+      "kind": "video",
+      "file": "scene-glow-stage.pending",
+      "duration": 1.5
+    },
+    {
+      "id": "composition:scene-device-3d",
+      "name": "device-3d",
+      "kind": "video",
+      "file": "scene-device-3d.pending",
+      "duration": 3
+    },
+    {
+      "id": "composition:scene-floating-cards",
+      "name": "floating-cards",
+      "kind": "video",
+      "file": "scene-floating-cards.pending",
+      "duration": 3
+    },
+    {
+      "id": "composition:scene-chat-typing",
+      "name": "chat-typing",
+      "kind": "video",
+      "file": "scene-chat-typing.pending",
+      "duration": 2.5
+    },
+    {
+      "id": "composition:scene-kinetic-counter",
+      "name": "kinetic-counter",
+      "kind": "video",
+      "file": "scene-kinetic-counter.pending",
+      "duration": 2
+    },
+    {
+      "id": "sfx-tick",
+      "name": "sfx-tick",
+      "kind": "audio",
+      "file": "sfx-tick.wav",
+      "duration": 0.4
+    },
+    {
+      "id": "sfx-pop",
+      "name": "sfx-pop",
+      "kind": "audio",
+      "file": "sfx-pop.wav",
+      "duration": 0.4
+    },
+    {
+      "id": "sfx-thud",
+      "name": "sfx-thud",
+      "kind": "audio",
+      "file": "sfx-thud.wav",
+      "duration": 0.4
+    },
+    {
+      "id": "music-pulse-1-20s",
+      "name": "music-pulse-1-20s",
+      "kind": "audio",
+      "file": "music-pulse-1-20s.wav",
+      "duration": 20
+    }
+  ],
+  "zooms": [
+    {
+      "id": "zoom-scene-0",
+      "start": 0.75,
+      "end": 3.25,
+      "scale": 1.12,
+      "focus": {
+        "x": 0.5,
+        "y": 0.42
+      }
+    },
+    {
+      "id": "zoom-scene-1",
+      "start": 4.75,
+      "end": 6.625,
+      "scale": 1.12,
+      "focus": {
+        "x": 0.5,
+        "y": 0.42
+      }
+    }
+  ],
+  "touch": {
+    "style": "ripple",
+    "color": "#5b8cff",
+    "size": 44,
+    "spotlight": 0.5
+  },
+  "cursor": {
+    "visible": false,
+    "size": 28
+  },
+  "sound": {
+    "clicks": false,
+    "volume": 0.4
+  },
+  "layers": null,
+  "camera": {
+    "visible": false,
+    "layout": "overlay",
+    "corner": 8,
+    "size": 0.22,
+    "shape": "rounded",
+    "mirror": true
+  },
+  "mic": {
+    "volume": 1
+  },
+  "tracks": {
+    "hidden": [],
+    "muted": [],
+    "micMuted": false
+  },
+  "screen": {
+    "plate": 0.035,
+    "outline": 3,
+    "sweep": true,
+    "tilt": {
+      "x": 8,
+      "y": -10
+    },
+    "drift": 3,
+    "depth": 0.25,
+    "entrance": true
+  }
+}

@@ -1,5 +1,6 @@
 import {
   type Animation,
+  type Asset,
   DEFAULT_EDIT,
   DEFAULT_LOOK,
   type EditBackground,
@@ -7,9 +8,11 @@ import {
   type MainClip,
   type MeshStyle,
   meshPreset,
+  type Overlay,
   PREMIUM_LOOK,
   type TextOverlay,
   type TransitionKind,
+  type VideoOverlay,
   type ZoomSegment,
 } from "@goscreen/render-engine";
 
@@ -19,6 +22,7 @@ import type { Recipe } from "../recipes";
 import type { Role, Site } from "../site";
 import { readableOn, shade, toHex } from "./color";
 import { type Copy, type CopyProvider, localCopy } from "./copy";
+import { type SceneFill, sceneOf } from "./scene";
 import { type Chapter, pickScenes, type Scene, scenesFrom } from "./scenes";
 
 /** One step of a genre's structure. Seconds are at the recipe's default length. */
@@ -39,7 +43,32 @@ export type Beat =
       numbered?: boolean;
       /** Keep the source order (a walkthrough) instead of the role order. */
       chronological?: boolean;
+    }
+  | {
+      /**
+       * A scene composition of the dynamic look, full frame, filled from the
+       * site and the brief (`fill`). Emitted as a video layer that is not
+       * rendered yet (see `sceneLayer`).
+       */
+      kind: "scene";
+      composition: string;
+      fill: SceneFill;
+      seconds: number;
     };
+
+/**
+ * What the app offers beyond this package's vocabulary, so a montage never
+ * names a transition, a backdrop or a composition the app cannot draw. The
+ * shell reads it from `control.catalog` / `help.formats`; a test passes it
+ * by hand. Absent: the safe fallbacks (`push`, `circles`, no `film.sound`).
+ */
+export interface Available {
+  transitions?: string[];
+  backdrops?: string[];
+  compositions?: string[];
+  /** `film.sound` is understood by the film schema. */
+  sound?: boolean;
+}
 
 export interface BuildContext {
   site: Site;
@@ -49,6 +78,7 @@ export interface BuildContext {
   /** Tour pages in source seconds (journal v4); empty for a single page. */
   chapters: Chapter[];
   copy?: CopyProvider;
+  available?: Available;
 }
 
 interface Look {
@@ -106,6 +136,25 @@ const LOOKS: Record<Tone, Look> = {
   },
 };
 
+/**
+ * The dynamic look (references Zelios / AfterRender, `dynamic-analysis.md`):
+ * the camera goes through each element (`zoomThrough`) instead of cutting,
+ * the brand hue is a beam of light on a near-black field, every scene is a
+ * 3D composition. Only the pace of the tone is kept.
+ */
+export const DYNAMIC_TRANSITION = "zoomThrough";
+export const DYNAMIC_BACKDROP = "beam";
+export const DYNAMIC_FIELD = "#070a10";
+
+const DYNAMIC: Look = {
+  transition: "push",
+  transitionSeconds: 0.5,
+  text: "words",
+  pace: 1,
+  premium: true,
+  backdrop: "circles",
+};
+
 const VERTICAL: Format[] = ["9:16", "4:5"];
 
 /** Target length: the brief's hint kept inside the genre, else a third into its range. */
@@ -116,24 +165,26 @@ export function targetDuration(recipe: Recipe, campaign: Campaign): number {
   return Math.round(min + (max - min) / 3);
 }
 
-function palette(site: Site, campaign: Campaign) {
+function palette(site: Site, campaign: Campaign, dynamic: boolean) {
   const primary =
     toHex(campaign.brand.primary) ??
     toHex(site.brand.colors.primary) ??
     "#4f46e5";
-  const ink = toHex(site.brand.colors.ink) ?? "#111111";
+  const ink = dynamic ? "#f4f6fa" : (toHex(site.brand.colors.ink) ?? "#111111");
   const deep = shade(primary, -0.45);
   return {
     primary,
     // A lighter tone of the brand for accent words on dark plates.
     accent: shade(primary, 0.25),
-    background: {
-      kind: "gradient",
-      from: primary,
-      to: deep,
-      angle: 150,
-    } satisfies EditBackground,
-    onBrand: readableOn(primary, ink),
+    background: dynamic
+      ? ({ kind: "color", value: DYNAMIC_FIELD } satisfies EditBackground)
+      : ({
+          kind: "gradient",
+          from: primary,
+          to: deep,
+          angle: 150,
+        } satisfies EditBackground),
+    onBrand: dynamic ? ink : readableOn(primary, ink),
     pill: ink,
     onPill: readableOn(ink),
     heading:
@@ -145,19 +196,106 @@ function palette(site: Site, campaign: Campaign) {
   };
 }
 
+/** The asset id of a scene layer that is not rendered yet. */
+export const pendingAsset = (overlayId: string) => `composition:${overlayId}`;
+/** Pending files end with this: the app renders them when the montage opens. */
+export const PENDING_EXT = ".pending";
+
+/**
+ * The placeholder asset of a scene layer that is not rendered yet. A parse
+ * drops a media layer whose asset is missing, so the entry exists, with a
+ * file name that no renderer wrote: `<overlay id>.pending`. The app renders
+ * every video layer whose asset file ends with `.pending` (same composition,
+ * props, box and duration as `edit.addComposition`) and replaces the file.
+ */
+export function pendingSceneAsset(
+  overlayId: string,
+  composition: string,
+  duration: number,
+): Asset {
+  return {
+    id: pendingAsset(overlayId),
+    name: composition,
+    kind: "video",
+    file: `${overlayId}${PENDING_EXT}`,
+    duration,
+  };
+}
+
+/**
+ * A scene composition laid out but not rendered: a full-frame video layer
+ * whose `source.composition` names the scene and whose `asset` is the
+ * pending asset above. The app renders it when the montage opens (or
+ * `edit.addComposition` with the same id, props, start and box does).
+ */
+export function sceneLayer(
+  id: string,
+  composition: string,
+  props: Record<string, string | number>,
+  start: number,
+  duration: number,
+): VideoOverlay {
+  return {
+    id,
+    kind: "video",
+    lane: 1,
+    start,
+    duration,
+    x: 0.5,
+    y: 0.5,
+    width: 1,
+    height: 1,
+    rotation: 0,
+    opacity: 1,
+    enter: "none",
+    exit: "none",
+    motion: 0.4,
+    asset: pendingAsset(id),
+    in: 0,
+    volume: 0,
+    radius: 0,
+    source: { composition, props },
+  };
+}
+
+const has = (list: string[] | undefined, item: string) =>
+  list === undefined ? false : list.includes(item);
+
 /** Turns a proposal into a complete, editable montage of the recording. */
 export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
   const { recipe, format, variant } = proposal;
   const { site, campaign } = ctx;
+  const dynamic = recipe.dynamic === true;
   const copy: Copy = (ctx.copy ?? localCopy)(site, campaign);
-  const look = LOOKS[campaign.tone];
-  const colors = palette(site, campaign);
+  const look = dynamic
+    ? { ...DYNAMIC, pace: LOOKS[campaign.tone].pace }
+    : LOOKS[campaign.tone];
+  const colors = palette(site, campaign, dynamic);
   const vertical = VERTICAL.includes(format);
   const scenes = scenesFrom(site.sections, ctx.chapters, ctx.duration);
+  const available = ctx.available ?? {};
+  // Names the app may not know are written only when it says it draws them.
+  const transitionKind = (
+    dynamic && has(available.transitions, DYNAMIC_TRANSITION)
+      ? DYNAMIC_TRANSITION
+      : look.transition
+  ) as TransitionKind;
+  const backdropStyle = (
+    dynamic && has(available.backdrops, DYNAMIC_BACKDROP)
+      ? DYNAMIC_BACKDROP
+      : look.backdrop
+  ) as MeshStyle | null;
+  const backdrop: EditBackground = backdropStyle
+    ? {
+        ...meshPreset(look.backdrop ?? "circles", colors.primary, "dark"),
+        style: backdropStyle,
+        ...(dynamic ? { base: DYNAMIC_FIELD } : {}),
+      }
+    : colors.background;
 
   const target = targetDuration(recipe, campaign);
   const cardSeconds = recipe.structure.reduce(
-    (s, b) => s + (b.kind === "card" ? b.seconds * look.pace : 0),
+    (s, b) => s + (b.kind === "shots" ? 0 : b.seconds * look.pace),
     0,
   );
   const weights = recipe.structure.reduce(
@@ -167,14 +305,15 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
   const footage = Math.max(0, target - cardSeconds);
 
   const clips: MainClip[] = [];
-  const overlays: TextOverlay[] = [];
+  const overlays: Overlay[] = [];
+  const assets: Asset[] = [];
   const zooms: ZoomSegment[] = [];
   let t = 0;
   let n = 0;
   const transition = () =>
     clips.length === 0
       ? null
-      : { kind: look.transition, duration: look.transitionSeconds };
+      : { kind: transitionKind, duration: look.transitionSeconds };
 
   const cardText = (text: Extract<Beat, { kind: "card" }>["text"]) =>
     ({
@@ -184,23 +323,65 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
       cta: [copy.cta, copy.url],
     })[text];
 
+  const card = (
+    title: string,
+    subtitle: string,
+    duration: number,
+    animation: Animation,
+  ) => {
+    clips.push({
+      id: `${recipe.id}-${n++}`,
+      kind: "slide",
+      duration,
+      background: dynamic ? backdrop : colors.background,
+      title,
+      subtitle,
+      color: colors.onBrand,
+      font: colors.heading,
+      animation,
+      transition: transition(),
+    });
+    t += duration;
+  };
+
+  const hero = scenes.find((s) => s.role === "hero") ?? null;
+
   for (const beat of recipe.structure) {
     if (beat.kind === "card") {
       const [title, subtitle] = cardText(beat.text);
-      const duration = beat.seconds * look.pace;
-      clips.push({
-        id: `${recipe.id}-${n++}`,
-        kind: "slide",
-        duration,
-        background: colors.background,
+      card(
         title,
         subtitle,
-        color: colors.onBrand,
-        font: colors.heading,
-        animation: beat.text === "cta" ? "pop" : look.text,
-        transition: transition(),
+        beat.seconds * look.pace,
+        beat.text === "cta" ? "pop" : look.text,
+      );
+      continue;
+    }
+
+    if (beat.kind === "scene") {
+      const scene = sceneOf(beat.fill, beat.composition, {
+        copy,
+        sections: site.sections,
+        hero,
       });
-      t += duration;
+      // A site that states no figure skips the figure beat: never an empty scene.
+      if (!scene) continue;
+      const duration = beat.seconds * look.pace;
+      if (
+        available.compositions !== undefined &&
+        !has(available.compositions, scene.composition)
+      ) {
+        // The app does not have this scene: its words go on a card instead.
+        card(scene.text, "", duration, look.text);
+        continue;
+      }
+      const id = `${recipe.id}-scene-${n}`;
+      // The scene sits on a card of the backdrop so the main track runs under it.
+      card("", "", duration, "none");
+      overlays.push(
+        sceneLayer(id, scene.composition, scene.props, t - duration, duration),
+      );
+      assets.push(pendingSceneAsset(id, scene.composition, duration));
       continue;
     }
 
@@ -237,14 +418,16 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
           id: `${recipe.id}-zoom-${zooms.length}`,
           start: start + 0.6 * speed,
           end: out - 0.4 * speed,
-          scale: vertical ? 1.5 : 1.35,
+          // The dynamic look keeps the camera inside the rules' ceiling: the
+          // movement comes from the scenes, not from a tight zoom.
+          scale: dynamic ? 1.12 : vertical ? 1.5 : 1.35,
           focus: { x: 0.5, y: 0.4 },
         });
       }
       // The hero says what the hook card just said: no caption on it.
       if (beat.captions && scene.role !== "hero" && length > 1.2) {
         const label = copy.caption(scene, i);
-        overlays.push({
+        const caption: TextOverlay = {
           id: `${recipe.id}-caption-${overlays.length}`,
           kind: "text",
           lane: 0,
@@ -273,21 +456,43 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
             sweep: true,
             glow: 0.1,
           },
-        });
+        };
+        overlays.push(caption);
       }
       t += length;
     });
   }
 
+  const film = dynamic
+    ? {
+        settings: {
+          aspect: format,
+          background: DYNAMIC_FIELD,
+          ink: colors.onBrand,
+          accent: colors.accent,
+          font: colors.heading,
+          captions: "none",
+          zoom: 1.12,
+          look: "plain",
+          backdrop: backdropStyle ?? "flat",
+          screen: "premium",
+          label: "",
+          brand: copy.name,
+          // One sound per movement: only when the film schema knows the field.
+          ...(available.sound ? { sound: "full" } : {}),
+        },
+        locale: campaign.language,
+      }
+    : undefined;
+
   return {
     ...DEFAULT_EDIT,
     aspect: format,
-    background: look.backdrop
-      ? meshPreset(look.backdrop, colors.primary, "dark")
-      : colors.background,
+    background: backdrop,
     padding: vertical ? 0.06 : 0.08,
     clips,
     overlays,
+    assets,
     zooms,
     // The shell lays the recorded devices out (`initialLayers`) once it knows the source size.
     layers: null,
@@ -296,5 +501,6 @@ export function buildEdit(proposal: Proposal, ctx: BuildContext): EditState {
       ? { style: "ripple", color: colors.accent, size: 44, spotlight: 0.5 }
       : { ...DEFAULT_EDIT.touch, style: "none" },
     screen: look.premium ? PREMIUM_LOOK : DEFAULT_LOOK,
+    ...(film ? { film } : {}),
   };
 }

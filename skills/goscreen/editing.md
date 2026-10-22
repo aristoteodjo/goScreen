@@ -283,6 +283,80 @@ whole; it is validated field by field. Useful fields:
 
 The reference montages in `references/` show these fields assembled.
 
+## If available: the dynamic look
+
+Commands and ids developed alongside this skill. Use them when
+`control.catalog` lists them (and `help.formats` the transitions and
+backdrops); never depend on them. The reference
+`references/dynamic-16x9.edit.json` shows them assembled.
+
+- **Scenes** are compositions embedded in the app, placed with
+  `edit.addComposition` by id. Ids and their props: `glow-stage` (`title`,
+  `brand`: the hook on the beam), `device-3d` (`screen`: the name of an image
+  or video asset of the montage, `tilt`), `floating-cards` (`a`, `b`, `c`:
+  three benefits), `cards-stack-3d` (`a`, `b`, `c`), `icon-grid-3d`
+  (`labels`), `carousel-3d` (`a`, `b`, `c`), `kinetic-counter` (`from`,
+  `to`, `suffix`, `label`), `text-inline-icon` (`before`, `after`),
+  `brand-blur` (`brand`), `orbit-updates` (`title`, `subtitle`),
+  `chat-typing` (`question`, `answer`), `search-focus` (`placeholder`,
+  `query`), `cursor-click` (`label`). Colours default to the film's.
+
+```json
+{
+  "video": "…/take.mp4",
+  "composition": "chat-typing",
+  "props": { "question": "How do I connect Notion?", "answer": "Paste the link. Done in *one* click." },
+  "start": 6.5,
+  "duration": 3
+}
+```
+
+- **A scene laid out before it is rendered** (what `edit.propose` writes for
+  `dynamic-launch` and `dynamic-teaser`): a `video` overlay whose
+  `source.composition` names the scene and whose `asset` is
+  `"composition:<overlay id>"`, an id that is in no `assets` entry. The app
+  renders it when the montage opens (or `edit.addComposition` with the same
+  id, props, start and box does it by hand) and replaces `asset` with the
+  rendered file. `screen: "recording"` with `screenAt` (source seconds) on
+  `device-3d` means "a frame of the take at that time".
+
+```json
+{
+  "id": "dynamic-launch-scene-1",
+  "kind": "video",
+  "lane": 1,
+  "start": 1.5,
+  "duration": 3,
+  "x": 0.5, "y": 0.5, "width": 1, "height": 1,
+  "rotation": 0, "opacity": 1, "enter": "none", "exit": "none", "motion": 0.4,
+  "asset": "composition:dynamic-launch-scene-1",
+  "in": 0, "volume": 0, "radius": 0,
+  "source": { "composition": "device-3d", "props": { "screen": "recording", "screenAt": 2, "tilt": 12 } }
+}
+```
+
+- **Pop-out**: a rectangle of the take becomes a floating 3D layer.
+
+```json
+{ "video": "…/take.mp4", "t": 9.2, "rect": { "u": 0.55, "v": 0.3, "w": 0.4, "h": 0.22 }, "duration": 2.5, "lift": 0.08 }
+```
+
+- **Transition `zoomThrough`** on a clip (`edit.save`): `{ "kind":
+  "zoomThrough", "duration": 0.5 }`; the camera goes through the outgoing
+  frame into the next. `push` when the catalogue does not list it.
+- **Backdrops `beam` and `ring`** (`edit.setFilm { "backdrop": "beam" }` or
+  `background: { "kind": "mesh", "style": "beam", ... }`): the brand hue as
+  a light from the top edge, or an arc behind the product. `circles`
+  otherwise.
+- **Energy**: `edit.energize { "video", "every": 2 }` adds the permanent
+  camera drift and a pop-out or move in every `every` seconds window that
+  has none.
+- **Sound design**: `edit.soundDesign { "video", "density": "full" }` (a
+  tick or hit on every entrance; `"sparse"` for the four biggest) and
+  `film.sound: "full" | "sparse" | "none"` through `edit.setFilm`.
+  `edit.snapToBeats { "video" }` moves scene and card starts onto the beats
+  of the music bed (`sound.music` first).
+
 ## Compositions: HTML pages written by you
 
 6. **Polish**: `edit_get`, then `edit_save` (captions, cards, zooms, speed of

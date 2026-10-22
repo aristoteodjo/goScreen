@@ -3,13 +3,22 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { motionEvents, score, timelineOf, timelineTime } from "./score.mjs";
+import {
+  longestStill,
+  motionEvents,
+  score,
+  timelineOf,
+  timelineTime,
+} from "./score.mjs";
 import { SCENARIOS, scenario } from "./scenarios.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const reference = (name) =>
   JSON.parse(
-    readFileSync(resolve(here, "../../skills/goscreen/references", name), "utf8"),
+    readFileSync(
+      resolve(here, "../../skills/goscreen/references", name),
+      "utf8",
+    ),
   );
 
 const slide = (id, title, duration = 2) => ({
@@ -50,15 +59,30 @@ const text = (id, start, duration, t, extra = {}) => ({
   exit: "fade",
   motion: 0.4,
   text: t,
-  style: { font: "Inter", size: 0.05, weight: 800, color: "#ffffff", align: "left", background: null },
+  style: {
+    font: "Inter",
+    size: 0.05,
+    weight: 800,
+    color: "#ffffff",
+    align: "left",
+    background: null,
+  },
   ...extra,
 });
 
 const good = () => ({
   version: 2,
   aspect: "9:16",
-  clips: [slide("intro", "Stop *chasing* invoices", 1.6), clip("scene-0", 0, 6), clip("scene-1", 6, 12), slide("outro", "Start *free* today", 2.4)],
-  overlays: [text("caption-0", 1.6, 6, "Every invoice, *one* inbox"), text("caption-1", 7.6, 6, "Paid in *2* clicks")],
+  clips: [
+    slide("intro", "Stop *chasing* invoices", 1.6),
+    clip("scene-0", 0, 6),
+    clip("scene-1", 6, 12),
+    slide("outro", "Start *free* today", 2.4),
+  ],
+  overlays: [
+    text("caption-0", 1.6, 6, "Every invoice, *one* inbox"),
+    text("caption-1", 7.6, 6, "Paid in *2* clicks"),
+  ],
   zooms: [
     { id: "z0", start: 2.4, end: 5, scale: 1.15, focus: null },
     { id: "z1", start: 8.5, end: 11.5, scale: 1.15, focus: null },
@@ -66,7 +90,9 @@ const good = () => ({
 });
 
 test("timeline lays clips end to end, at their speed, and maps source time", () => {
-  const t = timelineOf({ clips: [slide("intro", "x", 2), clip("a", 0, 6), clip("b", 6, 12, 2)] });
+  const t = timelineOf({
+    clips: [slide("intro", "x", 2), clip("a", 0, 6), clip("b", 6, 12, 2)],
+  });
   assert.equal(t.duration, 2 + 6 + 3);
   assert.equal(timelineTime(t, 0), 2);
   assert.equal(timelineTime(t, 9), 8 + 1.5);
@@ -76,7 +102,11 @@ test("timeline lays clips end to end, at their speed, and maps source time", () 
 });
 
 test("a good montage passes every check", () => {
-  const r = score(good(), { aspect: "9:16", duration: [15, 30], phrases: ["Paid in 2 clicks"] });
+  const r = score(good(), {
+    aspect: "9:16",
+    duration: [15, 30],
+    phrases: ["Paid in 2 clicks"],
+  });
   assert.equal(r.pass, true, JSON.stringify(r.checks.filter((c) => !c.pass)));
   assert.equal(r.duration, 16);
 });
@@ -84,7 +114,11 @@ test("a good montage passes every check", () => {
 const failing = (r, id) => r.checks.find((c) => c.id === id)?.pass === false;
 
 test("duration out of range, wrong aspect and missing phrases fail", () => {
-  const r = score(good(), { aspect: "16:9", duration: [20, 30], phrases: ["Book a demo"] });
+  const r = score(good(), {
+    aspect: "16:9",
+    duration: [20, 30],
+    phrases: ["Book a demo"],
+  });
   assert.ok(failing(r, "aspect"));
   assert.ok(failing(r, "duration"));
   assert.ok(failing(r, "phrases"));
@@ -119,7 +153,10 @@ test("linear and overshooting eases fail; the last key's ease is ignored", () =>
     text("note", 3, 3, "A note", {
       enter: "none",
       keyframes: {
-        opacity: [{ t: 0, value: 0, ease: "out" }, { t: 0.3, value: 1, ease: "linear" }],
+        opacity: [
+          { t: 0, value: 0, ease: "out" },
+          { t: 0.3, value: 1, ease: "linear" },
+        ],
       },
     }),
   );
@@ -158,7 +195,10 @@ test("two effects within 0.2 s fail one-per-beat; a kicker with its caption is f
   e.overlays.push(text("note", 1.7, 2, "Now", { enter: "fade" }));
   const r = score(e);
   assert.ok(failing(r, "one-per-beat"));
-  assert.match(r.checks.find((c) => c.id === "one-per-beat").detail, /caption-0 and note/);
+  assert.match(
+    r.checks.find((c) => c.id === "one-per-beat").detail,
+    /caption-0 and note/,
+  );
 });
 
 test("the call to action is a closing card, a late text or a cta-button block", () => {
@@ -193,14 +233,22 @@ test("a loop needs the last card to match the first", () => {
   const e = good();
   assert.ok(failing(score(e, { loop: true }), "loop"));
   e.clips[3] = { ...e.clips[0], id: "outro" };
-  assert.equal(score(e, { loop: true }).checks.find((c) => c.id === "loop").pass, true);
+  assert.equal(
+    score(e, { loop: true }).checks.find((c) => c.id === "loop").pass,
+    true,
+  );
 });
 
 test("open-ended clips need a source duration", () => {
   const e = good();
   e.clips[2] = clip("scene-1", 6, 1e9);
   assert.ok(failing(score(e, { duration: [10, 40] }), "duration"));
-  assert.equal(score(e, { duration: [10, 40], sourceDuration: 12 }).checks.find((c) => c.id === "duration").pass, true);
+  assert.equal(
+    score(e, { duration: [10, 40], sourceDuration: 12 }).checks.find(
+      (c) => c.id === "duration",
+    ).pass,
+    true,
+  );
 });
 
 test("the reference montages pass their scenario's checks", () => {
@@ -208,18 +256,116 @@ test("the reference montages pass their scenario's checks", () => {
     ["ad-9x16.edit.json", "ad-9x16"],
     ["launch-16x9.edit.json", "launch-16x9"],
     ["proof-1x1.edit.json", "proof-1x1"],
+    ["dynamic-16x9.edit.json", "dynamic-ad"],
   ]) {
     const r = score(reference(file), scenario(id).options);
-    assert.equal(r.pass, true, `${file}: ${JSON.stringify(r.checks.filter((c) => !c.pass))}`);
+    assert.equal(
+      r.pass,
+      true,
+      `${file}: ${JSON.stringify(r.checks.filter((c) => !c.pass))}`,
+    );
   }
 });
 
 test("every scenario has a prompt, options and a way to find its video", () => {
-  assert.equal(SCENARIOS.length, 5);
+  assert.equal(SCENARIOS.length, 6);
   for (const s of SCENARIOS) {
     assert.ok(s.prompt.length > 40, s.id);
     assert.ok(Array.isArray(s.options.duration), s.id);
     assert.ok(["video", "site"].includes(s.needs), s.id);
   }
   assert.equal(scenario("nope"), null);
+});
+
+test("the dynamic rules catch a still card, a dry cut, a missing 3D scene, silence and no music", () => {
+  const e = reference("dynamic-16x9.edit.json");
+  const opts = scenario("dynamic-ad").options;
+  const base = score(e, opts);
+  assert.equal(
+    base.pass,
+    true,
+    JSON.stringify(base.checks.filter((c) => !c.pass)),
+  );
+  const stretch = longestStill(e, timelineOf(e));
+  assert.ok(stretch.to - stretch.from <= 2, JSON.stringify(stretch));
+
+  // A bare card held 3 s with nothing over it.
+  const still = structuredClone(e);
+  still.clips.splice(1, 0, {
+    ...still.clips[0],
+    id: "hold",
+    duration: 3,
+    transition: { kind: "push", duration: 0.5 },
+  });
+  still.overlays = still.overlays.map((o) =>
+    o.start >= 1.5 ? { ...o, start: o.start + 3 } : o,
+  );
+  still.audio = still.audio.map((a) =>
+    a.start >= 1.5 ? { ...a, start: a.start + 3 } : a,
+  );
+  const r1 = score(still, opts);
+  assert.ok(failing(r1, "dyn-still"));
+  assert.match(
+    r1.checks.find((c) => c.id === "dyn-still").detail,
+    /3 s from 1.5 s/,
+  );
+
+  const dry = structuredClone(e);
+  dry.clips[2].transition = null;
+  const r2 = score(dry, opts);
+  assert.ok(failing(r2, "dyn-cuts"));
+  assert.match(r2.checks.find((c) => c.id === "dyn-cuts").detail, /scene-0/);
+
+  const flat = structuredClone(e);
+  for (const o of flat.overlays)
+    if (o.source) o.source.composition = "glow-stage";
+  assert.ok(failing(score(flat, opts), "dyn-3d"));
+  flat.overlays[1].popOut = true;
+  assert.equal(
+    score(flat, opts).checks.find((c) => c.id === "dyn-3d").pass,
+    true,
+  );
+
+  const few = structuredClone(e);
+  few.overlays = few.overlays.filter(
+    (o) => o.source?.composition !== "chat-typing",
+  );
+  assert.equal(
+    score(few, { ...opts, scenes: 5 }).checks.find((c) => c.id === "dyn-scenes")
+      .pass,
+    false,
+  );
+  assert.equal(
+    score(few, { ...opts, scenes: 4 }).checks.find((c) => c.id === "dyn-scenes")
+      .pass,
+    true,
+  );
+
+  const quiet = structuredClone(e);
+  quiet.audio = quiet.audio.filter(
+    (a) => a.id === "music" || a.id.endsWith("-0") || a.id.endsWith("-1"),
+  );
+  const r3 = score(quiet, opts);
+  assert.ok(failing(r3, "dyn-sfx"));
+  assert.match(
+    r3.checks.find((c) => c.id === "dyn-sfx").detail,
+    /2 sound effect/,
+  );
+  quiet.film.settings.sound = "sparse";
+  assert.match(
+    score(quiet, opts).checks.find((c) => c.id === "dyn-sfx").detail,
+    /sparse/,
+  );
+
+  const silent = structuredClone(e);
+  silent.audio = silent.audio.filter((a) => a.id !== "music");
+  assert.ok(failing(score(silent, opts), "dyn-music"));
+
+  // The other references are not dynamic: without the option, no dynamic check runs.
+  assert.equal(
+    score(reference("ad-9x16.edit.json")).checks.some((c) =>
+      c.id.startsWith("dyn-"),
+    ),
+    false,
+  );
 });
