@@ -276,11 +276,11 @@ export async function renderPendingScenes(
   for (const o of edit.overlays) {
     if (o.kind !== "video" || !pending.has(o.asset)) continue;
     if (!o.source || !("composition" in o.source)) continue;
-    const c = await findComposition(
-      videoPath,
-      o.source.composition,
-      edit.aspect,
-    );
+    // A scene laid out by a recipe is the built-in one as this app ships it
+    // (a copy kept with the montage by an earlier render may be out of date).
+    const c =
+      sceneFor(o.source.composition, edit.aspect) ??
+      (await findComposition(videoPath, o.source.composition, edit.aspect));
     const props: Record<string, string | number> = {
       ...compositionBrand(edit, c),
       ...o.source.props,

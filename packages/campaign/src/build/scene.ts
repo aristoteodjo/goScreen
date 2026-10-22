@@ -72,8 +72,31 @@ const FIGURE =
  * nine and a half. Null when the text has no number.
  */
 export function figureOf(text: string): Figure | null {
-  const m = FIGURE.exec(text);
-  if (!m) return null;
+  // A window of time ("ces 30 derniers jours", "in the last 7 days") counts
+  // nothing: the next figure of the text is read instead. A duration that is
+  // the claim itself ("set up in 9 minutes") stays.
+  const all = new RegExp(FIGURE.source, "gu");
+  for (const m of text.matchAll(all)) {
+    const f = figureFrom(m);
+    if (!f) continue;
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 12), m.index);
+    const unit = TIME_UNIT.test(f.label);
+    const window =
+      unit && (WINDOW_AFTER.test(f.label) || WINDOW_BEFORE.test(before));
+    if (!window) return f;
+  }
+  return null;
+}
+
+const UNITS =
+  "(secondes?|minutes?|heures?|jours?|semaines?|mois|ans?|années?|seconds?|hours?|days?|weeks?|months?|years?)";
+const TIME_UNIT = new RegExp(`^(\\p{L}+\\s+)?${UNITS}\\b`, "iu");
+// "30 derniers jours", "3 prochains mois".
+const WINDOW_AFTER = /^(derni(?:er|ère)s?|prochain(?:e|s|es)?)\s/iu;
+// "the last 7 days", "ces 30 …", "past 12 months".
+const WINDOW_BEFORE = /(last|past|next|ces|les|over the)\s*$/iu;
+
+function figureFrom(m: RegExpMatchArray): Figure | null {
   const raw = m[1];
   const grouped = /[   .,]\d{3}/.test(raw) && !/^\d+[.,]\d{1,2}$/.test(raw);
   const value = grouped

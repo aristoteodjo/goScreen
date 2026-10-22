@@ -2,7 +2,7 @@ import { SCENE_IDS, sceneFor } from "@goscreen/blocks";
 import { describe, expect, it } from "vitest";
 import { RECIPES } from "../recipes";
 import type { Section } from "../site";
-import { SCENE_COMPOSITIONS, sceneOf } from "./scene";
+import { figureOf, SCENE_COMPOSITIONS, sceneOf } from "./scene";
 
 // The recipes and the scenes were written apart: a prop the recipe sends that
 // the scene does not declare is silently dropped, and the scene shows its
@@ -75,4 +75,18 @@ describe("scene beats and scene props", () => {
         `${beat.fill} words dropped by ${beat.composition}`,
       ).toBe(true);
     });
+});
+
+describe("the proof figure", () => {
+  it("skips a span of time and reads the next figure", () => {
+    expect(
+      figureOf("Remises ces 30 derniers jours : 100 plateaux livrés"),
+    ).toEqual({
+      value: 100,
+      suffix: "",
+      label: "plateaux livrés",
+    });
+    expect(figureOf("in the last 7 days")).toBeNull();
+    expect(figureOf("12 000 teams")?.value).toBe(12000);
+  });
 });
