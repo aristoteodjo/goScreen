@@ -14,7 +14,11 @@ export const SCENARIOS = [
     options: {
       aspect: "9:16",
       duration: [15, 30],
-      phrases: ["Every invoice, one inbox", "Paid in 2 clicks", "3 days faster"],
+      phrases: [
+        "Every invoice, one inbox",
+        "Paid in 2 clicks",
+        "3 days faster",
+      ],
     },
   },
   {
@@ -50,6 +54,16 @@ export const SCENARIOS = [
       "60 to 120 seconds.",
     ].join(" "),
     options: { aspect: "16:9", duration: [60, 120] },
+  },
+  {
+    id: "dynamic-ad",
+    title: "Dynamic product ad, 16:9 (SaaS motion look)",
+    needs: "video",
+    prompt: [
+      "Make a 16:9 product ad from the open take in the dynamic look of the SaaS motion references: wordmark and hook on a beam of the brand colour (#5b8cff on near-black), the product as a 3D object, two features as scenes (a chat that types, floating cards) with the real screen between them, a figure counting up, a short call to action.",
+      "Nothing still for 2 seconds, no dry cut, a sound on every movement over a rhythmic music bed. 15 to 30 seconds.",
+    ].join(" "),
+    options: { aspect: "16:9", duration: [15, 30], dynamic: true, scenes: 3 },
   },
   {
     id: "vsl-site",

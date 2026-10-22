@@ -2,6 +2,7 @@
 // quality bar an AI aims for: they must open as they are written.
 import { describe, expect, it } from "vitest";
 import ad from "../../../skills/goscreen/references/ad-9x16.edit.json";
+import dynamic from "../../../skills/goscreen/references/dynamic-16x9.edit.json";
 import launch from "../../../skills/goscreen/references/launch-16x9.edit.json";
 import proof from "../../../skills/goscreen/references/proof-1x1.edit.json";
 import { parseEditState } from "./schema";
@@ -10,6 +11,14 @@ const references = [
   { name: "ad-9x16", json: ad, aspect: "9:16", clips: 5, overlays: 5 },
   { name: "launch-16x9", json: launch, aspect: "16:9", clips: 8, overlays: 14 },
   { name: "proof-1x1", json: proof, aspect: "1:1", clips: 5, overlays: 9 },
+  // Scene layers wait for their render (`<id>.pending` assets): they must survive the parse.
+  {
+    name: "dynamic-16x9",
+    json: dynamic,
+    aspect: "16:9",
+    clips: 8,
+    overlays: 6,
+  },
 ];
 
 describe("reference montages", () => {
@@ -32,6 +41,7 @@ describe("reference montages", () => {
       expect(edit.touch).toEqual(r.json.touch);
       for (const o of edit.overlays)
         expect(o).toEqual(r.json.overlays.find((x) => x.id === o.id));
+      expect(edit.audio).toHaveLength(r.json.audio.length);
     });
   }
 });
