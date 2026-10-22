@@ -5,6 +5,7 @@ import {
   Cursor01Icon,
   Delete02Icon,
   FitToScreenIcon,
+  FlashIcon,
   HandGrabIcon,
   DashboardSquare01Icon,
   Image01Icon,
@@ -174,6 +175,11 @@ export function TimelineToolbar() {
         icon={MusicNote01Icon}
         label="Music"
         onClick={() => void editActions.importMedia(["audio"])}
+      />
+      <ToolButton
+        icon={FlashIcon}
+        label="Energize"
+        onClick={() => editActions.energize()}
       />
 
       <div className="mx-2 h-5 w-px bg-white/10" />

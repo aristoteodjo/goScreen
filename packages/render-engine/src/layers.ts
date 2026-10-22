@@ -1,4 +1,4 @@
-import { quadMapper } from "./homography";
+import { quadInverse, quadMapper } from "./homography";
 import { insideQuad } from "./look";
 import type {
   CameraEdit,
@@ -197,6 +197,22 @@ export function layerPoint(layer: PlacedLayer, u: number, v: number): Point {
     (screen.x + u * screen.width) / Math.max(1, frame.width),
     (screen.y + v * screen.height) / Math.max(1, frame.height),
   );
+}
+
+/** Output point -> fractions of the layer's screen (the glass); null when degenerate. */
+export function glassPoint(
+  layer: PlacedLayer,
+  p: Point,
+): { u: number; v: number } | null {
+  const inv = quadInverse(layer.quad);
+  if (!inv) return null;
+  const { frame, screen } = layer.geometry;
+  const q = inv(p);
+  if (!Number.isFinite(q.u) || !Number.isFinite(q.v)) return null;
+  return {
+    u: (q.u * Math.max(1, frame.width) - screen.x) / Math.max(1, screen.width),
+    v: (q.v * Math.max(1, frame.height) - screen.y) / Math.max(1, screen.height),
+  };
 }
 
 /** Topmost layer under an output point. */

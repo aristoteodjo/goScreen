@@ -7,6 +7,7 @@ import {
   type TextAnimator,
   unitsOf,
   type EditBackground,
+  type FloatLook,
   type Motion,
   type Overlay,
   overlayMotion,
@@ -142,8 +143,18 @@ function drawMesh(
     g.save();
     g.translate(sh.x * mw, sh.y * mh);
     g.scale(rx / r, ry / r);
-    const rg = g.createRadialGradient(0, 0, 0, 0, 0, r * (1 + soft));
-    rg.addColorStop(0, sh.color);
+    const R = r * (1 + soft);
+    const rg = g.createRadialGradient(0, 0, 0, 0, 0, R);
+    if (sh.hole) {
+      // A ring: empty inside, soft on both edges.
+      const inner = r * sh.hole;
+      const edge = Math.min(inner, soft * r);
+      rg.addColorStop(0, `${sh.color}00`);
+      rg.addColorStop(Math.max(0, inner - edge) / R, `${sh.color}00`);
+      rg.addColorStop(Math.min(1, inner / R), sh.color);
+    } else {
+      rg.addColorStop(0, sh.color);
+    }
     rg.addColorStop(Math.max(0, 1 - soft) / (1 + soft), sh.color);
     rg.addColorStop(1, `${sh.color}00`);
     g.fillStyle = rg;
@@ -609,6 +620,16 @@ export function drawSlide(
   out: Size,
 ) {
   fillBackground(ctx, slide.background, out.width, out.height, local);
+  const push = slide.push ?? 1;
+  if (push > 1 && slide.duration > 0) {
+    // A slow push-in over the card, decelerating, about its centre.
+    const k = Math.max(0, Math.min(1, local / slide.duration));
+    const e = k * (2 - k);
+    const z = 1 + (push - 1) * e;
+    ctx.translate(out.width / 2, out.height / 2);
+    ctx.scale(z, z);
+    ctx.translate(-out.width / 2, -out.height / 2);
+  }
   const m = slideMotion(slide.animation, slide.duration, local);
   if (slide.layout === "left") {
     drawBrandCard(ctx, slide, m, out);
@@ -871,23 +892,59 @@ export function overlayBox(o: Overlay, out: Size): DOMRectLike {
   };
 }
 
+/**
+ * A picture layer; floating ones (popped out of a screen) carry a soft
+ * drop shadow below and a thin glow of the accent along their edge.
+ */
 function drawMedia(
   ctx: CanvasRenderingContext2D,
   image: CanvasImageSource | null,
   r: DOMRectLike,
   radius: number,
+  look: FloatLook = {},
+  short = Math.min(r.width, r.height),
 ) {
+  const shadow = look.shadow ?? 0;
+  if (shadow > 0) {
+    ctx.save();
+    ctx.shadowColor = `rgba(0, 0, 0, ${(0.55 * shadow).toFixed(3)})`;
+    ctx.shadowBlur = 0.06 * short * shadow * 2;
+    ctx.shadowOffsetY = 0.018 * short * shadow * 2;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.roundRect(r.x, r.y, r.width, r.height, radius);
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.beginPath();
   ctx.roundRect(r.x, r.y, r.width, r.height, radius);
   if (!image) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
     ctx.fill();
-    return;
+  } else {
+    ctx.save();
+    ctx.clip();
+    ctx.drawImage(image, r.x, r.y, r.width, r.height);
+    ctx.restore();
   }
-  ctx.save();
-  ctx.clip();
-  ctx.drawImage(image, r.x, r.y, r.width, r.height);
-  ctx.restore();
+  if (look.glow) {
+    // A hairline of light on the edge and a faint halo around it.
+    const w = Math.max(1, short * 0.0025);
+    ctx.save();
+    ctx.lineWidth = w;
+    ctx.strokeStyle = hexAlphaOf(look.glow, 0.85);
+    ctx.shadowColor = hexAlphaOf(look.glow, 0.7);
+    ctx.shadowBlur = short * 0.02;
+    ctx.beginPath();
+    ctx.roundRect(r.x + w / 2, r.y + w / 2, r.width - w, r.height - w, Math.max(0, radius - w / 2));
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function hexAlphaOf(hex: string, alpha: number) {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${Math.max(0, Math.min(1, alpha))})`;
 }
 
 let pixelScratch: HTMLCanvasElement | null = null;
@@ -990,7 +1047,15 @@ export function drawOverlays(
       drawAnimatedText(ctx, o, o.animator, t - o.start, r, out);
     else if (o.kind === "text") drawTextOverlay(ctx, o, m, r, out, t - o.start);
     else if (o.kind === "shape") drawShape(ctx, o, m, r, out);
-    else drawMedia(ctx, mediaOf(o), r, o.radius * short);
+    else
+      drawMedia(
+        ctx,
+        mediaOf(o),
+        r,
+        o.radius * short,
+        { shadow: o.shadow, glow: o.glow },
+        short,
+      );
     ctx.restore();
   }
 }

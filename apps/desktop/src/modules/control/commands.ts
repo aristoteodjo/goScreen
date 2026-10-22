@@ -91,6 +91,7 @@ import { registerCompositionCommands } from "./compositions";
 import { registerSpeechCommands } from "./speech";
 import { registerMotionCommands } from "@/modules/motion/commands";
 import { registerVisualCommands } from "./visual";
+import { registerDynamicCommands } from "./dynamic";
 
 // The commands an AI can run. Each one is what a button of the studio does,
 // on the same data, so a person and an agent can take turns on a project.
@@ -167,6 +168,7 @@ export function registerCommands() {
   registerVisualCommands();
   registerVersionCommands();
   registerSoundCommands({ currentEdit, applyEdit });
+  registerDynamicCommands({ currentEdit, applyEdit });
   defineCommand({
     name: "control.catalog",
     title: "List commands",

@@ -110,7 +110,7 @@ export function FilmPanel() {
           }
           className="w-full"
         >
-          {(["flat", "circles", "blob", "waves"] as const).map((b) => (
+          {(["flat", "circles", "blob", "waves", "beam", "ring"] as const).map((b) => (
             <ToggleGroupItem key={b} value={b} className="flex-1 text-[11px]">
               {b[0].toUpperCase() + b.slice(1)}
             </ToggleGroupItem>

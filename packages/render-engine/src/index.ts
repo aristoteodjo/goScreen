@@ -99,9 +99,10 @@ export {
   popBox,
   popOutOverlay,
 } from "./dynamic";
-export { type Quad, quadMapper } from "./homography";
+export { type Quad, quadInverse, quadMapper } from "./homography";
 export {
   arrangeLayers,
+  glassPoint,
   hitLayer,
   layerPoint,
   nearestCorner,

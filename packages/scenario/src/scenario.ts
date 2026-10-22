@@ -160,7 +160,9 @@ export const filmSchema = z
     look: z.enum(["showcase", "plain"]).default("showcase"),
     // The scenes' background: flat colour, or one of the course's moving
     // cinematic backdrops built from the accent colour.
-    backdrop: z.enum(["flat", "circles", "blob", "waves"]).default("flat"),
+    backdrop: z
+      .enum(["flat", "circles", "blob", "waves", "beam", "ring"])
+      .default("flat"),
     // "framed": the device hardware around the screen; "premium": the SaaS
     // enhanced screen recording (frameless glass, outline, lean, pan-in).
     screen: z.enum(["framed", "premium"]).default("framed"),

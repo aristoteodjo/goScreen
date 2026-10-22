@@ -3,6 +3,8 @@ import {
   composeFrame,
   type EditState,
   fitInto,
+  type GlassRect,
+  glassPoint,
   hitLayer,
   MIC_ASSET,
   type Overlay,
@@ -20,8 +22,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { overlayBox } from "./drawOverlays";
+import { popOut, usePopOutTool } from "./popout";
 import { imageFor, pooled, prunePool } from "./media";
 import { PreviewMenu, type PreviewTarget } from "./PreviewMenu";
 import { drawAt, type TimelineSources } from "./render";
@@ -124,6 +128,24 @@ export function Preview() {
   const hasLayers = useEdit((s) => s.edit.layers !== null);
   const recordedLayers = useSession((s) => s.layers.length);
   const layered = hasLayers && recordedLayers > 0;
+  const popArmed = usePopOutTool((s) => s.armed);
+  // The rectangle being drawn for a pop-out, in CSS px of the preview.
+  const [band, setBand] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  // Escape puts the pop-out tool away.
+  useEffect(() => {
+    if (!popArmed) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") usePopOutTool.getState().disarm();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [popArmed]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -320,6 +342,83 @@ export function Preview() {
     return { kind: "empty", at };
   };
 
+  /** The pop-out tool: a drag draws the rectangle, releasing cuts it out. */
+  const drawPopOut = (e: PointerEvent<HTMLCanvasElement>) => {
+    const el = e.currentTarget;
+    const host = el.getBoundingClientRect();
+    el.setPointerCapture(e.pointerId);
+    const from = { x: e.clientX, y: e.clientY };
+    const rectOf = (ev: { clientX: number; clientY: number }) => ({
+      x: Math.min(from.x, ev.clientX) - host.left,
+      y: Math.min(from.y, ev.clientY) - host.top,
+      width: Math.abs(ev.clientX - from.x),
+      height: Math.abs(ev.clientY - from.y),
+    });
+    const onMove = (ev: globalThis.PointerEvent) => setBand(rectOf(ev));
+    const onUp = (ev: globalThis.PointerEvent) => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      setBand(null);
+      usePopOutTool.getState().disarm();
+      const r = rectOf(ev);
+      if (r.width < 4 || r.height < 4) return;
+      const req = glassRectOf(
+        { x: host.left + r.x, y: host.top + r.y },
+        { x: host.left + r.x + r.width, y: host.top + r.y + r.height },
+      );
+      if (!req) {
+        toast.error("Draw the rectangle on the recorded screen.");
+        return;
+      }
+      void popOut(req)
+        .then((done) =>
+          usePlayback.getState().select({ kind: "overlay", id: done.overlay }),
+        )
+        .catch((err: unknown) =>
+          toast.error(err instanceof Error ? err.message : String(err)),
+        );
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+  };
+
+  /** Two client points -> the rectangle of the glass under them, and the source time. */
+  const glassRectOf = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+  ): { t: number; layer: string | null; rect: GlassRect } | null => {
+    const now = frameNow();
+    const pa = toOutput(a.x, a.y);
+    const pb = toOutput(b.x, b.y);
+    const t = sourceTimeAt(useEdit.getState().edit.clips, usePlayback.getState().time);
+    if (!now || !pa || !pb || t === null) return null;
+    const { frame } = now;
+    const centre = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+    const id = frame.layers.length
+      ? (hitLayer(frame.layers, centre) ?? frame.layers[0].instanceId)
+      : null;
+    const glass = id
+      ? (frame.layers.find((l) => l.instanceId === id) ?? null)
+      : frame.flat;
+    const point = (p: Point) => {
+      if (glass) return glassPoint(glass, p);
+      const c = frame.content;
+      return { u: (p.x - c.x) / c.width, v: (p.y - c.y) / c.height };
+    };
+    const qa = point(pa);
+    const qb = point(pb);
+    if (!qa || !qb) return null;
+    const clamp = (v: number) => Math.max(0, Math.min(1, v));
+    const u = clamp(Math.min(qa.u, qb.u));
+    const v = clamp(Math.min(qa.v, qb.v));
+    const w = clamp(Math.max(qa.u, qb.u)) - u;
+    const h = clamp(Math.max(qa.v, qb.v)) - v;
+    if (w < 0.01 || h < 0.01) return null;
+    return { t, layer: id, rect: { u, v, w, h } };
+  };
+
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (
       e.button === 1 ||
@@ -329,6 +428,10 @@ export function Preview() {
       return;
     }
     if (e.button !== 0 || !output) return;
+    if (usePopOutTool.getState().armed) {
+      drawPopOut(e);
+      return;
+    }
     const { change } = useEdit.getState();
 
     // Overlays sit above everything: they take the click first.
@@ -494,7 +597,7 @@ export function Preview() {
                   "block rounded-sm shadow-2xl",
                   tool === "hand"
                     ? "cursor-grab active:cursor-grabbing"
-                    : selectedZoom
+                    : selectedZoom || popArmed
                       ? "cursor-crosshair"
                       : layered && "cursor-grab active:cursor-grabbing",
                 )}
@@ -508,11 +611,24 @@ export function Preview() {
                   toScreen={toScreen}
                 />
               ) : null}
+              {band ? (
+                <div
+                  className="pointer-events-none absolute border border-sky-300 bg-sky-400/15"
+                  style={{
+                    left: band.x,
+                    top: band.y,
+                    width: band.width,
+                    height: band.height,
+                  }}
+                />
+              ) : null}
             </div>
           </PreviewMenu>
         ) : null}
       </div>
-      {selectedZoom ? (
+      {popArmed ? (
+        <Hint>Drag a rectangle of the screen to pop it out (Esc cancels)</Hint>
+      ) : selectedZoom ? (
         <Hint>Click where the zoom should look</Hint>
       ) : layered && !selectedLayer ? (
         <Hint>Click a device to restyle it, drag to move it</Hint>
