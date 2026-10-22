@@ -131,7 +131,15 @@ export function sceneOf(
     case "hook":
       return {
         composition,
-        props: { title: copy.hook, brand: copy.name },
+        // glow-stage, brand-blur: title, brand; orbit-updates: title,
+        // subtitle; text-inline-icon: text; chat-typing: the first message.
+        props: {
+          title: copy.hook,
+          brand: copy.name,
+          subtitle: copy.name,
+          text: copy.hook,
+          m1: copy.hook,
+        },
         text: copy.hook,
       };
     case "brand":
@@ -146,7 +154,8 @@ export function sceneOf(
         props: {
           screen: RECORDING_SCREEN,
           screenAt: Number((input.hero?.start ?? 0).toFixed(2)),
-          tilt: 12,
+          // The body follows the capture: a portrait take goes in a phone.
+          kind: "auto",
         },
         text: copy.name,
       };
@@ -155,7 +164,13 @@ export function sceneOf(
       if (b.length === 0) return null;
       return {
         composition,
-        props: { a: b[0] ?? "", b: b[1] ?? "", c: b[2] ?? "" },
+        // floating-cards, cards-stack-3d, carousel-3d: card1…; icon-grid-3d: items.
+        props: {
+          card1: b[0] ?? "",
+          card2: b[1] ?? "",
+          card3: b[2] ?? "",
+          items: b.join(","),
+        },
         text: b.join(" · "),
       };
     }
@@ -164,7 +179,14 @@ export function sceneOf(
       if (!f) return null;
       return {
         composition,
-        props: { from: 0, to: f.value, suffix: f.suffix, label: f.label },
+        // kinetic-counter: the label goes under the number; no stepping words.
+        props: {
+          from: 0,
+          to: f.value,
+          suffix: f.suffix,
+          caption: f.label,
+          labels: "",
+        },
         text: `${f.value}${f.suffix} ${f.label}`.trim(),
       };
     }

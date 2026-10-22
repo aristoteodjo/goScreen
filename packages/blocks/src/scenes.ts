@@ -119,25 +119,45 @@ function isPicture(s){return /\\.(png|jpe?g|webp)$/i.test(String(s||""))}
 function isClip(s){return /\\.(mp4|webm)$/i.test(String(s||""))}
 function el(tag,cls,parent){var e=document.createElement(tag);if(cls)e.className=cls;if(parent)parent.appendChild(e);return e}
 var loads=[];
-function media(host,name){
+function media(host,name,onsize){
   var screen=host.querySelector(".screen")||host;var m=null;
   if(isClip(name)){m=document.createElement("video");m.muted=true;m.preload="auto";m.playsInline=true;}
   else if(isPicture(name)){m=document.createElement("img");}
   if(!m){screen.classList.add("mock");return null}
-  loads.push(new Promise(function(res){m.onerror=function(){screen.classList.add("mock");res()};if(m.tagName==="VIDEO"){m.onloadeddata=function(){res()}}else{m.onload=function(){res()}}}));
+  var sized=function(w,h){if(onsize&&w>0&&h>0)onsize(w/h)};
+  loads.push(new Promise(function(res){m.onerror=function(){screen.classList.add("mock");res()};if(m.tagName==="VIDEO"){m.onloadeddata=function(){sized(m.videoWidth,m.videoHeight);res()}}else{m.onload=function(){sized(m.naturalWidth,m.naturalHeight);res()}}}));
   m.src=ASSETS+name;screen.insertBefore(m,screen.firstChild);
   if(m.tagName!=="VIDEO")return null;
   return function(t){var want=clamp(t,0,Math.max(0,(m.duration||t)-0.04));if(m.readyState>=2&&Math.abs(m.currentTime-want)<0.001)return Promise.resolve();return new Promise(function(res){m.addEventListener("seeked",function(){res()},{once:true});m.currentTime=want})};
 }
 
+// A device whose screen keeps its picture's own ratio: never cropped, never
+// stretched. "auto" (the default) picks the body from that ratio: a portrait
+// capture goes in a phone, a square-ish one in a tablet, a wide one in a window.
 function device(host,kind,name){
-  kind=kind==="phone"||kind==="tablet"?kind:"window";host.classList.add("dev",kind);host.innerHTML=${JSON.stringify(DEVICE_HTML)};
-  var w,h;
-  if(kind==="phone"){h=Math.min(.78*H,.9*W/.46);w=h*.46}else if(kind==="tablet"){h=Math.min(.78*H,.9*W/.72);w=h*.72}else{w=Math.min(.86*W,.8*H/.64);h=w*.64}
-  host.style.width=w+"px";host.style.height=h+"px";host.style.marginLeft=(-w/2)+"px";host.style.marginTop=(-h/2)+"px";
-  host.querySelector(".screen").style.fontSize=(w/46)+"px";
-  var seek=media(host,name);
-  return{el:host,w:w,h:h,seek:seek,shine:host.querySelector(".shine")};
+  var fixed=kind==="phone"||kind==="tablet"||kind==="window";
+  host.classList.add("dev");host.innerHTML=${JSON.stringify(DEVICE_HTML)};
+  var d={el:host,w:0,h:0,seek:null,shine:host.querySelector(".shine"),k:1};
+  var cur={body:fixed?kind:"window",r:null};
+  var bodyFor=function(r){return r<.8?"phone":r<1.2?"tablet":"window"};
+  var layout=function(k,r){
+    cur.body=k;cur.r=r;
+    host.classList.remove("phone","tablet","window");host.classList.add(k);
+    // Screen insets in vmin (side, top, bottom), as in DEVICE_CSS.
+    var ins=k==="phone"?[1.1,1.1,1.1]:k==="tablet"?[1.6,1.6,1.6]:[.9,3.5,.9];
+    var sx=2*ins[0]*VM,sy=(ins[1]+ins[2])*VM;
+    var maxW=k==="window"?.86*W:.9*W,maxH=k==="window"?.8*H:.8*H;
+    var ratio=r||(k==="phone"?.46:k==="tablet"?.72:1.6);
+    var sh=Math.min(maxH-sy,(maxW-sx)/ratio),sw=sh*ratio;
+    var w=(sw+sx)*d.k,h=(sh+sy)*d.k;d.w=w;d.h=h;
+    host.style.width=w+"px";host.style.height=h+"px";host.style.marginLeft=(-w/2)+"px";host.style.marginTop=(-h/2)+"px";
+    host.querySelector(".screen").style.fontSize=(Math.max(w,h*.6)/46)+"px";
+  };
+  // A smaller device (a scene that puts things around it): kept on reload.
+  d.fit=function(f){d.k=f;layout(cur.body,cur.r)};
+  layout(cur.body,null);
+  d.seek=media(host,name,function(r){layout(fixed?kind:bodyFor(r),r)});
+  return d;
 }
 vars();
 `;
@@ -174,7 +194,7 @@ export const SCENES: Composition[] = [
     id: "glow-stage",
     label: "Glow stage",
     description:
-      "Dark gradient backdrop with a slow light beam (or a halo ring), light grain and vignette. Opaque: the plate under every other scene.",
+      "Dark gradient backdrop with a slow light beam (or a halo ring), light grain and vignette, and an optional hook: a brand kicker and a title whose words rise one by one (*word* in the accent). Opaque: the plate under every other scene.",
     box: box16x9,
     duration: 8,
     transparent: false,
@@ -184,6 +204,8 @@ export const SCENES: Composition[] = [
       color("ink", "Ink", INK),
       text("variant", "Variant (beam or ring)", "beam"),
       number("intensity", "Intensity (0.2-2)", 1),
+      text("title", "Title (*word* = accent; empty = plate only)", ""),
+      text("brand", "Brand above the title", ""),
     ],
     html: page({
       css: `
@@ -192,13 +214,27 @@ export const SCENES: Composition[] = [
 .beam.b2{width:14vmin;margin-left:-7vmin;background:linear-gradient(90deg,transparent,rgb(var(--ink)/.35) 50%,transparent)}
 .ring{position:absolute;left:50%;top:50%;width:70vmin;height:70vmin;margin:-35vmin 0 0 -35vmin;border-radius:50%;border:1.3vmin solid rgb(var(--a)/.9);box-shadow:0 0 9vmin rgb(var(--a)/.6),inset 0 0 9vmin rgb(var(--a)/.45);filter:blur(.5vmin);opacity:0}
 .halo{position:absolute;left:50%;top:50%;width:120vmin;height:120vmin;margin:-60vmin 0 0 -60vmin;border-radius:50%;background:radial-gradient(circle,rgb(var(--a)/.28),transparent 60%);filter:blur(4vmin);opacity:0}
+.hook{position:absolute;left:8%;right:8%;top:50%;transform:translateY(-50%);text-align:center}
+.hook b{display:inline-block;font-weight:700;font-size:3.2vmin;letter-spacing:.32em;text-transform:uppercase;color:rgb(var(--a));text-shadow:0 0 3vmin rgb(var(--a)/.6);margin-bottom:2.6vmin;opacity:0}
+.hook h1{margin:0;font-weight:800;font-size:9.5vmin;line-height:1.02;letter-spacing:-.035em;text-shadow:0 .6vmin 3vmin rgba(0,0,0,.45)}
+.hook h1 span{display:inline-block;opacity:0;will-change:transform,opacity,filter}
+.hook h1 span.acc{color:rgb(var(--a));text-shadow:0 0 4vmin rgb(var(--a)/.55)}
 `,
-      body: `<div class="bg"></div><div class="halo" id="halo"></div><div class="beam" id="beam"></div><div class="beam b2" id="beam2"></div><div class="ring" id="ring"></div><div class="grain"></div><div class="vignette"></div>`,
+      body: `<div class="bg"></div><div class="halo" id="halo"></div><div class="beam" id="beam"></div><div class="beam b2" id="beam2"></div><div class="ring" id="ring"></div><div class="grain"></div><div class="vignette"></div><div class="hook" id="hook"><b id="brand"></b><h1 id="title"></h1></div>`,
       script: `
 var k=clamp(Number(P.intensity)||1,.2,2),ring=P.variant==="ring";
+// The hook: words rise one by one (expo-out, from a blur); *words* take the accent.
+var words=[],brandEl=document.getElementById("brand"),titleEl=document.getElementById("title");
+brandEl.textContent=String(P.brand||"");
+String(P.title||"").split(/s+/).filter(Boolean).forEach(function(w,i){
+  var acc=/^*.**[.,!?]*$/.test(w);var sp=document.createElement("span");
+  sp.textContent=w.replace(/*/g,"")+" ";if(acc)sp.className="acc";titleEl.appendChild(sp);words.push(sp);
+});
 var beam=document.getElementById("beam"),beam2=document.getElementById("beam2"),ringEl=document.getElementById("ring"),halo=document.getElementById("halo");
 window.setT=function(t){
   var e=at(t,0,1.6);
+  var be=at(t,.1,.7);brandEl.style.opacity=be;brandEl.style.transform="translateY("+lerp(2,0,be)*VM+"px)";
+  words.forEach(function(sp,i){var w=at(t,.25+i*.07,.7);sp.style.opacity=w;sp.style.filter="blur("+lerp(1.4,0,w)*VM+"px)";sp.style.transform="translateY("+(lerp(5,0,w)*VM+sway(t,.1,i)*.2*VM)+"px) scale("+lerp(1.06,1,w)+")"});
   if(ring){
     beam.style.opacity=0;beam2.style.opacity=0;
     var s=lerp(.7,1,e)*(1+.02*sway(t,.12));
@@ -224,7 +260,7 @@ window.setT=function(t){
     transparent: true,
     props: [
       screenProp,
-      text("kind", "Kind (window, tablet or phone)", "window"),
+      text("kind", "Kind (auto, window, tablet or phone)", "auto"),
       color("accent", "Accent", ACCENT),
       color("frame", "Frame colour", "#15171f"),
       color("ink", "Ink", INK),
@@ -482,9 +518,8 @@ SCENES[2].html = page({
   body: `<div class="stage"><div class="p3" id="dev"></div><div class="glass card p3" id="c0"></div><div class="glass card p3" id="c1"></div><div class="glass card p3" id="c2"></div></div>`,
   script: `
 var host=document.getElementById("dev");host.innerHTML="";
-var d=device(host,"window",P.screen);
-d.el.style.width=(d.w*.78)+"px";d.el.style.height=(d.h*.78)+"px";d.el.style.marginLeft=(-d.w*.39)+"px";d.el.style.marginTop=(-d.h*.39)+"px";
-d.el.querySelector(".screen").style.fontSize=(d.w*.78/46)+"px";
+var d=device(host,"auto",P.screen);
+d.fit(.78);
 var spots=[[-.30,-.26],[.30,-.04],[-.22,.28]];
 var cards=[0,1,2].map(function(i){
   var c=document.getElementById("c"+i),v=P["card"+(i+1)]||"";
@@ -661,8 +696,7 @@ SCENES[8].html = page({
 var brand=document.getElementById("brand"),halo=document.getElementById("halo");brand.textContent=P.brand||"";
 var len=Math.max(3,String(P.brand||"").length);brand.style.fontSize=Math.min(44*VM,1.55*W/len)+"px";
 var d=device(document.getElementById("dev"),P.kind,P.screen);
-d.el.style.width=(d.w*.72)+"px";d.el.style.height=(d.h*.72)+"px";d.el.style.marginLeft=(-d.w*.36)+"px";d.el.style.marginTop=(-d.h*.36)+"px";
-d.el.querySelector(".screen").style.fontSize=(d.w*.72/46)+"px";
+d.fit(.72);
 window.setT=function(t){
   var e=at(t,0,1.6),f=at(t,.5,1.8);
   brand.style.opacity=e*.42;

@@ -293,22 +293,23 @@ describe("dynamic look", () => {
     const [glow, device, cards, chat, counter] = scenes.map(
       (o) => o.source?.props ?? {},
     );
-    expect(glow).toEqual({
+    expect(glow).toMatchObject({
       title: "Consultez les disponibilités dans votre zone",
       brand: "OEUF D'OR",
     });
-    expect(device).toEqual({ screen: "recording", screenAt: 0, tilt: 12 });
-    expect(cards).toEqual({
-      a: "Comment ça marche",
-      b: "Disponible maintenant",
-      c: "Classement des producteurs",
+    expect(device).toEqual({ screen: "recording", screenAt: 0, kind: "auto" });
+    expect(cards).toMatchObject({
+      card1: "Comment ça marche",
+      card2: "Disponible maintenant",
+      card3: "Classement des producteurs",
     });
-    expect(chat.title).toBe(glow.title);
+    expect(chat.m1).toBe(glow.title);
     expect(counter).toEqual({
       from: 0,
       to: 12000,
       suffix: "",
-      label: "plateaux livrés chaque semaine",
+      caption: "plateaux livrés chaque semaine",
+      labels: "",
     });
   });
 
