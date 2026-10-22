@@ -459,6 +459,17 @@ fn compose(job: serde_json::Value, out: &Path) -> Result<(), String> {
     }
 }
 
+/// The assets folder of the montage a block is rendered for, so its page may
+/// show the montage's own pictures and clips (by name, through the composer);
+/// none without a montage, or until the folder exists.
+fn block_assets(video: Option<&str>) -> Result<Option<PathBuf>, String> {
+    let Some(video) = video.filter(|v| !v.is_empty()) else {
+        return Ok(None);
+    };
+    let dir = super::media::assets_dir(&super::media::montage_path(video)?);
+    Ok(dir.is_dir().then_some(dir))
+}
+
 fn check_block_size(width: u32, height: u32) -> Result<(), String> {
     if !(2..=4096).contains(&width) || !(2..=4096).contains(&height) {
         return Err("Block size out of range.".into());
@@ -477,6 +488,7 @@ pub fn block_render(
     fps: u32,
     duration: f64,
     transparent: bool,
+    video: Option<String>,
 ) -> Result<String, String> {
     check_block_size(width, height)?;
     if !(0.1..=60.0).contains(&duration) || !(1..=60).contains(&fps) {
@@ -484,9 +496,15 @@ pub fn block_render(
     }
     let (width, height) = (width / 2 * 2, height / 2 * 2);
     let ffmpeg = ffmpeg::locate().ok_or("FFmpeg not found. Install it (brew install ffmpeg).")?;
+    let assets = block_assets(video.as_deref())?;
     let dir = block_cache_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-    let key = render_key(&html, width, height, fps, duration, transparent);
+    // Two montages may name their assets alike: the folder is part of the key.
+    let keyed = match &assets {
+        Some(a) => format!("{}\n{html}", a.display()),
+        None => html.clone(),
+    };
+    let key = render_key(&keyed, width, height, fps, duration, transparent);
     let ext = block_ext(transparent);
     let out = dir.join(format!("{key}.{ext}"));
     if out.is_file() {
@@ -502,6 +520,7 @@ pub fn block_render(
         "transparent": transparent,
         "out": part.to_string_lossy(),
         "ffmpeg": ffmpeg.to_string_lossy(),
+        "assets": assets.as_ref().map(|a| a.to_string_lossy().into_owned()),
     });
     compose(job, &part)?;
     std::fs::rename(&part, &out).map_err(|e| format!("keep {}: {e}", out.display()))?;
@@ -511,12 +530,20 @@ pub fn block_render(
 /// One still of a block (HTML composition) at `t` seconds, as a base64 JPEG:
 /// a look at a composition without rendering it.
 #[tauri::command(async)]
-pub fn block_frame(html: String, width: u32, height: u32, t: f64, transparent: bool) -> Result<String, String> {
+pub fn block_frame(
+    html: String,
+    width: u32,
+    height: u32,
+    t: f64,
+    transparent: bool,
+    video: Option<String>,
+) -> Result<String, String> {
     use base64::Engine;
     check_block_size(width, height)?;
     if !(0.0..=60.0).contains(&t) {
         return Err("Time out of range.".into());
     }
+    let assets = block_assets(video.as_deref())?;
     let out = std::env::temp_dir().join(format!("goscreen-block-{}.jpg", uuid::Uuid::new_v4()));
     let job = serde_json::json!({
         "html": html,
@@ -528,6 +555,7 @@ pub fn block_frame(html: String, width: u32, height: u32, t: f64, transparent: b
         "frame": t,
         "out": out.to_string_lossy(),
         "ffmpeg": "",
+        "assets": assets.as_ref().map(|a| a.to_string_lossy().into_owned()),
     });
     let result = compose(job, &out).and_then(|()| std::fs::read(&out).map_err(|e| e.to_string()));
     let _ = std::fs::remove_file(&out);
@@ -567,6 +595,23 @@ mod tests {
             done,
             serde_json::json!({"status": "done", "videoPath": "/m/a.mp4", "interactionsPath": "/m/a.interactions.json", "durationMs": 1200})
         );
+    }
+
+    #[test]
+    fn block_assets_follow_the_montage() {
+        assert_eq!(block_assets(None).unwrap(), None);
+        assert_eq!(block_assets(Some("")).unwrap(), None);
+        assert!(block_assets(Some("/nowhere/take.mp4")).is_err());
+        let dir = std::env::temp_dir().join(format!("goscreen-block-assets-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let video = dir.join("take.mp4");
+        std::fs::write(&video, b"").unwrap();
+        let path = video.to_string_lossy().into_owned();
+        // No assets folder yet: nothing to serve.
+        assert_eq!(block_assets(Some(&path)).unwrap(), None);
+        std::fs::create_dir_all(dir.join("take.assets")).unwrap();
+        assert_eq!(block_assets(Some(&path)).unwrap(), Some(dir.join("take.assets")));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

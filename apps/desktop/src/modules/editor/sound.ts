@@ -335,7 +335,8 @@ export function soundCuesOf(
 /**
  * The montage with the cues laid as `sfx-auto-*` clips (the previous ones
  * removed), each on a free lane, never ducked. `assets` holds the rendered
- * file of every kind and level the cues need (`sfxAssetKey`).
+ * file of every kind and level the cues need (`sfxAssetKey`). The export's
+ * own tap sounds go quiet when the design lays its clicks (same sounds twice).
  */
 export function withSoundDesign(
   edit: EditState,
@@ -368,6 +369,8 @@ export function withSoundDesign(
     next = withAsset(next, asset, clip);
     count += 1;
   });
+  if (cues.some((c) => c.kind === "click"))
+    next = { ...next, sound: { ...next.sound, clicks: false } };
   return { edit: next, count };
 }
 

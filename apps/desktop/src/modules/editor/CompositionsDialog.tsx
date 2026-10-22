@@ -4,6 +4,8 @@ import {
   EXAMPLE_COMPOSITION,
   prepareCompositionHtml,
   resolveCompositionProps,
+  SCENES,
+  sceneFor,
 } from "@goscreen/blocks";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -266,7 +268,9 @@ export function CompositionsDialog() {
             HTML pages written by you or an AI, rendered frame by frame into a
             layer. A page animates with CSS, or draws each frame in{" "}
             <code>window.setT(t)</code>. No network, no Math.random: the same
-            frame every time.
+            frame every time. Scenes are built in: 3D devices, cards, counters
+            and cursors in the look of SaaS ads; a “screen” takes the file name
+            of a montage asset.
           </DialogDescription>
         </DialogHeader>
 
@@ -297,6 +301,12 @@ export function CompositionsDialog() {
                   (Effect Controls, “Convert to composition”).
                 </span>
               ) : null}
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Scenes
+            </span>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+              {SCENES.map((s) => card(sceneFor(s.id, edit.aspect) ?? s, "Scene"))}
             </div>
             {list.data?.project ? (
               <>

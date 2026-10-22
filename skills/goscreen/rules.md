@@ -113,10 +113,22 @@ height as a fraction of the output height). Pixel figures are for 1080p.
   fading in 0.4 s and out 1.2 s, ending on the last spoken word when the take
   has words. Any sound that is not a voice is ducked -20 dB while someone
   speaks (80 ms down, 600 ms back) unless its `duck` is false.
-- 2 to 4 sound effects per film besides the music (`edit.addSfx`: tap, pop,
-  thud, tick, riser; never a whoosh). Beyond 4 the command warns: take one
-  out. Tap sounds (`sound.clicks`) count: off in a short ad, or at
-  `volume` ≤ 0.4 under a voice.
+- Sound design has two densities (`film.sound`, `edit.soundDesign`):
+  `sparse` for a spoken piece (only the cards, the clicks and the payoff:
+  about 12 effects a minute), `full` for a dynamic product ad like the
+  reference SaaS spots (a sound on every movement, 30 to 60 in a 20 s spot:
+  whoosh on an entrance, swish on an exit, pop on a pop, click on a click,
+  tick on each step of a counter, sparkle on a title, impact on a card,
+  riser then drop into the last card). Let `edit.soundDesign` lay them (it
+  reads the montage's movements) rather than placing them by hand; use
+  `edit.addSfx` for one sound on one moment. Never two identical sounds
+  within 0.15 s; the gain follows the importance (card > layer > tick). The
+  commands warn past the density, they never refuse. Tap sounds
+  (`sound.clicks`) are the same clicks: off when the design lays its own.
+- The music is snapped to: after `sound.music`, `edit.snapToBeats` moves
+  cards, layers and zooms onto the nearest beat (within 0.25 s), never a
+  take clip nor the voice. Lay the design after snapping, so the sounds
+  fall on the beats too. Order: cut → music → snap → sound design.
 - Clean a voice before cutting to it: `edit.cleanSilences` (`trim`, then
   `strip` if it drags), then `edit.alignToVoice`.
 - Captions follow the words (`edit.captions`, needs `edit.transcribe`): 1 to
@@ -161,8 +173,8 @@ the same work by hand.
 
 Pulse, bounce, elastic, overshoot (`elastic`, `back` eases; the `pulse`,
 `shake`, `letters-pop` presets on UI), glow beyond 0.12, neon, text
-gradients, confetti, emoji, stand-in logos, whoosh and click sounds on
-entrances, crossfades in place, holds longer than 4 s, zooms above 1.15,
+gradients, confetti, emoji, stand-in logos, a whoosh without a movement
+(and two identical sounds within 0.15 s), crossfades in place, holds longer than 4 s, zooms above 1.15,
 pure black, an opening logo, an empty first second, more than one accent
 colour at a time, more than 6 words on a line, a caption that repeats the
 voice, a still screenshot pasted as a scene.

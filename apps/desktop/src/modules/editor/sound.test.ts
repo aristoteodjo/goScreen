@@ -173,6 +173,7 @@ describe("sound design and beats", () => {
     const first = withSoundDesign(withCard, cues, assets);
     expect(first.count).toBe(cues.length);
     expect(first.edit.audio.every((a) => a.id.startsWith("sfx-auto-") && a.duck === false)).toBe(true);
+    expect(first.edit.sound.clicks).toBe(false);
     const again = withSoundDesign(first.edit, cues.slice(0, 1), assets);
     expect(again.edit.audio).toHaveLength(1);
     expect(sfxWarning(2, first.edit, "sparse")).toBeUndefined();

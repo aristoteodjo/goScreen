@@ -440,7 +440,8 @@ la détection du visage ; `modules/editor/speech.ts` est la coquille qui lit et 
 - Relevé sur la liste (2026-10-17) : la technique structurante la plus fréquente est le **calage sur le tempo**
   (« 120 BPM, something happens on every beat », 41 prompts) ; puis `seek(t)` pur et ressorts en forme close
   (déjà la méthode de goScreen), flou de mouvement par sous-images (`tmix`, 28), curseur qui pilote l'interface,
-  zoom façon Screen Studio. Manquent ici : calage sur le tempo, flou de mouvement, grain (voir « À faire »).
+  zoom façon Screen Studio. Manquent ici : flou de mouvement, grain (voir « À faire ») ; le calage sur le tempo
+  existe (`edit.snapToBeats`).
 
 ### IA aux commandes (MCP, CLI, skill)
 
@@ -722,7 +723,7 @@ fonctions pures du temps ; les notes détaillées (chiffres, timecodes) sont ran
   animé aux couleurs de la marque (selon le ton : `circles`, `blob`, `waves`), les clics en anneaux et les
   légendes accentuées. Les scènes alternent le côté vers lequel l'écran se tourne (`SceneTime.index`). Le
   runner fait défiler vers une section plutôt que vers le lien de navigation du même nom.
-- **À faire (relevé par le cours, pas encore fait)** : calage sur le tempo de la musique ; shatter / shine
+- **À faire (relevé par le cours, pas encore fait)** : shatter / shine
   avancés ; recadrage « éléments flottants » (un élément d'UI découpé qui pop hors de la capture) ; objets
   3D (pièces, logos extrudés) ; voix de synthèse (le cours utilise ElevenLabs : voix « Advertisement »,
   stability 40) ; mots-clés de la voix (ASR) pour déclencher les entrées de texte sur le mot, pas seulement
@@ -747,7 +748,7 @@ audio embarqué : tout est synthétisé en code.
   : pad à trois harmoniques qui respire avec la mesure, basse pincée, arpège, kick doux, passe-bas un pôle, délai
   en croche pointée, sidechain interne sur le temps ; crête fixée à -3 dBFS (le bed sort vers -17 LUFS, donc le
   `volume` 0,28 du clip le pose ~11 dB sous une voix nettoyée à -16, et le ducking fait le reste). `sfx.ts` :
-  `tap`, `pop`, `thud`, `tick`, `riser` (jamais de whoosh), `MAX_SFX = 4`. `render.mjs <job.json> <out.wav>`
+  douze effets en deux niveaux (voir « Sound design et calage sur le tempo »). `render.mjs <job.json> <out.wav>`
   (Node ≥ 22.6, sources TS dépouillées des types). Rust `sound_render(video_path, job)` (`modules/sound/`) :
   `music-<style>-<seed>-<s>s[-p<payoff>].wav` ou `sfx-<kind>.wav` dans `<stem>.assets/`, rendu une fois, servi
   comme un asset importé (`offset`, `seconds` en plus). Le studio n'envoie jamais de chemin.
@@ -780,8 +781,55 @@ audio embarqué : tout est synthétisé en code.
 - IA (`modules/control/sound.ts`) : `sound.styles`, `sound.music`, `edit.addSfx`, `edit.captions`,
   `edit.subtitles`, `sound.measure`.
 - Limites : la preview ducke sur les plages des clips, pas sur les phrases ; le bed reste sobre (synthèse
-  additive, pas de calage sur le tempo du montage) ; `render.mjs` exige Node ≥ 22.6 ; la transcription vient
-  d'une autre tranche (`edit.transcribe`).
+  additive) ; `render.mjs` exige Node ≥ 22.6 ; la transcription vient d'une autre tranche (`edit.transcribe`).
+
+### Sound design et calage sur le tempo
+
+Relevé sur trois pubs SaaS de référence (NeuraFlow, Doks, AfterRender, 2026-10-21) : **un effet sonore sur
+chaque mouvement** (661 transitoires aigus en 20 s pour NeuraFlow), une musique rythmée dessous, et les
+mouvements qui tombent sur les temps. Tout est synthétisé en code, rien à licencier.
+
+- **SFX** (`@goscreen/music` `sfx.ts`, pur, testé : durée, crête, déterminisme) : `tap`, `pop`, `thud`, `tick`,
+  `riser` (1,2 s), `whoosh` (bruit filtré balayé 300 → 2 600 Hz, 0,35 s), `swish` (0,18 s), `click`, `sparkle`
+  (grappe de sinus aigus décroissants), `impact` (grave + bruit court), `drop` (sub qui tombe), `blip`
+  (interface). Deux niveaux (`SfxLevel`) : `full` (crête 0,8) et `soft` (0,4) ; `SFX_LEAD` dit de combien un
+  effet part avant le mouvement (whoosh 0,14 s, riser 1,2 s). `MAX_SFX` a disparu : `SFX_PER_MINUTE` est une
+  **densité** (`sparse` 12/min, `full` 180/min) et `sfxBudget` ne sert qu'à avertir, jamais à refuser.
+  Rust `sound_render` : `{ kind: "sfx", sfx, level? }` → `sfx-<kind>.wav` ou `sfx-<kind>-soft.wav`.
+- **Événements de mouvement** (`render-engine/events.ts`, `motionEvents(edit, pointers)`, pur, testé) : carte
+  (`card`, poids 1 si titrée), scène (`scene`, chaque clip de prise après le premier), transition, entrée et
+  sortie de chaque calque (sauf les légendes par mot, qui suivent la voix ; pistes masquées exclues), `pop`
+  (entrée `pop`/`spring`, ou clé de `scale` qui saute de ≥ 0,15 en ≤ 0,3 s), `title` (texte avec glow, sweep,
+  flash, ou légende de scène `caption-*`), début et fin de chaque zoom (temps source → timeline), chaque clic
+  enregistré (`down`), et 8 `tick` par bloc compteur (`stat-counter` : de 0,2 à 1,8 s ; autre compteur : ses
+  premiers 60 %). Temps timeline, triés.
+- **Sound design** (`music/soundDesign.ts`, `soundDesign(events, { density, seed })`, pur, testé) : en `full`
+  un son par événement (whoosh sur entrée, zoom et transition ; swish sur sortie, dézoom et scène ; pop ; click ;
+  tick ; sparkle sur titre ; impact sur carte) ; en `sparse` seulement cartes, clics et payoff. Le **payoff** est
+  la dernière carte quand une autre la précède : `riser` 1,2 s avant, puis `drop` dessus. Jamais deux sons
+  identiques à moins de `SFX_MIN_GAP` 0,15 s (`thin` garde le plus fort) ; gain par importance (carte > calque
+  > tick) avec un léger jitter semé pour qu'une suite d'entrées ne sonne pas en boucle ; niveau `soft` sous
+  0,75 de poids. Desktop (`editor/sound.ts`) : `withSoundDesign` (pur) pose les cues en `AudioClip` ids
+  `sfx-auto-N` (remplacés à chaque passe, `duck: false`), `renderSfxAssets` rend une fois par (kind, niveau).
+  Bouton **Sound design** de la barre de la timeline (Full, Sparse, retirer) ; `film.sound: "none" | "sparse"
+  | "full"` dans `filmSchema` (défaut `none` : les films existants ne changent pas), `applyFilm` retire les
+  `sfx-auto-*` en `none` et la coquille les repose sinon (panneau Film, section Sound design). IA :
+  `edit.soundDesign { video, density, seed, replace }` (rend les cues posées), `edit.addSfx` accepte `level`,
+  `edit.setFilm { sound }` pose le design.
+- **Calage sur le tempo** (la technique la plus demandée des prompts partagés) : `beatGrid(plan, { start,
+  duration, offset, in })` (`music/beats.ts`, pur, testé) liste les temps d'un plan sur la timeline (fort = premier
+  temps de la mesure) ; `PLAN_SLACK` (24 s) est partagé entre `render.mjs` et l'éditeur pour reconstruire le
+  même plan. Un bed posé garde `AudioClip.music = { style, seed, offset }` (`withMusic`, `sound.music`,
+  `addMusic`) ; un bed sans ces champs est relu depuis son nom `music-<style>-<seed>-<s>s[-pN].wav`
+  (`musicPlanOf`). `snapToBeats(edit, grid, { tolerance: 0,25 })` (`render-engine/beats.ts`, pur, testé) déplace
+  la **fin de chaque carte** (donc le début de ce qui suit) sur le temps le plus proche, carte après carte, puis
+  le début des calques (sauf légendes par mot et calques `syncWord`) et des zooms (décalés en temps source, dans
+  leur clip) ; **jamais un clip de la prise ni un son**, et rend les déplacements. Bouton « Snap to beats » dans
+  le panneau d'un bed (affiche le BPM) ; IA `edit.snapToBeats { video, tolerance }` ; sans bed généré, erreur
+  claire (`NO_MUSIC`). Ordre conseillé (skill `rules.md`) : coupe → musique → snap → sound design.
+- Limites : un seul tempo par montage (le premier bed) ; une musique importée (pas générée) n'a pas de grille
+  (détection de tempo à faire) ; le sound design ne lit pas les blocs rendus hors `source` (une vidéo importée
+  n'a qu'une entrée et une sortie) ; les sons posés ne suivent pas un calque déplacé après coup (relancer).
 
 ### Capture native
 
@@ -1009,9 +1057,8 @@ n'en sait rien.
     mots d'avant) ;
   - titres en fondu enchaîné : un mot peut manquer pendant la transition ;
   - le fond et les éléments appris par le modèle local ne servent pas encore au rendu.
-  - inspirations : détecter le tempo d'une musique (grille de temps) et caler coupes, cartons et entrées de blocs
-    dessus (« beat-sync », la technique la plus demandée) ; flou de mouvement à l'export (sous-images mélangées) ;
-    grain/vignette en option de film.
+  - inspirations : détecter le tempo d'une musique **importée** (la grille d'un bed généré existe :
+    `edit.snapToBeats`) ; flou de mouvement à l'export (sous-images mélangées) ; grain/vignette en option de film.
   - prise de parole : **étalonnage** (`EditState.grade` : contraste, température, saturation, vignette, grain ;
     raccord d'exposition entre prises ; un clip `grade: false` sert de « reveal ») et **détourage** du sujet
     (texte derrière la tête, Vision) ; détection du visage hors macOS (MediaPipe) ; micro-fondu audio à chaque

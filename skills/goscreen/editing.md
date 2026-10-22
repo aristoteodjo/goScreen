@@ -174,8 +174,22 @@ Use: a spoken number → `stat-counter`; a command → `prompt-input`; a tool �
   `volume` 0.28, ducked under the voice, ending on the last spoken word when
   the take has words. Returns the clip and `offset` (where in the bed the
   film starts, so its full section lands on the payoff).
-- `edit.addSfx`: `{ "video", "kind": "pop", "t": 4.2 }`; the answer carries
-  `count` and a `warning` past 4 effects.
+- `edit.addSfx`: `{ "video", "kind": "pop", "level": "soft", "t": 4.2 }`
+  (kinds: tap, pop, thud, tick, riser, whoosh, swish, click, sparkle, impact,
+  drop, blip); the answer carries `count` and a `warning` past the film's
+  density.
+- `edit.soundDesign`: `{ "video", "density": "full", "seed": 1 }` lays a
+  synthesised effect on every movement of the montage (entrances, exits,
+  pops, zooms, transitions, clicks, counter steps, titles, cards, a riser
+  and a drop into the last card); `"sparse"` keeps cards, clicks and the
+  payoff; `"none"` removes them. Clips `sfx-auto-*` are replaced on each
+  pass; the answer lists the `cues` (`t`, `kind`, `level`, `gain`, `on`,
+  `item`). `edit.setFilm { "film": { "sound": "full" } }` does the same and
+  keeps the choice in the film.
+- `edit.snapToBeats`: `{ "video", "tolerance": 0.25 }` moves cards (their
+  end), layers and zooms onto the nearest beat of the laid generated bed;
+  returns `tempo`, `beats` and the `moves`. Needs `sound.music` first (the
+  bed carries its tempo in `AudioClip.music`).
 - A sound's `duck` (default true for anything that is not a voice) lowers it
   by 20 dB while a voice speaks; set `"duck": false` through `edit.save` for
   a sound that must stay (a product's own audio).
