@@ -88,5 +88,6 @@ describe("the proof figure", () => {
     });
     expect(figureOf("in the last 7 days")).toBeNull();
     expect(figureOf("12 000 teams")?.value).toBe(12000);
+    expect(figureOf("100 plateaux · dès 2 100 FCFA")?.label).toBe("plateaux");
   });
 });

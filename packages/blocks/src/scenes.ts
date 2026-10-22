@@ -226,9 +226,9 @@ var k=clamp(Number(P.intensity)||1,.2,2),ring=P.variant==="ring";
 // The hook: words rise one by one (expo-out, from a blur); *words* take the accent.
 var words=[],brandEl=document.getElementById("brand"),titleEl=document.getElementById("title");
 brandEl.textContent=String(P.brand||"");
-String(P.title||"").split(/s+/).filter(Boolean).forEach(function(w,i){
-  var acc=/^*.**[.,!?]*$/.test(w);var sp=document.createElement("span");
-  sp.textContent=w.replace(/*/g,"")+" ";if(acc)sp.className="acc";titleEl.appendChild(sp);words.push(sp);
+String(P.title||"").split(/\\s+/).filter(Boolean).forEach(function(w,i){
+  var acc=/^\\*.*\\*[.,!?]*$/.test(w);var sp=document.createElement("span");
+  sp.textContent=w.replace(/\\*/g,"")+" ";if(acc)sp.className="acc";titleEl.appendChild(sp);words.push(sp);
 });
 var beam=document.getElementById("beam"),beam2=document.getElementById("beam2"),ringEl=document.getElementById("ring"),halo=document.getElementById("halo");
 window.setT=function(t){

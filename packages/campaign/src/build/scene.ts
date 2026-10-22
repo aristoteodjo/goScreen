@@ -104,7 +104,9 @@ function figureFrom(m: RegExpMatchArray): Figure | null {
     : Number(raw.replace(",", "."));
   if (!Number.isFinite(value) || value <= 0) return null;
   const suffix = m[2] ?? "";
-  const label = shorten((m[3] ?? "").trim(), 4).replace(/…$/, "");
+  // The words up to a separator ("100 plateaux · dès 2 100 FCFA").
+  const words = (m[3] ?? "").split(/\s[·•|–—-]\s|[·•|–—]/u)[0].trim();
+  const label = shorten(words, 4).replace(/…$/, "");
   return { value, suffix, label };
 }
 

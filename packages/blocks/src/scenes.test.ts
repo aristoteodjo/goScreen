@@ -56,6 +56,15 @@ describe("scenes", () => {
     }
   });
 
+  it("every scene's script compiles (an invalid regex kills the whole page)", () => {
+    for (const s of SCENES) {
+      const scripts = [...s.html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+      expect(scripts.length, s.id).toBeGreaterThan(0);
+      for (const [, code] of scripts)
+        expect(() => new Function(code), s.id).not.toThrow();
+    }
+  });
+
   it("fits a scene to a format, the page unchanged", () => {
     const s = sceneFor("device-3d", "9:16");
     expect(s?.box).toEqual(SCENE_BOXES["9:16"]);
