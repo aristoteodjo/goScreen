@@ -51,8 +51,9 @@ with `zoom` rebuilds them on the scenes' taps).
 - Its five scene layers are `video` overlays with `source.composition`
   (`glow-stage`, `device-3d`, `floating-cards`, `chat-typing`,
   `kinetic-counter`) and a placeholder asset `composition:<id>` whose file
-  is `<id>.pending`: the app renders each one on open, or you place them
-  with `edit.addComposition` (same id, props, start and full-frame box).
+  is `<id>.pending`: after `edit.save`, call `edit.renderScenes` to render
+  them all, or place them with `edit.addComposition` (same id, props, start
+  and full-frame box).
   Without those compositions, `edit.addBlock` stands in: `wordmark`,
   `cards-row`, `chat-bubbles`, `stat-counter`.
 - Transitions are `push` 0.5 s; replace them with `zoomThrough` when

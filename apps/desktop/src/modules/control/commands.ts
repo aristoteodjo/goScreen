@@ -1,5 +1,10 @@
-import { captionLook } from "@/modules/editor/sound";
-import { BLOCKS } from "@goscreen/blocks";
+import { BLOCKS, SCENE_IDS } from "@goscreen/blocks";
+import {
+  buildEdit,
+  buildProposals,
+  defaultCampaign,
+  parseCampaign,
+} from "@goscreen/campaign";
 import {
   ANIMATION_PRESETS,
   type AudioClip,
@@ -7,18 +12,14 @@ import {
   clearAnimation,
   type EditState,
   isBlank,
+  MESH_STYLES,
   MIC_ASSET,
   type Overlay,
   parseEditReport,
   parseEditState,
   parseRecordingFile,
+  TRANSITION_KINDS,
 } from "@goscreen/render-engine";
-import {
-  buildEdit,
-  buildProposals,
-  defaultCampaign,
-  parseCampaign,
-} from "@goscreen/campaign";
 import {
   adoptFilm,
   alignScenesToVoice,
@@ -47,6 +48,7 @@ import { registry } from "@/lib/registry";
 import { router } from "@/lib/router";
 import { naturalSize } from "@/modules/editor/actions";
 import { addBlock, updateBlock } from "@/modules/editor/blocks";
+import { renderPendingScenes } from "@/modules/editor/compositions";
 import {
   exportCurrent,
   exportRunning,
@@ -64,6 +66,7 @@ import {
   stripSilences,
   trimSilentEnds,
 } from "@/modules/editor/silences";
+import { captionLook } from "@/modules/editor/sound";
 import { newId, useEdit, usePlayback } from "@/modules/editor/store";
 import {
   applyState,
@@ -79,19 +82,19 @@ import {
   valuesOf,
 } from "@/modules/flow/runs";
 import { useFlowDoc } from "@/modules/flow/store";
+import { registerInspirationCommands } from "@/modules/inspiration/commands";
+import { registerMotionCommands } from "@/modules/motion/commands";
 import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
-import { catalog, defineCommand, runningCommand } from "./registry";
-import { designSoundFor, registerSoundCommands } from "./sound";
-import { registerVersionCommands } from "./versions";
-import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerBlankCommands } from "./blank";
 import { registerCompositionCommands } from "./compositions";
-import { registerSpeechCommands } from "./speech";
-import { registerMotionCommands } from "@/modules/motion/commands";
-import { registerVisualCommands } from "./visual";
 import { registerDynamicCommands } from "./dynamic";
+import { catalog, defineCommand, runningCommand } from "./registry";
+import { designSoundFor, registerSoundCommands } from "./sound";
+import { registerSpeechCommands } from "./speech";
+import { registerVersionCommands } from "./versions";
+import { registerVisualCommands } from "./visual";
 
 // The commands an AI can run. Each one is what a button of the studio does,
 // on the same data, so a person and an agent can take turns on a project.
@@ -1223,15 +1226,23 @@ export function registerCommands() {
         campaign,
         duration: usePlayback.getState().duration,
         chapters: s.chapters,
+        // What this app draws: dynamic recipes use them instead of fallbacks.
+        available: {
+          transitions: TRANSITION_KINDS.map((k) => k.id),
+          backdrops: MESH_STYLES,
+          compositions: SCENE_IDS,
+          sound: true,
+        },
       });
-      await applyEdit(
-        i.video,
-        placeProposal(edit, s.layers, s.source, s.cameraUrl),
-      );
+      const placed = placeProposal(edit, s.layers, s.source, s.cameraUrl);
+      // Scene layers are laid out unrendered: render them before showing.
+      const scenes = await renderPendingScenes(i.video, placed, true);
+      await applyEdit(i.video, scenes.edit);
       return {
         applied: view[i.pick],
         clips: edit.clips.length,
         overlays: edit.overlays.length,
+        scenes: scenes.rendered,
       };
     },
   });

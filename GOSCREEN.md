@@ -952,10 +952,12 @@ Ce que cette tranche livre (les scènes, pop-outs, `zoomThrough`, fonds `beam`/`
   `brand`, rempli depuis la marque et les sections : `sceneOf`, `benefitsOf`, `siteFigure`/`figureOf`) à côté des
   `card` et `shots`. `buildEdit` émet pour chaque scène une carte du fond (la piste principale continue dessous) et
   un calque `video` plein cadre **non rendu** : `source: { composition, props }`, `asset: "composition:<id>"` et une
-  entrée d'asset `<id>.pending` (sans elle, `parseEditState` écarte le calque). **Contrat** : l'app rend à l'ouverture
-  tout calque vidéo dont l'asset finit en `.pending` (même composition, props, boîte et durée que
-  `edit.addComposition`) et remplace le fichier ; `device-3d` reçoit `screen: "recording"`, `screenAt` (secondes
-  source). Un site sans chiffre saute la scène compteur ; une scène que l'app n'a pas (`available.compositions`)
+  entrée d'asset `<id>.pending` (sans elle, `parseEditState` écarte le calque). **Contrat** : l'app rend
+  tout calque vidéo dont l'asset finit en `.pending` (`renderPendingScenes`, `editor/compositions.ts` : même
+  composition, props, boîte et durée que `edit.addComposition`) et remplace le fichier ; `edit.propose` le fait avant
+  d'appliquer (et passe `available` : transitions, fonds, scènes, son de l'app), `edit.renderScenes` le fait pour un
+  montage écrit à la main ; `device-3d` reçoit `screen: "recording"`, `screenAt` (secondes
+  source) : l'image de la prise à cet instant (`recording_crop`, cadre entier), ou l'interface factice sans prise. Un site sans chiffre saute la scène compteur ; une scène que l'app n'a pas (`available.compositions`)
   met ses mots sur une carte. `BuildContext.available` (`transitions`, `backdrops`, `compositions`, `sound`) dit ce
   que l'app sait dessiner : `zoomThrough` sinon `push`, `beam` sinon `circles`, `film.sound: "full"` seulement si le
   schéma du film le connaît. Le film (`film.settings`) est posé : `plain`, `premium`, légendes `none`, zoom 1,12.
@@ -971,8 +973,8 @@ Ce que cette tranche livre (les scènes, pop-outs, `zoomThrough`, fonds `beam`/`
   (`film.sound: "full"` et ≥ 1 effet par 2 s). La référence passe ; chaque règle a son test de rupture.
 - **À faire** : morph entre scènes (un élément qui devient le suivant sur place, comme le carrousel qui devient le
   logo) ; ombres portées projetées par les objets 3D sur le fond ; particules et poussière lumineuse dans le
-  faisceau ; les scènes elles-mêmes, `edit.popOut`, `zoomThrough`, `beam`/`ring`, `energize`, `soundDesign`,
-  `snapToBeats` (branches parallèles) ; rendre les calques `.pending` à l'ouverture dans l'app.
+  faisceau ; un rendu des scènes en attente à l'ouverture d'un montage dans l'éditeur (aujourd'hui par
+  `edit.propose` et `edit.renderScenes`).
 
 ### Capture native
 

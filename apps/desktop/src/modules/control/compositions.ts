@@ -8,11 +8,13 @@ import {
 } from "@goscreen/blocks";
 import type { EditState } from "@goscreen/render-engine";
 import { z } from "zod";
+import { ipc } from "@/lib/ipc";
 import {
   addComposition,
   findComposition,
   loadCompositions,
   previewComposition,
+  renderPendingScenes,
   saveComposition,
   updateComposition,
 } from "@/modules/editor/compositions";
@@ -160,6 +162,24 @@ export function registerCompositionCommands({
       });
       await applyEdit(path, result.edit);
       return { overlay: result.overlay, composition: c.id };
+    },
+  });
+  defineCommand({
+    name: "edit.renderScenes",
+    title: "Render waiting scenes",
+    description:
+      'Renders every scene layer laid out but not rendered yet (a video layer whose source names a composition and whose asset file ends with `.pending`, as edit.propose with a dynamic recipe or the dynamic-16x9 reference write them), each at its own box and length. `screen: "recording"` takes a frame of the take at `screenAt`. Returns how many were rendered.',
+    input: z.object({ video }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const opened = await ipc.recordingOpen(i.video);
+      const result = await renderPendingScenes(
+        i.video,
+        edit,
+        opened.videoUrl !== null,
+      );
+      if (result.rendered > 0) await applyEdit(i.video, result.edit);
+      return { rendered: result.rendered };
     },
   });
   defineCommand({

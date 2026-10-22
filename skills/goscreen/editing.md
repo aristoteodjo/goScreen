@@ -323,10 +323,11 @@ backdrops); never depend on them. The reference
 - **A scene laid out before it is rendered** (what `edit.propose` writes for
   `dynamic-launch` and `dynamic-teaser`): a `video` overlay whose
   `source.composition` names the scene and whose `asset` is
-  `"composition:<overlay id>"`, an id that is in no `assets` entry. The app
-  renders it when the montage opens (or `edit.addComposition` with the same
-  id, props, start and box does it by hand) and replaces `asset` with the
-  rendered file. `screen: "recording"` with `screenAt` (source seconds) on
+  `"composition:<overlay id>"`, whose asset file ends with `.pending`.
+  `edit.propose` renders them before applying; for a montage you wrote
+  (`edit.save`, a reference), call `edit.renderScenes { "video" }`, which
+  renders each at its box and length and replaces `asset` with the rendered
+  file. `screen: "recording"` with `screenAt` (source seconds) on
   `device-3d` means "a frame of the take at that time".
 
 ```json

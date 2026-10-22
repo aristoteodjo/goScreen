@@ -250,6 +250,82 @@ const withAsset = (edit: EditState, asset: EditState["assets"][number]) =>
     ? edit.assets
     : [...edit.assets, asset];
 
+/** Files of scene layers laid out but not rendered yet (`@goscreen/campaign`). */
+const PENDING_EXT = ".pending";
+
+/**
+ * Renders every scene layer laid out but not rendered yet (what a dynamic
+ * recipe or a reference montage writes): a video layer whose source names a
+ * composition and whose asset file ends with `.pending`. Each one is rendered
+ * at its own box and length, like `edit.addComposition`, and its placeholder
+ * asset replaced. `screen: "recording"` on a scene means a frame of the take
+ * at `screenAt` (source seconds), cut from the recording; without a recording
+ * the scene draws its stand-in interface.
+ */
+export async function renderPendingScenes(
+  videoPath: string,
+  edit: EditState,
+  hasRecording: boolean,
+): Promise<{ edit: EditState; rendered: number }> {
+  const pending = new Set(
+    edit.assets.filter((a) => a.file.endsWith(PENDING_EXT)).map((a) => a.id),
+  );
+  if (pending.size === 0) return { edit, rendered: 0 };
+  let next = edit;
+  let rendered = 0;
+  for (const o of edit.overlays) {
+    if (o.kind !== "video" || !pending.has(o.asset)) continue;
+    if (!o.source || !("composition" in o.source)) continue;
+    const c = await findComposition(
+      videoPath,
+      o.source.composition,
+      edit.aspect,
+    );
+    const props: Record<string, string | number> = {
+      ...compositionBrand(edit, c),
+      ...o.source.props,
+    };
+    if (props.screen === "recording") {
+      const at = Number(props.screenAt ?? 0);
+      props.screen = hasRecording
+        ? (
+            await ipc.recordingCrop(videoPath, Number.isFinite(at) ? at : 0, {
+              x: 0,
+              y: 0,
+              w: 1,
+              h: 1,
+            })
+          ).file
+        : "";
+    }
+    delete props.screenAt;
+    await compositionsIpc.save(videoPath, c.id, c, false);
+    const { asset } = await renderComposition(
+      videoPath,
+      next,
+      c,
+      props,
+      { x: o.x, y: o.y, width: o.width, height: o.height },
+      o.duration,
+    );
+    next = {
+      ...next,
+      assets: [
+        ...next.assets.filter((a) => a.id !== o.asset && a.id !== asset.id),
+        asset,
+      ],
+      overlays: next.overlays.map((x) =>
+        x.id === o.id && x.kind === "video"
+          ? { ...x, asset: asset.id, source: { composition: c.id, props } }
+          : x,
+      ),
+    };
+    rendered++;
+  }
+  await refreshCompositions(videoPath);
+  return { edit: next, rendered };
+}
+
 /**
  * Adds a composition to an edit: the page is checked, kept with the montage
  * (so the layer can be rendered again later), rendered and placed.
