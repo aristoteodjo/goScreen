@@ -64,3 +64,29 @@ describe("mesh", () => {
     expect(meshAt(waves, 2).shapes[0].x).not.toBe(w[0].x);
   });
 });
+
+describe("beam and ring", () => {
+  it("builds a beam of the brand's light on a near-black canvas", () => {
+    const beam = meshPreset("beam", "#4cc2ff");
+    expect(hexToHsl(beam.base)[2]).toBeLessThan(0.06);
+    expect(beam.colors).toHaveLength(3);
+    expect(hexToHsl(beam.colors[0])[2]).toBeGreaterThan(hexToHsl(beam.colors[2])[2]);
+    const shapes = meshShapes(beam);
+    const core = shapes[2];
+    expect(core.rx).toBeLessThan(0.06);
+    expect(core.ry).toBeGreaterThan(0.6);
+    // It breathes: wider at one moment than another, never still.
+    const a = meshAt(beam, 0).shapes[1].rx;
+    const b = meshAt(beam, 1.4).shapes[1].rx;
+    expect(a).not.toBeCloseTo(b, 4);
+  });
+
+  it("turns a ring slowly", () => {
+    const ring = meshPreset("ring", "#e9a100");
+    const shapes = meshShapes(ring);
+    expect(shapes.filter((s) => s.hole).length).toBe(2);
+    for (const s of shapes.filter((s) => s.hole)) expect(s.hole).toBeGreaterThan(0.5);
+    expect(meshAt(ring, 10).rotation).toBeCloseTo((60 / 180) * Math.PI);
+    expect(ring.blur).toBeLessThan(0.1);
+  });
+});

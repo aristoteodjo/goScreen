@@ -219,3 +219,39 @@ describe("compose", () => {
     expect(frame.camera.scale).toBe(1);
   });
 });
+
+describe("camera drift", () => {
+  it("pushes in and pans over a scene, decelerating, never past the frame", async () => {
+    const { driftState, withDrift } = await import("./camera");
+    const drift = { scale: 0.03, pan: 0.02 };
+    const at0 = driftState(drift, 0);
+    expect(at0.scale).toBe(1);
+    expect(at0.dx).toBeCloseTo(-0.01);
+    expect(at0.dy).toBeCloseTo(0.0033);
+    const mid = driftState(drift, 0.5);
+    expect(mid.scale).toBeGreaterThan(1.015);
+    expect(driftState(drift, 1).scale).toBeCloseTo(1.03);
+    expect(driftState(drift, 1).dx).toBeCloseTo(0.01);
+    expect(driftState(drift, 1, -1).dx).toBeCloseTo(-0.01);
+    expect(driftState(undefined, 0.5)).toEqual({ scale: 1, dx: 0, dy: 0 });
+    const out = { width: 1000, height: 500 };
+    const still = { scale: 1, center: { x: 500, y: 250 } };
+    const moved = withDrift(still, driftState(drift, 1), out);
+    expect(moved.scale).toBeCloseTo(1.03);
+    // The window stays inside the frame: the pan is clamped by the push.
+    expect(moved.center.x - 500 / moved.scale).toBeGreaterThanOrEqual(0);
+    expect(moved.center.x + 500 / moved.scale).toBeLessThanOrEqual(1000);
+    expect(withDrift(still, driftState(undefined, 1), out)).toBe(still);
+  });
+
+  it("is folded into the composed frame", async () => {
+    const { composeFrame, timelineOf } = await import("./compose");
+    const { DEFAULT_EDIT } = await import("./schema");
+    const edit = { ...DEFAULT_EDIT, drift: { scale: 0.03, pan: 0 } };
+    const timeline = timelineOf({ width: 1920, height: 1080 }, []);
+    const out = { width: 1920, height: 1080 };
+    const scene = { local: 4, length: 4, opens: true, index: 0 };
+    expect(composeFrame(edit, timeline, out, 4, scene).camera.scale).toBeCloseTo(1.03);
+    expect(composeFrame(edit, timeline, out, 4, null).camera.scale).toBe(1);
+  });
+});

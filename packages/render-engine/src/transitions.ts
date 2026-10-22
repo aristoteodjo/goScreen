@@ -1,7 +1,7 @@
 import { easeInOut } from "./camera";
 import { sharp, sharpOut } from "./look";
 import { clipDuration, type Placed, placeClips } from "./sequence";
-import type { MainClip, Transition, TransitionKind } from "./types";
+import type { MainClip, Point, Transition, TransitionKind } from "./types";
 
 export const TRANSITION_KINDS: { id: TransitionKind; label: string }[] = [
   { id: "fade", label: "Cross fade" },
@@ -12,7 +12,15 @@ export const TRANSITION_KINDS: { id: TransitionKind; label: string }[] = [
   { id: "wipe", label: "Wipe" },
   { id: "blur", label: "Cut blur" },
   { id: "push", label: "Push in" },
+  { id: "zoomThrough", label: "Zoom through" },
 ];
+
+/** Where a zoom-through dives when the clip names no focus: the centre. */
+export const CENTRE: Point = { x: 0.5, y: 0.5 };
+
+/** Expo-out: all the speed at once, then a long glide (1 - 2^-10x). */
+export const expoOut = (x: number) =>
+  x <= 0 ? 0 : x >= 1 ? 1 : 1 - 2 ** (-10 * x);
 
 export const DEFAULT_TRANSITION: Transition = { kind: "fade", duration: 0.6 };
 
@@ -35,6 +43,8 @@ export type ActiveTransition = {
   progress: number;
   prev: Placed;
   next: Placed;
+  // Where the outgoing side is dived into (zoomThrough), fractions of the output.
+  focus: Point;
 };
 
 /** The transition running at timeline time t, if any. */
@@ -53,6 +63,7 @@ export function transitionAt(
         progress: (t - next.start) / length,
         prev: placed[i - 1],
         next,
+        focus: next.clip.transition.focus ?? CENTRE,
       };
     }
   }
@@ -77,9 +88,18 @@ export type TransitionMix = {
 
 const SIDE = { alpha: 1, dx: 0, dy: 0, scale: 1 };
 
+/**
+ * Offset that keeps `focus` (fractions) fixed while an image is scaled by
+ * `scale` about its centre: the camera dives into that point.
+ */
+export function diveOffset(focus: Point, scale: number): Point {
+  return { x: (focus.x - 0.5) * (1 - scale), y: (focus.y - 0.5) * (1 - scale) };
+}
+
 export function transitionMix(
   kind: TransitionKind,
   progress: number,
+  focus: Point = CENTRE,
 ): TransitionMix {
   const raw = Math.max(0, Math.min(1, progress));
   const p = easeInOut(raw);
@@ -113,6 +133,29 @@ export function transitionMix(
         from: { ...SIDE, alpha: 1 - out, scale: 1 + 0.12 * out },
         to: { ...SIDE, alpha: Math.min(1, raw * 2), scale: 1.15 - 0.15 * land },
         blur: (12 / 1080) * (1 - Math.abs(raw * 2 - 1)),
+        samples: 3,
+      };
+    }
+    case "zoomThrough": {
+      // The camera dives through the outgoing picture towards the focus
+      // (expo-out: all the speed at the cut), which fades and smears; the
+      // incoming one lands from further away on the sharp curve and
+      // settles. Nothing ever reads as a cut.
+      const dive = expoOut(raw);
+      const fromScale = 1 + 0.9 * dive;
+      const off = diveOffset(focus, fromScale);
+      const land = sharp(raw);
+      return {
+        ...base,
+        fromOnTop: true,
+        from: {
+          alpha: Math.max(0, 1 - raw * 1.6),
+          dx: off.x,
+          dy: off.y,
+          scale: fromScale,
+        },
+        to: { ...SIDE, alpha: Math.min(1, raw * 2.2), scale: 1.22 - 0.22 * land },
+        blur: (16 / 1080) * Math.sin(Math.PI * raw),
         samples: 3,
       };
     }
