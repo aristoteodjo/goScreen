@@ -20,7 +20,8 @@ use crate::modules::{
 };
 
 pub const STYLES: [&str; 6] = ["calm", "warm", "pulse", "rise", "focus", "bright"];
-pub const SFX: [&str; 5] = ["tap", "pop", "thud", "tick", "riser"];
+pub const SFX: [&str; 12] = ["tap", "pop", "thud", "tick", "riser", "whoosh", "swish", "click", "sparkle", "impact", "drop", "blip"];
+pub const SFX_LEVELS: [&str; 2] = ["soft", "full"];
 const MAX_SECONDS: f64 = 1800.0;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -28,7 +29,8 @@ const MAX_SECONDS: f64 = 1800.0;
 pub enum SoundJob {
     /// A bed of `duration` seconds; with `payoff`, its full section lands there.
     Music { style: String, seed: u32, duration: f64, payoff: Option<f64> },
-    Sfx { sfx: String },
+    /// An effect; `level` "soft" or "full" (the default).
+    Sfx { sfx: String, level: Option<String> },
 }
 
 /// The asset file a job renders to: its inputs spelled out, nothing else.
@@ -47,11 +49,15 @@ pub fn asset_name(job: &SoundJob) -> Result<String, String> {
                 None => Ok(format!("music-{style}-{seed}-{seconds}s.wav")),
             }
         }
-        SoundJob::Sfx { sfx } => {
+        SoundJob::Sfx { sfx, level } => {
             if !SFX.contains(&sfx.as_str()) {
                 return Err(format!("Unknown sound effect {sfx:?} (one of {}).", SFX.join(", ")));
             }
-            Ok(format!("sfx-{sfx}.wav"))
+            match level.as_deref() {
+                None | Some("full") => Ok(format!("sfx-{sfx}.wav")),
+                Some("soft") => Ok(format!("sfx-{sfx}-soft.wav")),
+                Some(other) => Err(format!("Unknown effect level {other:?} (one of {}).", SFX_LEVELS.join(", "))),
+            }
         }
     }
 }
@@ -63,7 +69,7 @@ fn job_json(job: &SoundJob) -> Value {
             "kind": "music", "style": style, "seed": seed, "duration": duration.ceil(),
             "payoff": payoff.filter(|p| p.is_finite() && *p > 0.0),
         }),
-        SoundJob::Sfx { sfx } => serde_json::json!({ "kind": "sfx", "sfx": sfx }),
+        SoundJob::Sfx { sfx, level } => serde_json::json!({ "kind": "sfx", "sfx": sfx, "level": level.as_deref().unwrap_or("full") }),
     }
 }
 
@@ -151,7 +157,13 @@ pub async fn sound_render(state: State<'_, MediaState>, video_path: String, job:
     let url = state.publish(assets_dir(&video).join(&file)).await?;
     let (name, kind) = match &job {
         SoundJob::Music { style, .. } => (format!("Music ({style})"), "audio"),
-        SoundJob::Sfx { sfx } => (format!("SFX {sfx}"), "audio"),
+        SoundJob::Sfx { sfx, level } => (
+            match level.as_deref() {
+                Some("soft") => format!("SFX {sfx} (soft)"),
+                _ => format!("SFX {sfx}"),
+            },
+            "audio",
+        ),
     };
     Ok(RenderedSound {
         asset: ImportedAsset { id: file.trim_end_matches(".wav").replace('.', "-"), name, kind, file, url },
@@ -219,8 +231,10 @@ mod tests {
         assert_eq!(asset_name(&bed).unwrap(), "music-pulse-3-32s-p43.wav");
         let plain = SoundJob::Music { style: "calm".into(), seed: 0, duration: 10.0, payoff: None };
         assert_eq!(asset_name(&plain).unwrap(), "music-calm-0-10s.wav");
-        assert_eq!(asset_name(&SoundJob::Sfx { sfx: "pop".into() }).unwrap(), "sfx-pop.wav");
-        assert!(asset_name(&SoundJob::Sfx { sfx: "../x".into() }).is_err());
+        assert_eq!(asset_name(&SoundJob::Sfx { sfx: "pop".into(), level: None }).unwrap(), "sfx-pop.wav");
+        assert_eq!(asset_name(&SoundJob::Sfx { sfx: "whoosh".into(), level: Some("soft".into()) }).unwrap(), "sfx-whoosh-soft.wav");
+        assert!(asset_name(&SoundJob::Sfx { sfx: "../x".into(), level: None }).is_err());
+        assert!(asset_name(&SoundJob::Sfx { sfx: "pop".into(), level: Some("loud".into()) }).is_err());
         assert!(asset_name(&SoundJob::Music { style: "metal".into(), seed: 0, duration: 10.0, payoff: None }).is_err());
         assert!(asset_name(&SoundJob::Music { style: "calm".into(), seed: 0, duration: 0.0, payoff: None }).is_err());
     }

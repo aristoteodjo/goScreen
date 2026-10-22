@@ -164,6 +164,10 @@ export const filmSchema = z
     // "framed": the device hardware around the screen; "premium": the SaaS
     // enhanced screen recording (frameless glass, outline, lean, pan-in).
     screen: z.enum(["framed", "premium"]).default("framed"),
+    // Automatic sound design: "full" puts a synthesised effect on every
+    // movement (a dynamic product ad), "sparse" only on cards, clicks and the
+    // payoff (a spoken piece), "none" lays nothing and removes what was laid.
+    sound: z.enum(["none", "sparse", "full"]).default("none"),
     // Chapter kicker: "BUYER · 2/11". Empty: no kicker.
     label: z.string().default(""),
     // On the cards, with the accent dot.

@@ -47,7 +47,12 @@ import { useSession } from "./session";
 import { Section, SliderRow, useChange } from "./PanelKit";
 import { bgCss, GRADIENTS } from "./Panels";
 import { SILENCE_DEFAULTS } from "./silences";
-import { captionsFromTake, writeSubtitles } from "./sound";
+import {
+  captionsFromTake,
+  musicPlanOf,
+  snapOpenToBeats,
+  writeSubtitles,
+} from "./sound";
 import { SpeechSection } from "./SpeechSection";
 import { useEdit, usePlayback } from "./store";
 import { SHAPES } from "./TimelineToolbar";
@@ -863,6 +868,9 @@ export function MusicPanel() {
   );
   const voice = useEdit((s) => (clip ? isVoiceClip(s.edit, clip) : false));
   const ducked = useEdit((s) => (clip ? ducks(s.edit, clip) : false));
+  const tempo = useEdit((s) =>
+    clip ? (musicPlanOf(s.edit, clip)?.plan.tempo ?? null) : null,
+  );
   const change = useChange();
   if (!clip) return <Empty what="Music" />;
   const set = (patch: Partial<AudioClip>, key?: string) =>
@@ -895,6 +903,31 @@ export function MusicPanel() {
           }
         />
       )}
+      {tempo !== null ? (
+        <Section
+          title="Snap to beats"
+          hint={`${tempo} BPM. Moves cards, layers and zooms onto the nearest beat (within 0.25 s); never a take clip nor a voice.`}
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              try {
+                const r = snapOpenToBeats();
+                toast.success(
+                  r.moves.length
+                    ? `${r.moves.length} moved onto the ${r.beats} beats`
+                    : "Everything already sits on a beat",
+                );
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
+          >
+            Snap to beats
+          </Button>
+        </Section>
+      ) : null}
       <Section
         title="Voice leads the cut"
         hint="Each scene lasts until the next phrase of this voice starts, so scene changes land on the attack of a sentence."

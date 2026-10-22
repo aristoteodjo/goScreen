@@ -83,7 +83,7 @@ import { openPlace, useTabs } from "@/modules/tabs/tabs";
 import { cancelTask, deviceFor } from "@/modules/tasks/queue";
 import { isFinished, type Task, useTasks } from "@/modules/tasks/store";
 import { catalog, defineCommand, runningCommand } from "./registry";
-import { registerSoundCommands } from "./sound";
+import { designSoundFor, registerSoundCommands } from "./sound";
 import { registerVersionCommands } from "./versions";
 import { registerInspirationCommands } from "@/modules/inspiration/commands";
 import { registerBlankCommands } from "./blank";
@@ -1112,7 +1112,11 @@ export function registerCommands() {
         ? applyFilm(edit, next.data, edit.film.locale)
         : adoptFilm(edit, next.data, navigator.language || "en-US");
       await applyEdit(i.video, applied);
-      return { film: next.data };
+      const sound =
+        "sound" in i.film && next.data.sound !== "none"
+          ? await designSoundFor(i.video, next.data.sound, 1)
+          : undefined;
+      return { film: next.data, sound };
     },
   });
   defineCommand({

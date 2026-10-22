@@ -9,10 +9,16 @@ import { describe, expect, it } from "vitest";
 import {
   captionLook,
   lastWordEnd,
+  musicOf,
+  NO_MUSIC,
+  sfxWarning,
+  snappedToMusic,
+  soundCuesOf,
   timelineWords,
   withCaptions,
   withMusic,
   withSfx,
+  withSoundDesign,
 } from "./sound";
 
 const words = [
@@ -122,5 +128,68 @@ describe("generated sound in the montage", () => {
     expect(count).toBe(5);
     expect(e.audio[0]).toMatchObject({ start: 0, duration: 0.09, duck: false });
     expect(e.assets.filter((a) => a.id === "sfx-pop")).toHaveLength(1);
+  });
+});
+
+describe("sound design and beats", () => {
+  const bed = {
+    id: "music-pulse-3-20s",
+    name: "Music (pulse)",
+    file: "music-pulse-3-20s.wav",
+    seconds: 20,
+  };
+  const pointers = [
+    { t: 1, kind: "down" as const, x: 0.5, y: 0.5, instanceId: "d", source: "web" as const },
+  ];
+
+  it("lays one clip per cue, replaces the previous pass, never ducks", () => {
+    const withCard: EditState = {
+      ...edit,
+      clips: [
+        {
+          id: "intro",
+          kind: "slide",
+          duration: 2,
+          transition: null,
+          background: DEFAULT_EDIT.background,
+          title: "Hello",
+          subtitle: "",
+          color: "#ffffff",
+          font: "Inter",
+          animation: "words",
+        },
+        ...clips,
+      ],
+    };
+    const cues = soundCuesOf(withCard, pointers, "full", 1);
+    expect(cues.some((c) => c.kind === "impact")).toBe(true);
+    expect(cues.some((c) => c.kind === "click" && c.t === 3)).toBe(true);
+    const assets = Object.fromEntries(
+      cues.map((c) => {
+        const key = c.level === "soft" ? `${c.kind}-soft` : c.kind;
+        return [key, { id: `sfx-${key}`, name: `SFX ${key}`, file: `sfx-${key}.wav`, seconds: 0.3 }];
+      }),
+    );
+    const first = withSoundDesign(withCard, cues, assets);
+    expect(first.count).toBe(cues.length);
+    expect(first.edit.audio.every((a) => a.id.startsWith("sfx-auto-") && a.duck === false)).toBe(true);
+    const again = withSoundDesign(first.edit, cues.slice(0, 1), assets);
+    expect(again.edit.audio).toHaveLength(1);
+    expect(sfxWarning(2, first.edit, "sparse")).toBeUndefined();
+    expect(sfxWarning(40, first.edit, "sparse")).toContain("noise");
+  });
+
+  it("reads a bed's plan from its clip or its file name, and snaps to its beats", () => {
+    expect(() => snappedToMusic(edit)).toThrow(NO_MUSIC);
+    const laid = withMusic(edit, bed, null, "m", { style: "pulse", seed: 3, offset: 1.5 });
+    const music = musicOf(laid.edit);
+    expect(music?.plan.style).toBe("pulse");
+    expect(music?.offset).toBe(1.5);
+    const byName = withMusic(edit, { ...bed, id: "music-rise-2-30s-p40", file: "music-rise-2-30s-p40.wav" }, null, "m");
+    expect(musicOf(byName.edit)?.plan.style).toBe("rise");
+    const r = snappedToMusic(laid.edit);
+    expect(r.tempo).toBe(music?.plan.tempo);
+    expect(r.beats).toBeGreaterThan(5);
+    expect(Array.isArray(r.moves)).toBe(true);
   });
 });

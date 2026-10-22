@@ -35,7 +35,7 @@ export type MotionEvent = {
 const POP_JUMP = 0.15;
 const POP_WINDOW = 0.3;
 
-/** The `stat-counter` block counts from 0.2 s to 1.8 s after it appears. */
+/** The `stat-counter` block counts from 0.2 s to 1.8 s after it appears; any other counter over its first 60 %. */
 const COUNTER = { from: 0.2, to: 1.8, steps: 8 };
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
@@ -55,12 +55,16 @@ function isTitle(o: Overlay): boolean {
   return Boolean(o.style.sweep || o.style.flash || (o.style.glow ?? 0) > 0);
 }
 
-/** A rendered `stat-counter` block (or a composition named like one). */
+/** A rendered counter block (`stat-counter`, `kinetic-counter`) or a composition named like one. */
 function isCounter(o: Overlay): boolean {
   if (o.kind !== "video" || !o.source) return false;
-  return "block" in o.source
-    ? o.source.block === "stat-counter"
-    : o.source.composition.includes("counter");
+  return ("block" in o.source ? o.source.block : o.source.composition).includes("counter");
+}
+
+/** When a counter's steps fall, from its start. */
+function counterSteps(o: Overlay): { from: number; to: number } {
+  const stat = o.kind === "video" && o.source && "block" in o.source && o.source.block === "stat-counter";
+  return stat ? COUNTER : { from: 0.2, to: Math.max(0.4, o.duration * 0.6) };
 }
 
 /** Keys of the scale track that jump up quickly: each is a pop. */
@@ -117,9 +121,10 @@ export function motionEvents(
     if (isCaptionOverlay(o)) continue;
     const start = round(o.start);
     if (isCounter(o)) {
-      const step = (COUNTER.to - COUNTER.from) / (COUNTER.steps - 1);
+      const span = counterSteps(o);
+      const step = (span.to - span.from) / (COUNTER.steps - 1);
       for (let k = 0; k < COUNTER.steps; k += 1) {
-        const t = o.start + COUNTER.from + k * step;
+        const t = o.start + span.from + k * step;
         if (t <= o.start + o.duration)
           out.push({ t: round(t), kind: "tick", weight: 0.3, item: o.id });
       }

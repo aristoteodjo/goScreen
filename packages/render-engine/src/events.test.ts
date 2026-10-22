@@ -4,8 +4,8 @@ import {
   type EditState,
   fullClip,
   motionEvents,
-  type Overlay,
   type RecordedPointer,
+  type TextOverlay,
   type SlideClip,
   snapToBeats,
 } from "./index";
@@ -23,7 +23,7 @@ const slide = (id: string, duration: number, title = "Hello"): SlideClip => ({
   animation: "words",
 });
 
-const text = (id: string, start: number, duration: number): Overlay => ({
+const text = (id: string, start: number, duration: number): TextOverlay => ({
   id,
   kind: "text",
   lane: 0,

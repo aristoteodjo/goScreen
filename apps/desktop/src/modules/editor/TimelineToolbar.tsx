@@ -14,12 +14,14 @@ import {
   PresentationBarChart01Icon,
   Scissor01Icon,
   ShapesIcon,
+  SpeakerIcon,
   TextIcon,
   ZoomInAreaIcon,
   ZoomOutAreaIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -36,7 +38,17 @@ import {
 import { cn } from "@/lib/utils";
 import { editActions, TEXT_PRESETS } from "./actions";
 import { useBlocksDialog } from "./BlocksDialog";
+import { clearSoundDesign, designSound } from "./sound";
 import { type Tool, usePlayback } from "./store";
+
+function runSoundDesign(density: "sparse" | "full") {
+  designSound(density)
+    .then((r) => {
+      toast.success(`${r.count} sounds laid (${density})`);
+      if (r.warning) toast.warning(r.warning);
+    })
+    .catch((e: Error) => toast.error(e.message));
+}
 
 const TOOLS: {
   id: Tool;
@@ -175,6 +187,24 @@ export function TimelineToolbar() {
         label="Music"
         onClick={() => void editActions.importMedia(["audio"])}
       />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <ToolButton icon={SpeakerIcon} label="Sound design" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onSelect={() => runSoundDesign("full")}>
+            Full: a sound on every movement
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => runSoundDesign("sparse")}>
+            Sparse: cards, clicks and payoff
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => toast.success(`${clearSoundDesign()} sounds removed`)}
+          >
+            Remove the laid sounds
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <div className="mx-2 h-5 w-px bg-white/10" />
 

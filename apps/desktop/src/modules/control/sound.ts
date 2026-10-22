@@ -1,13 +1,16 @@
 import {
-  MAX_SFX,
   MUSIC_STYLES,
   pickStyle,
+  type SoundDensity,
   SFX_KINDS,
+  SFX_LEVELS,
+  SOUND_DENSITIES,
   STYLE_SPECS,
 } from "@goscreen/music";
 import {
   type EditState,
   isCaptionOverlay,
+  parseRecordingFile,
   sequenceDuration,
   srtOf,
 } from "@goscreen/render-engine";
@@ -17,13 +20,19 @@ import { useSession } from "@/modules/editor/session";
 import {
   captionLook,
   lastWordEnd,
-  MAX_SFX_WARNING,
   NO_WORDS,
   readWords,
+  renderSfxAssets,
+  SFX_AUTO,
+  sfxWarning,
+  snappedToMusic,
+  soundCuesOf,
+  soundDensityOf,
   timelineWords,
   withCaptions,
   withMusic,
   withSfx,
+  withSoundDesign,
 } from "@/modules/editor/sound";
 import { defineCommand } from "./registry";
 
@@ -50,7 +59,50 @@ function announce(videoPath: string, asset: { file: string; url: string }) {
   if (s.videoPath === videoPath) s.addAssetUrl(asset.file, asset.url);
 }
 
+let access: EditAccess | null = null;
+
+/** Lays the sound design on a video at a density (what edit.soundDesign and edit.setFilm share). */
+export async function designSoundFor(
+  video: string,
+  density: SoundDensity,
+  seed: number,
+  replace = true,
+) {
+  if (!access) throw new Error("Sound commands are not registered.");
+  const { currentEdit, applyEdit } = access;
+  const edit = await currentEdit(video);
+  const opened = await ipc.recordingOpen(video);
+  const pointers = parseRecordingFile(opened.interactions).pointers;
+  const cues = soundCuesOf(edit, pointers, density, seed);
+  const assets = await renderSfxAssets(video, cues);
+  const now = await currentEdit(video);
+  const base = replace
+    ? now
+    : {
+        ...now,
+        audio: now.audio.map((a) =>
+          a.id.startsWith(SFX_AUTO) ? { ...a, id: `sfx-kept-${a.id}` } : a,
+        ),
+      };
+  const r = withSoundDesign(base, soundCuesOf(now, pointers, density, seed), assets);
+  await applyEdit(video, r.edit);
+  return {
+    sounds: r.count,
+    density,
+    cues: cues.map((c) => ({
+      t: c.t,
+      kind: c.kind,
+      level: c.level,
+      gain: c.gain,
+      on: c.event,
+      item: c.item,
+    })),
+    warning: sfxWarning(r.count, r.edit, density),
+  };
+}
+
 export function registerSoundCommands({ currentEdit, applyEdit }: EditAccess) {
+  access = { currentEdit, applyEdit };
   defineCommand({
     name: "sound.styles",
     title: "List music styles",
@@ -98,6 +150,8 @@ export function registerSoundCommands({ currentEdit, applyEdit }: EditAccess) {
         now,
         { ...rendered.asset, seconds: rendered.seconds },
         lastWordEnd(now, words?.words ?? null),
+        undefined,
+        { style, seed: i.seed, offset: rendered.offset },
       );
       await applyEdit(i.video, next);
       return {
@@ -105,6 +159,7 @@ export function registerSoundCommands({ currentEdit, applyEdit }: EditAccess) {
         asset: rendered.asset.id,
         style,
         offset: rendered.offset,
+        tempo: STYLE_SPECS[style].tempo,
         duration: clip.duration,
         volume: clip.volume,
       };
@@ -114,16 +169,18 @@ export function registerSoundCommands({ currentEdit, applyEdit }: EditAccess) {
   defineCommand({
     name: "edit.addSfx",
     title: "Add a sound effect",
-    description: `Places one synthesised effect (${SFX_KINDS.join(", ")}) at timeline time t. ${MAX_SFX_WARNING} The answer warns beyond ${MAX_SFX}.`,
+    description: `Places one synthesised effect (${SFX_KINDS.join(", ")}; level soft|full) at timeline time t. For a sound on every movement use edit.soundDesign instead. The answer warns past the film's density (film.sound: sparse ≈ 12 a minute, full ≈ 180).`,
     input: z.object({
       video,
       kind: z.enum(SFX_KINDS),
+      level: z.enum(SFX_LEVELS).default("full"),
       t: z.number().min(0),
     }),
     run: async (i) => {
       const rendered = await ipc.soundRender(i.video, {
         kind: "sfx",
         sfx: i.kind,
+        level: i.level,
       });
       announce(i.video, rendered.asset);
       const edit = await currentEdit(i.video);
@@ -137,8 +194,48 @@ export function registerSoundCommands({ currentEdit, applyEdit }: EditAccess) {
       return {
         item: r.clip.id,
         count: r.count,
-        warning: r.count > MAX_SFX ? MAX_SFX_WARNING : undefined,
+        warning: sfxWarning(r.count, r.edit),
       };
+    },
+  });
+
+  defineCommand({
+    name: "edit.soundDesign",
+    title: "A sound on every movement",
+    description:
+      'Lays synthesised effects on the montage\'s movements, as the reference SaaS ads do: "full" puts one on each (whoosh on an entrance, swish on an exit, pop on a pop, click on a click, tick on each step of a counter, sparkle on a title, impact on a card, riser then drop into the last card); "sparse" keeps only cards, clicks and the payoff (a spoken piece). Never two identical sounds within 0.15 s; gain by importance. Clips sfx-auto-* are replaced on every pass (density "none" removes them). Returns the cues laid. Default density: film.sound, else sparse.',
+    input: z.object({
+      video,
+      density: z.enum([...SOUND_DENSITIES, "none"]).optional(),
+      seed: z.number().int().min(0).max(1_000_000).default(1),
+      replace: z.boolean().default(true),
+    }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const density = i.density ?? soundDensityOf(edit);
+      if (density === "none") {
+        const kept = edit.audio.filter((a) => !a.id.startsWith(SFX_AUTO));
+        await applyEdit(i.video, { ...edit, audio: kept });
+        return { sounds: 0, removed: edit.audio.length - kept.length };
+      }
+      return designSoundFor(i.video, density, i.seed, i.replace);
+    },
+  });
+
+  defineCommand({
+    name: "edit.snapToBeats",
+    title: "Snap the montage to the beats",
+    description:
+      "Moves the start of every card (its end, so what follows starts on the beat), layer and zoom onto the nearest beat of the laid generated bed (sound.music), within `tolerance` seconds (0.25). Never a take's clip, a word-timed caption, a synced layer or a sound. Returns the tempo, the beats and each move. Without a generated bed, says to add one.",
+    input: z.object({
+      video,
+      tolerance: z.number().min(0.02).max(1).default(0.25),
+    }),
+    run: async (i) => {
+      const edit = await currentEdit(i.video);
+      const r = snappedToMusic(edit, i.tolerance);
+      if (r.moves.length) await applyEdit(i.video, r.edit);
+      return { tempo: r.tempo, beats: r.beats, moved: r.moves.length, moves: r.moves };
     },
   });
 

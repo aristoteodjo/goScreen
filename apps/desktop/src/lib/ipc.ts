@@ -92,7 +92,7 @@ export type SoundJob =
       duration: number;
       payoff: number | null;
     }
-  | { kind: "sfx"; sfx: string };
+  | { kind: "sfx"; sfx: string; level?: "soft" | "full" };
 export type OpenedRecording = z.infer<typeof openedRecordingSchema>;
 
 const recordingEntrySchema = z.object({

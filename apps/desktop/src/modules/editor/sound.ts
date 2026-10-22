@@ -1,6 +1,26 @@
-import { MAX_SFX, SFX_LENGTHS, type SfxKind } from "@goscreen/music";
+import {
+  alignToPayoff,
+  type Beat,
+  beatGrid,
+  type MusicPlan,
+  musicPlan,
+  musicStyleSchema,
+  PLAN_SLACK,
+  SFX_LENGTHS,
+  type SfxKind,
+  type SfxLevel,
+  sfxBudget,
+  type SoundCue,
+  type SoundDensity,
+  soundDensitySchema,
+  soundDesign,
+} from "@goscreen/music";
 import {
   type AudioClip,
+  type BeatMove,
+  motionEvents,
+  type RecordedPointer,
+  snapToBeats,
   type CaptionLook,
   captionOverlays,
   captionsFromWords,
@@ -197,6 +217,7 @@ export function withMusic(
   asset: SoundAsset,
   lastWord: number | null,
   id = newId("aud"),
+  music?: AudioClip["music"],
 ): { edit: EditState; clip: AudioClip } {
   const end = sequenceDuration(edit.clips);
   const stop = lastWord !== null ? Math.min(end, lastWord + 0.3) : end;
@@ -212,11 +233,12 @@ export function withMusic(
     fadeIn: MUSIC_FADE.in,
     fadeOut: Math.min(MUSIC_FADE.out, duration / 2),
     duck: true,
+    ...(music ? { music } : {}),
   };
   return { edit: withAsset(edit, asset, clip), clip };
 }
 
-/** A sound effect at t; `count` is how many the film then holds (more than MAX_SFX reads as noise). */
+/** A sound effect at t; `count` is how many the film then holds (`sfxWarning` judges it). */
 export function withSfx(
   edit: EditState,
   asset: SoundAsset,
@@ -271,7 +293,153 @@ function withAsset(
   };
 }
 
-export const MAX_SFX_WARNING = `A film carries at most ${MAX_SFX} sound effects: beyond that they read as noise.`;
+/** The film's sound density (`film.sound`), `sparse` when unset. */
+export function soundDensityOf(edit: EditState): SoundDensity {
+  const parsed = soundDensitySchema.safeParse(
+    (edit.film?.settings as { sound?: unknown } | undefined)?.sound,
+  );
+  return parsed.success ? parsed.data : "sparse";
+}
+
+/** What the commands say past the film's effect budget (a density, not a cap). */
+export function sfxWarning(
+  count: number,
+  edit: EditState,
+  density = soundDensityOf(edit),
+): string | undefined {
+  const budget = sfxBudget(sequenceDuration(edit.clips), density);
+  return count > budget
+    ? `${count} effects for ${Math.round(sequenceDuration(edit.clips))} s at the "${density}" density (about ${budget} read well): beyond that they read as noise. Use "full" for a dynamic product ad, or take some out.`
+    : undefined;
+}
+
+// --- Automatic sound design -------------------------------------------------
+
+/** Clips laid by the sound design: replaced on every pass. */
+export const SFX_AUTO = "sfx-auto-";
+
+/** The asset key of a cue: one file per kind and level. */
+export const sfxAssetKey = (kind: SfxKind, level: SfxLevel) =>
+  level === "soft" ? `${kind}-soft` : kind;
+
+/** The cues of a montage at a density: every movement, or only cards, clicks and the payoff. */
+export function soundCuesOf(
+  edit: EditState,
+  pointers: RecordedPointer[],
+  density: SoundDensity,
+  seed = 1,
+): SoundCue[] {
+  return soundDesign(motionEvents(edit, pointers), { density, seed });
+}
+
+/**
+ * The montage with the cues laid as `sfx-auto-*` clips (the previous ones
+ * removed), each on a free lane, never ducked. `assets` holds the rendered
+ * file of every kind and level the cues need (`sfxAssetKey`).
+ */
+export function withSoundDesign(
+  edit: EditState,
+  cues: SoundCue[],
+  assets: Record<string, SoundAsset>,
+): { edit: EditState; count: number } {
+  let next: EditState = {
+    ...edit,
+    audio: edit.audio.filter((a) => !a.id.startsWith(SFX_AUTO)),
+  };
+  let count = 0;
+  cues.forEach((cue, i) => {
+    const asset = assets[sfxAssetKey(cue.kind, cue.level)];
+    if (!asset) return;
+    const duration = round(
+      Math.min(asset.seconds || SFX_LENGTHS[cue.kind], SFX_LENGTHS[cue.kind]),
+    );
+    const clip: AudioClip = {
+      id: `${SFX_AUTO}${i + 1}`,
+      lane: freeLane(next.audio, cue.t, duration),
+      start: cue.t,
+      duration,
+      asset: asset.id,
+      in: 0,
+      volume: round(Math.min(1, cue.gain)),
+      fadeIn: 0,
+      fadeOut: 0,
+      duck: false,
+    };
+    next = withAsset(next, asset, clip);
+    count += 1;
+  });
+  return { edit: next, count };
+}
+
+// --- Beat grid of the laid music ----------------------------------------------
+
+export const NO_MUSIC =
+  "This montage has no generated music: add one with sound.music (the bed carries its tempo), then snap again.";
+
+/** A bed's name as the renderer writes it: music-<style>-<seed>-<s>s[-p<payoff×10>].wav */
+const BED_NAME = /^music-([a-z]+)-(\d+)-(\d+)s(?:-p(\d+))?(?:\.wav)?$/;
+
+/**
+ * The plan of a laid bed: from the clip's `music` (style, seed, offset), or
+ * read back from its asset's file name. Null when the clip is no generated bed.
+ */
+export function musicPlanOf(
+  edit: EditState,
+  clip: AudioClip,
+): { plan: MusicPlan; offset: number } | null {
+  const asset = edit.assets.find((a) => a.id === clip.asset);
+  const m = BED_NAME.exec(asset?.file ?? "") ?? BED_NAME.exec(clip.asset);
+  if (clip.music) {
+    const style = musicStyleSchema.safeParse(clip.music.style);
+    if (!style.success) return null;
+    const seconds = m ? Number(m[3]) : Math.ceil(asset?.duration ?? clip.duration);
+    return {
+      plan: musicPlan(style.data, clip.music.seed, seconds + PLAN_SLACK),
+      offset: clip.music.offset,
+    };
+  }
+  if (!m) return null;
+  const style = musicStyleSchema.safeParse(m[1]);
+  if (!style.success) return null;
+  const plan = musicPlan(style.data, Number(m[2]), Number(m[3]) + PLAN_SLACK);
+  const offset = m[4] ? alignToPayoff(plan, Number(m[4]) / 10) : 0;
+  return { plan, offset };
+}
+
+/** The first generated bed of the montage, with its plan; null without one. */
+export function musicOf(
+  edit: EditState,
+): { clip: AudioClip; plan: MusicPlan; offset: number } | null {
+  for (const clip of edit.audio) {
+    const found = musicPlanOf(edit, clip);
+    if (found) return { clip, ...found };
+  }
+  return null;
+}
+
+/** The beats of the laid bed on the timeline. */
+export function beatsOf(edit: EditState): Beat[] {
+  const music = musicOf(edit);
+  if (!music) throw new Error(NO_MUSIC);
+  return beatGrid(music.plan, {
+    start: music.clip.start,
+    duration: music.clip.duration,
+    offset: music.offset,
+    in: music.clip.in,
+  });
+}
+
+/** Cards, layers and zooms moved onto the beats of the laid bed. */
+export function snappedToMusic(
+  edit: EditState,
+  tolerance?: number,
+): { edit: EditState; moves: BeatMove[]; beats: number; tempo: number } {
+  const music = musicOf(edit);
+  if (!music) throw new Error(NO_MUSIC);
+  const grid = beatsOf(edit);
+  const r = snapToBeats(edit, grid, { tolerance });
+  return { ...r, beats: grid.length, tempo: music.plan.tempo };
+}
 
 export const NO_WORDS =
   "This take has no transcription yet (<stem>.words.json): run edit.transcribe first, then try again.";
@@ -348,10 +516,74 @@ export async function addMusic(
     now,
     { ...rendered.asset, seconds: rendered.seconds },
     lastWordEnd(now, words?.words ?? null),
+    undefined,
+    { style, seed, offset: rendered.offset },
   );
   change(() => next, undefined);
   usePlayback.getState().select({ kind: "audio", id: clip.id });
   return clip;
+}
+
+/** Renders the effects the cues need, once per kind and level, into the montage's assets. */
+export async function renderSfxAssets(
+  videoPath: string,
+  cues: SoundCue[],
+): Promise<Record<string, SoundAsset>> {
+  const out: Record<string, SoundAsset> = {};
+  for (const cue of cues) {
+    const key = sfxAssetKey(cue.kind, cue.level);
+    if (out[key]) continue;
+    const rendered = await ipc.soundRender(videoPath, {
+      kind: "sfx",
+      sfx: cue.kind,
+      level: cue.level,
+    });
+    const s = useSession.getState();
+    if (s.videoPath === videoPath)
+      s.addAssetUrl(rendered.asset.file, rendered.asset.url);
+    out[key] = { ...rendered.asset, seconds: rendered.seconds };
+  }
+  return out;
+}
+
+/** Lays a sound on every movement of the open montage (or only the cards, clicks and payoff). */
+export async function designSound(
+  density: SoundDensity,
+  seed = 1,
+): Promise<{ count: number; warning?: string }> {
+  const videoPath = openVideo();
+  const { pointers } = useSession.getState();
+  const cues = soundCuesOf(useEdit.getState().edit, pointers, density, seed);
+  const assets = await renderSfxAssets(videoPath, cues);
+  const now = useEdit.getState().edit;
+  const r = withSoundDesign(
+    now,
+    soundCuesOf(now, pointers, density, seed),
+    assets,
+  );
+  change(() => r.edit, undefined);
+  return { count: r.count, warning: sfxWarning(r.count, r.edit, density) };
+}
+
+/** Removes the clips the sound design laid. */
+export function clearSoundDesign(): number {
+  const before = useEdit.getState().edit.audio.length;
+  change((ed) => ({
+    ...ed,
+    audio: ed.audio.filter((a) => !a.id.startsWith(SFX_AUTO)),
+  }));
+  return before - useEdit.getState().edit.audio.length;
+}
+
+/** Snaps the open montage's cards, layers and zooms to the beats of its bed. */
+export function snapOpenToBeats(tolerance?: number): {
+  moves: BeatMove[];
+  beats: number;
+  tempo: number;
+} {
+  const r = snappedToMusic(useEdit.getState().edit, tolerance);
+  if (r.moves.length) change(() => r.edit, undefined);
+  return { moves: r.moves, beats: r.beats, tempo: r.tempo };
 }
 
 /** Renders an effect and places it at t (the playhead by default). */
