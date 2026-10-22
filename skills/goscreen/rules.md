@@ -69,16 +69,24 @@ height as a fraction of the output height). Pixel figures are for 1080p.
 - Clicks: `touch.style: "ripple"` with `spotlight` 0.4 to 0.6 on the premium
   look; `"ring"` on the framed look. Cursor hidden unless the cursor is the
   story.
-- Transitions between clips: `push` (momentum) or `blur` (soft at the cut),
-  0.3 to 0.5 s; `fade` 0.35 s only into and out of cards.
+- Transitions between clips: `zoomThrough` (the camera dives through the
+  outgoing picture into the next, with `focus` on what comes next), `push`
+  (momentum) or `blur` (soft at the cut), 0.3 to 0.5 s; `fade` 0.35 s only
+  into and out of cards. Never a hard cut in a product spot: `edit.energize`
+  turns the ones left into zoom-throughs.
+- The camera never stands still: `drift` on (the premium look sets it), and
+  an element of the UI popped out of the screen (`edit.popOut`) once per
+  feature at most, on the thing the voice names.
 
 ## Look
 
 - Dark films use dark greys, never pure black (`#0b0f14`, `#121a24`, never
   `#000000`). One family of desaturated hues from the accent, one accent
   colour at any moment, no gradients on text or buttons, no neon.
-- `backdrop: "circles" | "blob" | "waves"` (`background.kind: "mesh"`) for a
-  moving background; `grain` ≤ 0.08, `vignette` ≤ 0.35. `"flat"` for a quiet
+- `backdrop: "circles" | "blob" | "waves" | "beam" | "ring"`
+  (`background.kind: "mesh"`) for a moving background; `beam` and `ring` are
+  the dark reference looks (a shaft or a halo of the accent's light on a
+  near-black canvas); `grain` ≤ 0.08, `vignette` ≤ 0.4. `"flat"` for a quiet
   proof clip.
 - `screen: "premium"` for a product spot (frameless glass, outline, lean,
   pan-in, depth of field); `"framed"` when the device itself matters

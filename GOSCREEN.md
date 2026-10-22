@@ -722,8 +722,63 @@ fonctions pures du temps ; les notes détaillées (chiffres, timecodes) sont ran
   animé aux couleurs de la marque (selon le ton : `circles`, `blob`, `waves`), les clics en anneaux et les
   légendes accentuées. Les scènes alternent le côté vers lequel l'écran se tourne (`SceneTime.index`). Le
   runner fait défiler vers une section plutôt que vers le lien de navigation du même nom.
+### Éléments flottants et caméra continue
+
+Relevé le 2026-10-21 sur trois références (NeuraFlow, Doks.AI, AfterRender) : aucune coupe franche, la caméra
+traverse un élément pour arriver au suivant ; des éléments d'interface sortent de la capture et flottent devant
+en 3D avec ombre et glow ; fond sombre avec faisceau ou halo de la marque ; tout dérive en permanence. Rien ne
+touche la capture : tout s'applique au montage, en fonctions pures du temps.
+
+- **Éléments flottants** (« pop-out ») : un rectangle du verre enregistré (`u, v, w, h` en fractions du verre, à
+  un temps source `t`) devient un calque image qui sort de l'écran et flotte devant. Rust `media/crop.rs`
+  (`recording_crop(video, t, rect)`) : FFmpeg extrait l'image affichée à `t` (`fps=30:round=up`, comme
+  ailleurs) et la recadre en une passe (`crop` en pixels pairs) dans `<stem>.assets/pop-<t ms>-<n>.png` ;
+  chemins dérivés du MP4, rectangle borné dans le cadre (`check_rect`), jamais d'écrasement (`pop_name`).
+  render-engine `dynamic.ts` : `popBox` place le rectangle sur le cadre (les quatre coins passent par le quad
+  projeté du calque, `layerPoint`, puis par la caméra de zoom, `applyCamera` ; bornes alignées) ;
+  `popOutOverlay` fabrique l'`ImageOverlay` posé exactement dessus avec des **images clés ordinaires** :
+  échelle 1 → 1 + `lift` (0,08) sur la courbe sharp en 0,55 s, légère montée et glissement vers le centre, puis
+  dérive lente, entrée `none` (il est déjà à sa place), sortie en fondu. `ImageOverlay` et `VideoOverlay`
+  portent `shadow` (0..1, ombre portée douce) et `glow` (`#rrggbb`, filet de lumière et halo sur le bord),
+  dessinés par `drawMedia`. L'inverse de l'homographie (`quadInverse`, `glassPoint`) ramène un point du cadre
+  dans le verre, écran penché compris.
+  Desktop : `editor/popout.ts` (`cutPopOut` découpe et construit le calque, `popOut` applique en une
+  modification annulable ; le glow prend l'accent du film, sinon la couleur des touches) ; « Pop out… » dans le
+  clic droit de l'aperçu arme l'outil, le rectangle se dessine à la souris sur l'écran (Échap annule), le
+  calque est sélectionné. IA : `edit.popOut {video, t, rect, layer?, duration, lift}` (`modules/control/dynamic.ts`).
+  Les repères du journal v4 (`marks`) n'existent pas encore : le rectangle vient toujours de la souris ou de l'IA.
+- **Caméra continue** : transition `zoomThrough` (`Transition.kind`, `focus?` en fractions du cadre) : la caméra
+  plonge dans le plan sortant vers `focus` (sinon le centre) en expo-out (`expoOut`, toute la vitesse à la
+  coupe), l'image sortante grossit jusqu'à 1,9×, s'efface et se floute (16 px à 1080p au milieu), le plan entrant
+  arrive de plus loin (1,22×) et se pose sur la courbe sharp ; trois sous-images (flou de mouvement). `diveOffset`
+  garde le point visé immobile pendant que l'image grossit. **Dérive permanente** (`EditState.drift =
+  { scale, pan }`, `camera.ts` : `driftState`, `withDrift`) : sur chaque scène (`sceneTimeAt`), poussée 1 →
+  1 + `scale` (3 %) et pan de `pan` (1,5 %) de la largeur, en décélération (jamais linéaire), côté alterné
+  d'une scène à l'autre, fenêtre toujours dans le cadre ; posée sur la caméra des zooms dans `composeFrame`.
+  Le look premium d'un film l'active (`screenOf`, `applyFilm` garde une dérive réglée à la main) ; panneau Zoom
+  → « Camera drift » (interrupteur, poussée, pan). Une carte peut pousser lentement (`SlideClip.push`, 1,06 :
+  échelle autour du centre, décélérée, dans `drawSlide`).
+- **Fonds** (`background.ts`) : `beam` (faisceau vertical de la lumière de l'accent qui respire à 0,18 Hz, halo
+  large, flaque au sol, sur une toile presque noire de la même teinte) et `ring` (anneau en halo incliné qui
+  tourne à 6°/s, écho plus doux, lueur au centre ; `MeshShape.hole` = rayon intérieur, dégradé vide au centre
+  dans `drawMesh`). Palette propre (`lightBase`, `lightTones` : cœur, lueur, brume depuis l'accent) ; `backdrop`
+  du film et le panneau Background les acceptent (changer vers ou depuis un style lumineux rebâtit les couleurs).
+- **Pass « dynamise »** (`dynamic.ts`, `energize(edit, { every: 2, minGap: 0.2 })`, pur et testé) :
+  `changeTimes` liste les instants où quelque chose change (débuts de clips et fins de transitions, bornes des
+  calques, images clés, bornes des zooms en temps timeline) ; partout où rien ne change pendant plus de `every`
+  secondes, un mouvement est ajouté : zoom doux 1,12× de 2,6 s sur la prise (suit les touches, borné au clip,
+  jamais sur un zoom existant), sinon **pop** de 4 % d'un texte déjà à l'écran (jamais deux fois à moins de
+  0,6 s), poussée 1,06 d'une carte ; chaque coupe sèche devient un `zoomThrough` de 0,5 s ; la dérive est
+  activée si absente. Deux effets ajoutés ne sont jamais à moins de `minGap` ; ce qui est déjà animé reste.
+  Rend la liste des changements (`t`, `kind`, `target`, `detail`). Bouton **Energize** de la barre de la
+  timeline (une modification annulable, toast du compte) ; IA : `edit.energize {video, every?}`.
+- `RENDER_VERSION` passe à 2 (le rendu d'un même état change avec la dérive).
+- Limites : le pop-out est une image fixe (pas le clip animé de la zone) ; il ne suit pas un défilement de la
+  page après `t` ; la carte ne pousse qu'en échelle (pas de pan) ; `energize` ne lit pas la voix (les
+  mouvements tombent sur une grille, pas sur les mots : `edit.syncMap` pour cela).
+
 - **À faire (relevé par le cours, pas encore fait)** : calage sur le tempo de la musique ; shatter / shine
-  avancés ; recadrage « éléments flottants » (un élément d'UI découpé qui pop hors de la capture) ; objets
+  avancés ; objets
   3D (pièces, logos extrudés) ; voix de synthèse (le cours utilise ElevenLabs : voix « Advertisement »,
   stability 40) ; mots-clés de la voix (ASR) pour déclencher les entrées de texte sur le mot, pas seulement
   la scène ; vérification visuelle du look premium sur une prise longue (l'export exige la fenêtre visible).
