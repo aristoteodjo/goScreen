@@ -400,6 +400,41 @@ la détection du visage ; `modules/editor/speech.ts` est la coquille qui lit et 
   native) ; une composition convertie depuis un bloc n'a plus de réglages (tout est dans le HTML) ; le cache de
   rendu n'est jamais purgé.
 
+### Scènes dynamiques : compositions embarquées
+
+- Le rendu était jugé statique face aux pubs SaaS modernes (mockups en perspective, cartes qui sortent de
+  l'écran, typographie cinétique, interactions mimées, fond sombre à faisceau, glow, aucune coupe franche). Les
+  **scènes** (`@goscreen/blocks` `scenes.ts`, `SCENES`, pur et testé) sont 13 compositions embarquées qui tiennent
+  ce vocabulaire en HTML/CSS 3D, **toutes dessinées par `setT(t)`** (aucune animation CSS, aucun minuteur : une
+  image est exacte à n'importe quel instant), courbes expo-out, dérive lente permanente (rien ne s'arrête net),
+  glow sur chaque élément, grain fixe (SVG `feTurbulence` en `data:`), couleurs par props `#rrggbb` (`accent`,
+  `ink`, `background`, `frame` : le film remplit `accent` et `ink` comme pour tout bloc), textes par props.
+  Ids : `glow-stage` (plaque opaque, faisceau ou anneau), `device-3d` (fenêtre / tablette / téléphone qui monte,
+  tourne puis se redresse), `floating-cards`, `cards-stack-3d`, `icon-grid-3d`, `carousel-3d` (un pas à la fois),
+  `kinetic-counter` (« Not 15 % / Off 25 % / But 40 % »), `text-inline-icon`, `brand-blur` (opaque), `orbit-updates`,
+  `chat-typing` (version 3D du bloc : la file glisse, rien ne saute), `search-focus` (zoom, saisie, curseur,
+  clic, poignées), `cursor-click` (transparent, à poser sur la capture ; positions en fractions du cadre).
+- **Formats** : une scène se met en page depuis son viewport (`vmin`/`vw`/`vh`) ; `sceneFor(id, aspect)` donne
+  la même page boîtée au cadre 1080p du format (`SCENE_BOXES` : 16:9, 9:16, 1:1, 4:5, 4:3, 3:4). Variables CSS
+  de couleur en « r g b » (la syntaxe à virgules refuse l'alpha `/`).
+- **Écran = asset du montage** : `screen` (et une carte image de `floating-cards`) prend le **nom de fichier** d'un
+  asset (`edit.assets[].file`, png/jpg/webp/mp4/webm), chargé depuis `http://goscreen.assets/<nom>` ; un clip est
+  cherché image par image (`seeked` attendu avant la capture). `compositionIssues` accepte cette origine (et elle
+  seule). `block_render` / `block_frame` reçoivent `video` et passent `assets` (= `<stem>.assets/`) à
+  `compose.mjs`, qui ne sert que ce dossier, par nom ; le dossier entre dans la clé du cache de rendu. Sans asset,
+  ou dans l'aperçu vivant (iframe sandbox, origine injoignable), la scène dessine une interface factice.
+- Galerie : section « Scenes » de l'onglet Compositions et du dialogue (aperçu vivant aux couleurs du film) ;
+  `findComposition` résout montage, bibliothèque, puis scène (au format du montage) ; `compositions.list` les
+  rend avec `from: "scene"`, `edit.addComposition` accepte leur id (la copie est gardée avec le montage, donc
+  éditable). Skill : `editing.md`, section « Scenes » (quand les utiliser, un exemple par scène).
+- Tests : `scenes.test.ts` (chaque scène valide, déterministe, couleurs en props ; `sceneFor` ; origine des
+  assets) et `scenes.test.mjs` (Node, bout en bout : plaque, compteur et clic rendus par `compose.mjs` et
+  vérifiés pixel par pixel ; `device-3d` montre un PNG servi par nom, et l'interface factice sans lui).
+- Limites : un `.mov` HEVC (sortie d'une composition transparente sur macOS) ne peut pas servir d'écran ;
+  l'aperçu vivant ne montre jamais le vrai écran ; pas de calage sur le tempo ni de flou de mouvement interne ;
+  les références vidéo (planches) n'étaient plus disponibles lors de la vérification : scènes contrôlées sur
+  leurs propres images rendues.
+
 ### Inspirations : prompts partagés dans le processus créatif
 
 - Source : la liste communautaire `yihui-dev/awesome-opus5-5-videos` (MIT, ~700 vidéos faites en code, chacune avec

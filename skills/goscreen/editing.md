@@ -390,3 +390,55 @@ before placing it; same input renders once (cached), so iterating is cheap.
 The layer keeps the page with the video: the person can edit its HTML.
 Prefer a block for the common elements; a composition for a layout,
 a chart or an effect the catalogue does not have.
+
+## Scenes: built-in dynamic compositions
+
+`compositions_list` also lists 13 built-in **scenes** (`from: "scene"`), in
+the look of modern SaaS ads: CSS 3D, drawn by `setT(t)` (every frame exact),
+expo-out curves, a slow permanent drift, a small glow on everything. Add one
+with `edit_addComposition` and its **id** as `composition`; it fills the
+frame of the montage's format (16:9, 9:16, 1:1, 4:5), so give no box. Colours
+(`accent`, `ink`, `background`) default to the film's; texts are props. A
+scene that shows a screen takes `screen` = the file name of a montage asset
+(`edit_get` → `assets[].file`, png/jpg/webp/mp4/webm; a composition's own
+`.mov` cannot be a screen); without one it draws a mock interface. Preview
+with `compositions_preview` before placing. Two are opaque plates
+(`glow-stage`, `brand-blur`); the others are transparent, to lay over a
+capture or over `glow-stage`.
+
+| id | use it for | main props |
+|---|---|---|
+| `glow-stage` | the plate under a whole sequence: dark gradient, beam or ring | `variant` beam/ring, `intensity` |
+| `device-3d` | the product reveal: window/tablet/phone rises, turns, straightens | `screen`, `kind`, `frame` |
+| `floating-cards` | three results that come out of the screen | `screen`, `card1..3` "Label\|Value" or a picture name |
+| `cards-stack-3d` | four features deployed one by one | `card1..4` "Title\|Subtitle" |
+| `icon-grid-3d` | integrations / capabilities flying into a grid | `items` "A,B,C…", `cols` |
+| `carousel-3d` | 3-5 modules turning on a ring | `card1..5` |
+| `kinetic-counter` | a number that grows while its label changes | `from`, `to`, `suffix`, `labels` "Not\|Off\|But", `caption` |
+| `text-inline-icon` | one sentence, words rising, a pill inline | `text`, `icon`, `iconAfter` |
+| `brand-blur` | hero: giant blurred brand name behind a device | `brand`, `screen`, `kind` |
+| `orbit-updates` | "what's new": ring, title, orbiting pills | `title`, `subtitle`, `items` |
+| `chat-typing` | an assistant conversation in a tilted glass panel | `m1..m4` |
+| `search-focus` | a field that zooms, types, is clicked, then selected | `placeholder`, `query`, `button` |
+| `cursor-click` | a mimed click over a capture | `fromX/Y`, `toX/Y` (0-1), `clickAt`, `size` |
+
+One example per scene (`video` omitted):
+
+```json
+{ "composition": "glow-stage", "start": 0, "duration": 12, "props": { "variant": "beam" } }
+{ "composition": "device-3d", "start": 0.5, "props": { "screen": "shot-dashboard.png", "kind": "window" } }
+{ "composition": "floating-cards", "start": 6, "props": { "screen": "take-hero.mp4", "card1": "Revenue|+24%", "card2": "Signups|1,284", "card3": "Latency|38 ms" } }
+{ "composition": "cards-stack-3d", "start": 12, "props": { "card1": "Plan|Weekly goals", "card2": "Write|Drafts in your voice", "card3": "Review|One click", "card4": "Ship|Everywhere" } }
+{ "composition": "icon-grid-3d", "start": 17, "props": { "items": "S,N,G,J,F,L,A,T,H,Z,M,D", "cols": 4 } }
+{ "composition": "carousel-3d", "start": 22, "props": { "card1": "Inbox|Zero by noon", "card2": "Calendar|What matters", "card3": "Notes|Searchable", "card4": "Reports|Monday-ready" } }
+{ "composition": "kinetic-counter", "start": 30, "props": { "from": 15, "to": 40, "suffix": "%", "labels": "Not|Off|But", "caption": "faster onboarding" } }
+{ "composition": "text-inline-icon", "start": 35, "props": { "text": "Ship updates your users notice", "icon": "→", "iconAfter": 2 } }
+{ "composition": "brand-blur", "start": 40, "props": { "brand": "ACME", "screen": "shot-home.png" } }
+{ "composition": "orbit-updates", "start": 46, "props": { "title": "New Updates", "subtitle": "Version 2.4", "items": "AI,⌘,A,B,C,D" } }
+{ "composition": "chat-typing", "start": 54, "props": { "m1": "Summarise last week's calls", "m2": "14 calls, 3 need a follow-up.", "m3": "Draft them", "m4": "Done: three drafts in your outbox." } }
+{ "composition": "search-focus", "start": 61, "props": { "placeholder": "Search anything…", "query": "invoices from Q3", "button": "Search" } }
+{ "composition": "cursor-click", "start": 8.2, "props": { "fromX": 0.2, "fromY": 0.8, "toX": 0.62, "toY": 0.41, "clickAt": 1.2 } }
+```
+
+`edit_updateComposition` with new `props` renders a placed scene again; the
+page is kept with the video, so its HTML can be edited like any composition.

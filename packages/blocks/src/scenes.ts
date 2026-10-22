@@ -9,10 +9,20 @@ import type { Composition } from "./composition.ts";
 // served by the renderer as http://goscreen.assets/<name>; without one, or
 // in a browser preview, it draws a mock interface instead.
 
-export type SceneAspect = "auto" | "16:9" | "9:16" | "1:1" | "4:5" | "4:3" | "3:4";
+export type SceneAspect =
+  | "auto"
+  | "16:9"
+  | "9:16"
+  | "1:1"
+  | "4:5"
+  | "4:3"
+  | "3:4";
 
 /** The frame a scene fills, per aspect (1080p). */
-export const SCENE_BOXES: Record<SceneAspect, { width: number; height: number }> = {
+export const SCENE_BOXES: Record<
+  SceneAspect,
+  { width: number; height: number }
+> = {
   auto: { width: 1920, height: 1080 },
   "16:9": { width: 1920, height: 1080 },
   "9:16": { width: 1080, height: 1920 },
@@ -132,7 +142,12 @@ function device(host,kind,name){
 vars();
 `;
 
-function page(o: { css?: string; body: string; script: string; device?: boolean }): string {
+function page(o: {
+  css?: string;
+  body: string;
+  script: string;
+  device?: boolean;
+}): string {
   return `<!doctype html>
 <html><head><meta charset="utf-8">
 <style>${BASE_CSS}${o.device ? DEVICE_CSS : ""}${o.css ?? ""}</style>
@@ -244,7 +259,11 @@ window.setT=function(t){
     duration: 5,
     transparent: true,
     props: [
-      text("card1", "Card 1 (Title|Subtitle)", "Plan|Weekly goals, auto-sorted"),
+      text(
+        "card1",
+        "Card 1 (Title|Subtitle)",
+        "Plan|Weekly goals, auto-sorted",
+      ),
       text("card2", "Card 2", "Write|Drafts in your voice"),
       text("card3", "Card 3", "Review|One click to approve"),
       text("card4", "Card 4", "Ship|Published everywhere"),
@@ -370,10 +389,22 @@ window.setT=function(t){
     duration: 7,
     transparent: true,
     props: [
-      longtext("m1", "Message 1 (user)", "Can you summarise last week's calls?"),
-      longtext("m2", "Message 2 (assistant)", "Sure. 14 calls, 3 need a follow-up."),
+      longtext(
+        "m1",
+        "Message 1 (user)",
+        "Can you summarise last week's calls?",
+      ),
+      longtext(
+        "m2",
+        "Message 2 (assistant)",
+        "Sure. 14 calls, 3 need a follow-up.",
+      ),
       longtext("m3", "Message 3 (user)", "Draft the follow-ups for me"),
-      longtext("m4", "Message 4 (assistant)", "Done. Three drafts are in your outbox."),
+      longtext(
+        "m4",
+        "Message 4 (assistant)",
+        "Done. Three drafts are in your outbox.",
+      ),
       color("accent", "Accent", ACCENT),
       color("ink", "Ink", INK),
     ],
@@ -628,7 +659,7 @@ SCENES[8].html = page({
   body: `<div class="bg"></div><div class="halo" id="halo"></div><div class="brand" id="brand"></div><div class="stage"><div class="p3" id="dev"></div></div><div class="grain"></div><div class="vignette"></div>`,
   script: `
 var brand=document.getElementById("brand"),halo=document.getElementById("halo");brand.textContent=P.brand||"";
-var len=Math.max(3,String(P.brand||"").length);brand.style.fontSize=Math.min(44*VM,1.75*W/len)+"px";
+var len=Math.max(3,String(P.brand||"").length);brand.style.fontSize=Math.min(44*VM,1.55*W/len)+"px";
 var d=device(document.getElementById("dev"),P.kind,P.screen);
 d.el.style.width=(d.w*.72)+"px";d.el.style.height=(d.h*.72)+"px";d.el.style.marginLeft=(-d.w*.36)+"px";d.el.style.marginTop=(-d.h*.36)+"px";
 d.el.querySelector(".screen").style.fontSize=(d.w*.72/46)+"px";
@@ -799,9 +830,13 @@ export const isSceneId = (id: string) => SCENES.some((s) => s.id === id);
  * A built-in scene fitted to a format: the same page, boxed to that frame
  * (every scene lays itself out from its viewport, in vmin/vw/vh).
  */
-export function sceneFor(id: string, aspect: SceneAspect | string = "16:9"): Composition | null {
+export function sceneFor(
+  id: string,
+  aspect: SceneAspect | string = "16:9",
+): Composition | null {
   const scene = SCENES.find((s) => s.id === id);
   if (!scene) return null;
-  const box = SCENE_BOXES[(aspect in SCENE_BOXES ? aspect : "16:9") as SceneAspect];
+  const box =
+    SCENE_BOXES[(aspect in SCENE_BOXES ? aspect : "16:9") as SceneAspect];
   return { ...scene, box };
 }

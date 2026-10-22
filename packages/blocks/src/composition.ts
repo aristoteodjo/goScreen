@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { type Block, type BlockSize, escapeHtml, resolveProps } from "./blocks.ts";
+import {
+  type Block,
+  type BlockSize,
+  escapeHtml,
+  resolveProps,
+} from "./blocks.ts";
 
 // Compositions: HTML pages written by an AI or a person (the video-agent /
 // Remotion way) that goScreen renders frame by frame like a block. The page
@@ -83,7 +88,11 @@ export function compositionIssues(raw: unknown): CompositionIssue[] {
       path: "html",
       message: `The HTML is ${Math.round(bytes / 1024)} KB; keep it under ${MAX_HTML_BYTES / 1024} KB (inline small assets as data: URLs).`,
     });
-  if (REMOTE_ATTR.test(c.html) || REMOTE_URL.test(c.html) || REMOTE_IMPORT.test(c.html))
+  if (
+    REMOTE_ATTR.test(c.html) ||
+    REMOTE_URL.test(c.html) ||
+    REMOTE_IMPORT.test(c.html)
+  )
     out.push({
       path: "html",
       message:
@@ -104,7 +113,10 @@ export function compositionIssues(raw: unknown): CompositionIssue[] {
   const names = new Set<string>();
   c.props.forEach((p, i) => {
     if (names.has(p.name))
-      out.push({ path: `props.${i}.name`, message: `Duplicate prop "${p.name}".` });
+      out.push({
+        path: `props.${i}.name`,
+        message: `Duplicate prop "${p.name}".`,
+      });
     names.add(p.name);
     if (p.type === "color" && !/^#[0-9a-fA-F]{6}$/.test(String(p.default)))
       out.push({
@@ -112,7 +124,10 @@ export function compositionIssues(raw: unknown): CompositionIssue[] {
         message: "A colour default is #rrggbb.",
       });
     if (p.type === "number" && !Number.isFinite(Number(p.default)))
-      out.push({ path: `props.${i}.default`, message: "A number default is a number." });
+      out.push({
+        path: `props.${i}.default`,
+        message: "A number default is a number.",
+      });
   });
   return out;
 }
@@ -120,7 +135,9 @@ export function compositionIssues(raw: unknown): CompositionIssue[] {
 /** The composition, parsed, or an error naming each issue with its path. */
 export function parseComposition(
   raw: unknown,
-): { ok: true; composition: Composition } | { ok: false; issues: CompositionIssue[] } {
+):
+  | { ok: true; composition: Composition }
+  | { ok: false; issues: CompositionIssue[] } {
   const issues = compositionIssues(raw);
   if (issues.length > 0) return { ok: false, issues };
   return { ok: true, composition: compositionSchema.parse(raw) };
@@ -137,7 +154,8 @@ export function resolveCompositionProps(
   const out: Record<string, string> = {};
   for (const spec of c.props) {
     const v = given[spec.name];
-    let value = v === undefined || v === null ? String(spec.default) : String(v);
+    let value =
+      v === undefined || v === null ? String(spec.default) : String(v);
     if (spec.type === "color" && !/^#[0-9a-fA-F]{6}$/.test(value))
       value = String(spec.default);
     if (spec.type === "number" && !Number.isFinite(Number(value)))
@@ -198,9 +216,13 @@ window.setInterval=function(){return 0;};
 }
 
 /** Every `{{name}}` of the page, replaced by its escaped value. */
-export function substituteProps(html: string, props: Record<string, string>): string {
-  return html.replace(/\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g, (m, name: string) =>
-    name in props ? escapeHtml(props[name]) : m,
+export function substituteProps(
+  html: string,
+  props: Record<string, string>,
+): string {
+  return html.replace(
+    /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}/g,
+    (m, name: string) => (name in props ? escapeHtml(props[name]) : m),
   );
 }
 
@@ -288,7 +310,8 @@ export function compositionFromBlock(
 export const EXAMPLE_COMPOSITION: Composition = {
   id: "orbit-badge",
   label: "Orbit badge",
-  description: "A label that circles a dot: drawn by setT, so any frame is exact.",
+  description:
+    "A label that circles a dot: drawn by setT, so any frame is exact.",
   box: { width: 640, height: 360 },
   duration: 3,
   transparent: true,

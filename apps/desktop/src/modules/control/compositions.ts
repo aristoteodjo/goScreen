@@ -118,7 +118,13 @@ export function registerCompositionCommands({
         typeof i.composition === "string"
           ? await findComposition(i.video, i.composition, edit.aspect)
           : check(i.composition);
-      const screenshot = await previewComposition(edit, c, i.props, i.t, i.video);
+      const screenshot = await previewComposition(
+        edit,
+        c,
+        i.props,
+        i.t,
+        i.video,
+      );
       return { id: c.id, t: i.t, box: c.box, screenshot };
     },
   });
@@ -207,7 +213,11 @@ export function registerCompositionCommands({
       const c = i.composition
         ? check(i.composition)
         : i.id
-          ? await findComposition(i.video, i.id, (await currentEdit(i.video)).aspect)
+          ? await findComposition(
+              i.video,
+              i.id,
+              (await currentEdit(i.video)).aspect,
+            )
           : null;
       if (!c) throw new Error("Give an id or a composition.");
       await saveComposition(i.video, c, true);

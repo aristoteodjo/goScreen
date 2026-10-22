@@ -207,7 +207,9 @@ export function CompositionsDialog() {
     onSuccess: () => {
       close();
       toast.success(
-        editing ? "Composition rendered again" : "Composition added at the playhead",
+        editing
+          ? "Composition rendered again"
+          : "Composition added at the playhead",
       );
     },
     onError: (e) =>
@@ -306,7 +308,9 @@ export function CompositionsDialog() {
               Scenes
             </span>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-              {SCENES.map((s) => card(sceneFor(s.id, edit.aspect) ?? s, "Scene"))}
+              {SCENES.map((s) =>
+                card(sceneFor(s.id, edit.aspect) ?? s, "Scene"),
+              )}
             </div>
             {list.data?.project ? (
               <>
@@ -314,7 +318,9 @@ export function CompositionsDialog() {
                   Project library
                 </span>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-                  {(list.data.library ?? []).map((c) => card(c, "Project library"))}
+                  {(list.data.library ?? []).map((c) =>
+                    card(c, "Project library"),
+                  )}
                   {list.data.library.length === 0 ? (
                     <span className="text-[11px] text-muted-foreground">
                       Empty. “Save to project library” keeps a composition for

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   compositionIssues,
+  isSceneId,
   parseComposition,
   prepareCompositionHtml,
   SCENE_BOXES,
   SCENE_IDS,
   SCENES,
-  isSceneId,
   sceneFor,
 } from "./index.ts";
 
@@ -35,9 +35,13 @@ describe("scenes", () => {
       expect(s.html.length).toBeGreaterThan(500);
       // Drawn by setT, deterministic: no CSS animation, no timers.
       expect(s.html).toContain("window.setT=function(t)");
-      expect(s.html).not.toMatch(/@keyframes|animation:|setTimeout|setInterval/);
+      expect(s.html).not.toMatch(
+        /@keyframes|animation:|setTimeout|setInterval/,
+      );
       // Colours are props, so the film can fill them.
-      expect(s.props.some((p) => p.name === "accent" && p.type === "color")).toBe(true);
+      expect(
+        s.props.some((p) => p.name === "accent" && p.type === "color"),
+      ).toBe(true);
     }
     expect(new Set(SCENE_IDS).size).toBe(SCENES.length);
   });
@@ -46,18 +50,24 @@ describe("scenes", () => {
     const opaque = SCENES.filter((s) => !s.transparent).map((s) => s.id);
     expect(opaque).toEqual(["glow-stage", "brand-blur"]);
     for (const id of ["device-3d", "floating-cards", "brand-blur"]) {
-      const s = SCENES.find((x) => x.id === id)!;
-      expect(s.props.find((p) => p.name === "screen")?.type).toBe("text");
-      expect(s.html).toContain("http://goscreen.assets/");
+      const s = SCENES.find((x) => x.id === id);
+      expect(s?.props.find((p) => p.name === "screen")?.type).toBe("text");
+      expect(s?.html).toContain("http://goscreen.assets/");
     }
   });
 
   it("fits a scene to a format, the page unchanged", () => {
-    const s = sceneFor("device-3d", "9:16")!;
-    expect(s.box).toEqual(SCENE_BOXES["9:16"]);
-    expect(s.html).toBe(SCENES[1].html);
-    expect(sceneFor("device-3d", "auto")?.box).toEqual({ width: 1920, height: 1080 });
-    expect(sceneFor("device-3d", "weird")?.box).toEqual({ width: 1920, height: 1080 });
+    const s = sceneFor("device-3d", "9:16");
+    expect(s?.box).toEqual(SCENE_BOXES["9:16"]);
+    expect(s?.html).toBe(SCENES[1].html);
+    expect(sceneFor("device-3d", "auto")?.box).toEqual({
+      width: 1920,
+      height: 1080,
+    });
+    expect(sceneFor("device-3d", "weird")?.box).toEqual({
+      width: 1920,
+      height: 1080,
+    });
     expect(sceneFor("nope")).toBeNull();
     expect(isSceneId("glow-stage")).toBe(true);
     expect(isSceneId("glow")).toBe(false);
@@ -65,19 +75,34 @@ describe("scenes", () => {
   });
 
   it("substitutes props and keeps the prelude first", () => {
-    const html = prepareCompositionHtml(SCENES[0], { accent: "#ff0000" }, { width: 640, height: 360 });
-    expect(html.indexOf("window.__props")).toBeLessThan(html.indexOf("window.setT"));
+    const html = prepareCompositionHtml(
+      SCENES[0],
+      { accent: "#ff0000" },
+      { width: 640, height: 360 },
+    );
+    expect(html.indexOf("window.__props")).toBeLessThan(
+      html.indexOf("window.setT"),
+    );
     expect(html).toContain('"accent":"#ff0000"');
   });
 
   it("a page may use a montage asset by name, nothing else remote", () => {
-    const base = { ...SCENES[0], html: '<img src="http://goscreen.assets/shot.png">' };
+    const base = {
+      ...SCENES[0],
+      html: '<img src="http://goscreen.assets/shot.png">',
+    };
     expect(compositionIssues(base)).toEqual([]);
     expect(
-      compositionIssues({ ...base, html: '<img src="http://goscreen.assets.evil.com/x.png">' }).map((i) => i.path),
+      compositionIssues({
+        ...base,
+        html: '<img src="http://goscreen.assets.evil.com/x.png">',
+      }).map((i) => i.path),
     ).toEqual(["html"]);
     expect(
-      compositionIssues({ ...base, html: "<style>a{background:url(//cdn.example/x.png)}</style>" }).map((i) => i.path),
+      compositionIssues({
+        ...base,
+        html: "<style>a{background:url(//cdn.example/x.png)}</style>",
+      }).map((i) => i.path),
     ).toEqual(["html"]);
   });
 });
