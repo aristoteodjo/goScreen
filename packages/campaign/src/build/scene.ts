@@ -194,6 +194,9 @@ export function sceneOf(
           card1: b[0] ?? "",
           card2: b[1] ?? "",
           card3: b[2] ?? "",
+          // Scenes with more cards show only the ones given.
+          card4: "",
+          card5: "",
           items: b.join(","),
         },
         text: b.join(" · "),

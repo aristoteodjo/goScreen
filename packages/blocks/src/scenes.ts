@@ -228,7 +228,9 @@ var words=[],brandEl=document.getElementById("brand"),titleEl=document.getElemen
 brandEl.textContent=String(P.brand||"");
 String(P.title||"").split(/\\s+/).filter(Boolean).forEach(function(w,i){
   var acc=/^\\*.*\\*[.,!?]*$/.test(w);var sp=document.createElement("span");
-  sp.textContent=w.replace(/\\*/g,"")+" ";if(acc)sp.className="acc";titleEl.appendChild(sp);words.push(sp);
+  sp.textContent=w.replace(/\\*/g,"");if(acc)sp.className="acc";
+  // The space lives between the blocks: inside one, it would collapse.
+  if(words.length)titleEl.appendChild(document.createTextNode(" "));titleEl.appendChild(sp);words.push(sp);
 });
 var beam=document.getElementById("beam"),beam2=document.getElementById("beam2"),ringEl=document.getElementById("ring"),halo=document.getElementById("halo");
 window.setT=function(t){
